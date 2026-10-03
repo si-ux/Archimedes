@@ -1,7 +1,7 @@
 .PHONY: demo test lint train train-smoke filter-smoke
 
 demo:            ## browser demo - open the forwarded port 8000
-	uvicorn webdemo.server:app --host 0.0.0.0 --port 8000
+	python -m uvicorn webdemo.server:app --host 0.0.0.0 --port 8000
 
 test:
 	python -m pytest -q
