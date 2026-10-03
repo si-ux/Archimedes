@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+# personal / recorded data and downloaded models stay local
+data/
+models/*.task
+models/*.joblib
+reports/
