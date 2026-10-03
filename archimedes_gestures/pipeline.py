@@ -16,7 +16,7 @@ from .intent import EngineConfig, IntentEngine
 from .landmarks import FrameInput, HandFrame
 from .recorder import ClipRecorder
 from .view_state import Command, ViewState
-from .vocab import cheat_sheet
+from .vocab import PROFILES, cheat_sheet
 
 
 def load_base_classifier(model_path: str | Path | None) -> PoseClassifier:
@@ -32,14 +32,16 @@ class GesturePipeline:
         profile_path: str | Path = "data/profile.json",
         personal_path: str | Path = "data/personal_samples.npz",
         clips_root: str | Path = "data/clips",
+        profile: str = "viewer",
     ):
+        self.modes = PROFILES[profile]
         self.profile_path, self.personal_path = Path(profile_path), Path(personal_path)
         self.profile = Profile.load(self.profile_path) if self.profile_path.exists() else Profile()
         self.base = load_base_classifier(model_path)
         self.classifier = PersonalAdapter(self.base)
         if self.personal_path.exists():
             self.classifier.load(self.personal_path)
-        self.engine = IntentEngine(self._engine_cfg())
+        self.engine = IntentEngine(self._engine_cfg(), modes=self.modes)
         self.view = ViewState()
         self.smoothers: dict[str, PoseSmoother] = {}
         self.calibrator: Calibrator | None = None
@@ -125,7 +127,7 @@ class GesturePipeline:
         self.profile.save(self.profile_path)
         if self.classifier.y:
             self.classifier.save(self.personal_path)
-        self.engine = IntentEngine(self._engine_cfg())
+        self.engine = IntentEngine(self._engine_cfg(), modes=self.modes)
         self.smoothers.clear()
 
     def set_dominant(self, hand: str) -> None:
@@ -134,7 +136,7 @@ class GesturePipeline:
 
     def info(self) -> dict:
         return {
-            "cheat_sheet": cheat_sheet(),
+            "cheat_sheet": cheat_sheet(self.modes),
             "profile": self.profile.__dict__,
             "classifier": self.classifier_name,
             "personal_samples": self.classifier.counts(),

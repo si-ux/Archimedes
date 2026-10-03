@@ -23,6 +23,20 @@ First time with the camera? Press **Calibrate (C)**. In 30 seconds it:
 - sets an interaction box that fits your comfortable reach,
 - records ~30 frames of each pose so recognition adapts to your hand (`data/personal_samples.npz`).
 
+## Archimedes Workbench with live gestures
+
+The Workbench (`Archimedes/`, FE pre/post-processor with a DOLFINx backend) is
+served by the same demo server, with the gesture engine wired in:
+
+```bash
+make demo        # then open port 8000 at /workbench/ and press G
+```
+
+`/workbench/?tour` runs a camera-free gesture tour. The vocabulary and the
+reasons for it are in [`Archimedes/docs/gestures.md`](Archimedes/docs/gestures.md).
+In the Workbench, thumbs-up held still for 1.2 s runs the solve instead of
+taking a snapshot.
+
 ## Gestures
 
 | Hold… | to… | then… |

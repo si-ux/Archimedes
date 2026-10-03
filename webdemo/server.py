@@ -19,15 +19,17 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from archimedes_gestures import synthetic
 from archimedes_gestures.landmarks import FrameInput
 from archimedes_gestures.pipeline import GesturePipeline
+from archimedes_gestures.vocab import PROFILES
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(__file__).resolve().parent / "static"
+WORKBENCH = ROOT / "Archimedes"
 
 app = FastAPI(title="Archimedes gesture demo")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -38,13 +40,30 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/workbench")
+def workbench_redirect():
+    return RedirectResponse("/workbench/")
+
+
+@app.get("/workbench/")
+def workbench():
+    """The Archimedes Workbench, served same-origin so its gesture client can reach /ws."""
+    return FileResponse(WORKBENCH / "Archimedes Workbench.dc.html", media_type="text/html")
+
+
+@app.get("/workbench/support.js")
+def workbench_support():
+    return FileResponse(WORKBENCH / "support.js", media_type="application/javascript")
+
+
 @app.get("/healthz")
 def health():
     return {"ok": True}
 
 
-def new_pipeline() -> GesturePipeline:
+def new_pipeline(profile: str = "viewer") -> GesturePipeline:
     return GesturePipeline(
+        profile=profile if profile in PROFILES else "viewer",
         model_path=ROOT / "models" / "static_pose.joblib",
         profile_path=ROOT / "data" / "profile.json",
         personal_path=ROOT / "data" / "personal_samples.npz",
@@ -68,7 +87,8 @@ async def run_tour(ws: WebSocket, pipe: GesturePipeline, stop: asyncio.Event) ->
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
-    pipe = new_pipeline()
+    # ?profile=workbench gives the Workbench vocabulary (thumbs-up = run solve)
+    pipe = new_pipeline(ws.query_params.get("profile", "viewer"))
     await ws.send_text(json.dumps({"type": "info", **pipe.info()}))
     tour_stop = asyncio.Event()
     tour_task: asyncio.Task | None = None

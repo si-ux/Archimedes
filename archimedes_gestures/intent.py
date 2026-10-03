@@ -31,7 +31,7 @@ from .geometry import camera_to_view, fingertip, palm_normal
 from .landmarks import FrameInput, HandFrame
 from .quality import Hint, QualityConfig, check_frame, check_hand
 from .view_state import Command
-from .vocab import MODES, NONE, POSE_TO_MODE
+from .vocab import MODES, NONE, pose_to_mode
 
 
 @dataclass
@@ -71,9 +71,12 @@ class _HandTrack:
 
 
 class IntentEngine:
-    def __init__(self, cfg: EngineConfig | None = None, quality: QualityConfig | None = None):
+    def __init__(self, cfg: EngineConfig | None = None, quality: QualityConfig | None = None,
+                 modes: dict | None = None):
         self.cfg = cfg or EngineConfig()
         self.qcfg = quality or QualityConfig()
+        self.modes = modes or MODES
+        self.pose_to_mode = pose_to_mode(self.modes)
         self.reset()
 
     def reset(self) -> None:
@@ -175,7 +178,7 @@ class IntentEngine:
 
         # ---- active mode ----
         if self.mode:
-            if pose != MODES[self.mode].pose:
+            if pose != self.modes[self.mode].pose:
                 self.release_t += dt
                 if self.release_t > self.cfg.release_grace_s:
                     self._end_mode(t, out)
@@ -186,13 +189,13 @@ class IntentEngine:
                 return out, self._hud(ctrl, pose, conf, hints, poses)
 
         # ---- arming ----
-        mode = POSE_TO_MODE.get(pose)
+        mode = self.pose_to_mode.get(pose)
         if mode is None:
             self.state, self.arming, self.arm_t = "idle", None, 0.0
             return out, self._hud(ctrl, pose, conf, hints, poses)
         if mode != self.arming:
             self.arming, self.arm_t = mode, 0.0
-        m = MODES[mode]
+        m = self.modes[mode]
         if m.still and track.speed > self.cfg.still_speed:
             self.arm_t = 0.0  # moving: start over, so passing hands never arm a hold
         else:
@@ -204,9 +207,9 @@ class IntentEngine:
             self._mode_reset()
             self.start_pos, self.start_size = track.last_pos.copy(), track.size.value
             out.append(Command("begin", {"mode": mode}))
-            if mode == "snapshot":
-                out.append(Command("snapshot"))
-                self.toast = "Snapshot saved"
+            if m.fire:
+                out.append(Command(m.fire))
+                self.toast = m.toast
             self._run_mode(ctrl, track, t, dt, out)
         return out, self._hud(ctrl, pose, conf, hints, poses)
 
@@ -263,7 +266,7 @@ class IntentEngine:
         if self.reset_t > 0:
             return "Reset", self.reset_t / self.cfg.reset_hold_s
         if self.arming:
-            m = MODES[self.arming]
+            m = self.modes[self.arming]
             return m.label, min(1.0, self.arm_t / m.arm_s)
         if self.mode == "probe" and self.still_t > 0 and not self.pinned:
             return "Pin value", min(1.0, self.still_t / self.cfg.pin_hold_s)
@@ -271,16 +274,16 @@ class IntentEngine:
 
     def _hud(self, h: HandFrame | None, pose: str, conf: float, hints: list[Hint], poses) -> dict:
         label, prog = self.progress()
-        mode = MODES.get(self.mode) if self.mode else None
+        mode = self.modes.get(self.mode) if self.mode else None
         hints = sorted(hints, key=lambda x: -x.severity)
         if self.state == "no_hand":
             tip = "Raise your hand so the camera can see it"
         elif mode:
             tip = mode.hint + ". Relax your hand to stop."
         elif self.arming:
-            tip = f"Keep holding for {MODES[self.arming].label}…"
+            tip = f"Keep holding for {self.modes[self.arming].label}…"
         else:
-            tip = "Hold a pose to start: ✊ rotate · 🤏 zoom · ✋ cut · ☝️ probe · ✌️ field · 👍 snapshot"
+            tip = "Hold a pose to start: " + " · ".join(f"{m.icon} {m.label.lower()}" for m in self.modes.values())
         return {
             "state": self.state,
             "mode": self.mode,

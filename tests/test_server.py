@@ -51,3 +51,15 @@ def test_record_clip(client, tmp_path):
         ws.send_text(json.dumps({"type": "record_stop"}))
         msg = json.loads(ws.receive_text())
         assert msg["type"] == "recorded" and msg["path"].startswith("data/clips/p01/fist/")
+
+
+def test_workbench_served_same_origin(client):
+    r = client.get("/workbench/")
+    assert r.status_code == 200 and "GESTURE_BY_MODE" in r.text
+    assert client.get("/workbench/support.js").status_code == 200
+
+
+def test_websocket_workbench_profile(client):
+    with client.websocket_connect("/ws?profile=workbench") as ws:
+        info = json.loads(ws.receive_text())
+        assert "solve" in {row["mode"] for row in info["cheat_sheet"]}

@@ -25,6 +25,8 @@ class Mode:
     label: str  # HUD text
     hint: str  # one-line "how to use" text for the HUD / cheat-sheet
     icon: str
+    fire: str | None = None  # one-shot command emitted when the mode engages
+    toast: str | None = None  # HUD message shown when it fires
 
 
 MODES = {
@@ -36,15 +38,32 @@ MODES = {
     ),
     "probe": Mode("probe", "point", 0.3, False, "Probe", "Point to read stress; hold still to pin a value", "☝️"),
     "field": Mode("field", "peace", 0.3, False, "Field", "Show a V and swipe left/right to change the result field", "✌️"),
-    "snapshot": Mode("snapshot", "thumbs_up", 1.0, True, "Snapshot", "Hold a thumbs-up to save a screenshot", "👍"),
+    "snapshot": Mode("snapshot", "thumbs_up", 1.0, True, "Snapshot", "Hold a thumbs-up to save a screenshot", "👍",
+                     fire="snapshot", toast="Snapshot saved"),
 }
+
+# The Workbench runs solves, which cost seconds to minutes and change what the
+# user is looking at, so the thumbs-up there means "run the solve" and needs a
+# longer, still hold. Pipeline stages (geometry -> mesh) are pre-processing and
+# stay on menus/keys: gestures are for looking at results.
+WORKBENCH_MODES = {
+    **{k: v for k, v in MODES.items() if k != "snapshot"},
+    "solve": Mode("solve", "thumbs_up", 1.2, True, "Run solve", "Hold a thumbs-up still to run the solve", "👍",
+                  fire="solve", toast="Solve started"),
+}
+PROFILES = {"viewer": MODES, "workbench": WORKBENCH_MODES}
 POSE_TO_MODE = {m.pose: m.name for m in MODES.values()}
+
+
+def pose_to_mode(modes: dict) -> dict:
+    return {m.pose: m.name for m in modes.values()}
 
 # two-hand gesture, handled separately by the intent engine
 RESET_HINT = "Show both open palms for a second to reset the view"
 
 
-def cheat_sheet() -> list[dict]:
-    rows = [{"icon": m.icon, "label": m.label, "hint": m.hint, "pose": m.pose} for m in MODES.values()]
-    rows.append({"icon": "🙌", "label": "Reset", "hint": RESET_HINT, "pose": "open_palm x2"})
+def cheat_sheet(modes: dict | None = None) -> list[dict]:
+    rows = [{"icon": m.icon, "label": m.label, "hint": m.hint, "pose": m.pose, "mode": m.name}
+            for m in (modes or MODES).values()]
+    rows.append({"icon": "🙌", "label": "Reset", "hint": RESET_HINT, "pose": "open_palm x2", "mode": "reset"})
     return rows

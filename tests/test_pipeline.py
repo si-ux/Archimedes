@@ -179,3 +179,19 @@ def test_scripted_tour_exercises_every_mode():
     assert {"orbit", "zoom", "section", "probe", "field"} <= modes
     v = pipe.view
     assert v.distance < 1.0 and v.section_locked and v.probe_pins and v.field_index != 0
+
+
+def test_workbench_profile_thumbs_up_runs_solve_after_a_still_hold():
+    pipe = GesturePipeline(model_path=None, profile_path="/x/p.json", personal_path="/x/s.npz", profile="workbench")
+    assert "solve" in pipe.engine.modes and "snapshot" not in pipe.engine.modes
+    fired = []
+    # 0.8 s is not long enough (solve needs 1.2 s still), 1.6 s is
+    for dur, expect in ((0.8, 0), (1.6, 1)):
+        pipe.engine.reset()
+        fired = [c for f in scene([("thumbs_up", dur, STILL)]) for c in pipe.process(f)["commands"]
+                 if c["kind"] == "solve"]
+        assert len(fired) == expect
+    # a moving thumbs-up never arms it
+    moving = [c for f in scene([("thumbs_up", 2.0, ((0.3, 0.5), (0.7, 0.5)))]) for c in pipe.process(f)["commands"]
+              if c["kind"] == "solve"]
+    assert not moving

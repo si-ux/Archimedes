@@ -1116,37 +1116,43 @@ const TABS = [
 ];
 
 // The gesture vocabulary. Each entry is a real command: `act` runs the same
-// code path the mouse and menus use, so a recognised gesture and a click are
-// indistinguishable downstream. `demo` marks the ones the scripted driver
-// cycles through — the rest are discrete commands that would fire on
-// recognition, and can be test-fired from the panel.
+// code path the mouse and menus use. Live recognition comes from the Python
+// gesture engine (archimedes_gestures, profile "workbench"): the browser runs
+// MediaPipe, sends landmarks over a WebSocket, and gets commands back, which
+// applyGestureCommand() turns into these same state changes. `mode` is the
+// engine's name for the gesture. `demo` marks the continuous ones the scripted
+// driver cycles through when no camera is attached; ▶ test-fires any of them.
+//
+// Design rules (docs/gestures.md): one hand; a mode starts only after its pose
+// is HELD, and relaxing the hand stops it; anything costly (the solve) needs a
+// longer, still hold. Pipeline stages stay on menus and keys: gestures are for
+// looking at results.
 const GESTURES = [
-  { id: 'orbit', icon: '⟳', pose: 'open palm · drag', does: 'Orbit the camera', demo: true,
+  { id: 'orbit', mode: 'orbit', icon: '⟳', pose: 'fist · drag, like grabbing the model', does: 'Orbit the camera', demo: true,
     act: c => { c.tgt.yaw += 0.0055; } },
-  { id: 'pinch', icon: '⇔', pose: 'thumb + index · spread', does: 'Dolly zoom', demo: true,
+  { id: 'pinch', mode: 'zoom', icon: '⇔', pose: 'pinch · move up / down', does: 'Dolly zoom', demo: true,
     act: (c, ph) => { c.tgt.dist = Math.max(11, Math.min(80,
       c.tgt.dist + (ph === 'fire' ? -3 : Math.sin(performance.now() / 360) * 0.32))); } },
-  { id: 'blade', icon: '▬', pose: 'flat blade · sweep across', does: 'Drag the section plane', demo: true,
+  { id: 'blade', mode: 'section', icon: '▬', pose: 'flat palm · hold still 0.8 s', does: 'Section cut — your palm is the plane', demo: true,
     act: (c, ph) => {
       const p = ph === 'fire' ? (c.state.cutPos + 12) % 92 + 4
         : 30 + 50 * (0.5 - 0.5 * Math.cos(performance.now() / 1600));
-      if (Math.abs(p - c.state.cutPos) > 0.8) c.setState({ cutPos: Math.round(p), cutOn: true });
+      if (Math.abs(p - c.state.cutPos) > 0.8 || c.state.cutAxis === 'free')
+        c.setState({ cutPos: Math.round(p), cutOn: true, cutAxis: c.state.cutAxis === 'free' ? 'z' : c.state.cutAxis });
     } },
-  { id: 'point', icon: '↑', pose: 'index point · hold 400 ms', does: 'Probe the peak value', demo: true,
+  { id: 'point', mode: 'probe', icon: '↑', pose: 'index point · hold still to pin', does: 'Probe the field', demo: true,
     act: c => c.probePeak() },
-  { id: 'fist', icon: '●', pose: 'closed fist · hold 400 ms', does: 'Advance to the next stage',
-    act: c => c.setState({ stage: Math.min(6, c.state.stage + 1) }) },
-  { id: 'swipeL', icon: '◀', pose: 'quick palm sweep left', does: 'Previous stage',
-    act: c => c.setState({ stage: Math.max(1, c.state.stage - 1) }) },
-  { id: 'swipeR', icon: '▶', pose: 'quick palm sweep right', does: 'Next stage',
-    act: c => c.setState({ stage: Math.min(6, c.state.stage + 1) }) },
-  { id: 'thumb', icon: '▲', pose: 'thumb up · fingers curled', does: 'Run the solve',
+  { id: 'field', mode: 'field', icon: '◐', pose: 'V sign · swipe left / right', does: 'Change the result field',
+    act: c => c.cycleField(1) },
+  { id: 'thumb', mode: 'solve', icon: '▲', pose: 'thumbs-up · hold still 1.2 s', does: 'Run the solve',
     act: c => { if (!c.state.solving) c.startSolve(); } },
-  { id: 'spread', icon: '⇿', pose: 'two palms · vary separation', does: 'Scale the displacement warp',
-    act: c => c.setState({ deform: Math.max(1, Math.min(100, c.state.deform + 6)) }) },
-  { id: 'palmDown', icon: '▼', pose: 'palm down · press', does: 'Toggle the section cut',
-    act: c => c.setState({ cutOn: !c.state.cutOn }) }
+  { id: 'reset', mode: 'reset', icon: '⌂', pose: 'both open palms · hold 1 s', does: 'Reset the view',
+    act: c => c.resetView() }
 ];
+const GESTURE_BY_MODE = Object.fromEntries(GESTURES.map(g => [g.mode, g.id]));
+const HAND_EDGES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const MP_VERSION = '0.10.14';
 
 class Component extends DCLogic {
   state = {
@@ -1156,7 +1162,7 @@ class Component extends DCLogic {
     gestureOn: false, arOn: false, palOpen: false, palQuery: '', palIdx: 0,
     menu: null, maxed: true, savedAgo: '· saved 2 min ago',
     field: 'vm', deform: 12,
-    cutOn: false, cutAxis: 'z', cutPos: 52,
+    cutOn: false, cutAxis: 'z', cutPos: 52, cutPlane: null,
     shade: 'shaded', planes: false, pick: null,
     gestOpen: false, aiOpen: false,
     material: 'al7075', outputs: { u: true, s: true, e: true, rf: true, mode: false },
@@ -1195,6 +1201,7 @@ class Component extends DCLogic {
   componentDidMount() {
     this.frames = 0; this.fpsT = performance.now(); this.lastProbe = 0;
     this.syncModel();
+    if (/[?&]tour\b/.test(location.search)) this.setState({ gestureOn: true });   // camera-free gesture tour
 
     const c = this.canvas, vp = this.viewport;
     this.ro = new ResizeObserver(() => this.resize());
@@ -1284,6 +1291,7 @@ class Component extends DCLogic {
     clearInterval(this.watchdog);
     this.closePops();
     this.disconnectBridge();
+    this.stopLiveGestures();
     this.ro && this.ro.disconnect();
     window.removeEventListener('mouseup', this.onUp);
     window.removeEventListener('keydown', this.onKey);
@@ -1359,7 +1367,9 @@ class Component extends DCLogic {
   }
   faceSig() {
     const s = this.state;
-    return [this.msig, s.cutOn, s.cutAxis, s.cutPos, s.thresh, s.threshLo, s.stage,
+    const pl = s.cutAxis === 'free' && s.cutPlane
+      ? s.cutPlane.n.concat(s.cutPlane.o).map(v => v.toFixed(2)).join(',') : '';
+    return [this.msig, s.cutOn, s.cutAxis, s.cutPos, pl, s.thresh, s.threshLo, s.stage,
       s.solved, s.field, s.timeStep, s.modal, s.mode, !!this.res].join('|');
   }
 
@@ -1586,6 +1596,11 @@ class Component extends DCLogic {
     const L = this.mesh, st = this.state;
     if (!st.cutOn || st.stage < 4) return false;
     const a = st.cutAxis;
+    if (a === 'free' && st.cutPlane) {           // palm plane from the gesture engine
+      const P = st.cutPlane;
+      return ((i + 0.5) * L.dx - P.o[0]) * P.n[0] + ((j + 0.5) * L.dy - P.o[1]) * P.n[1]
+        + ((k + 0.5) * L.dz - P.o[2]) * P.n[2] > 0;
+    }
     const v = a === 'x' ? (i + 0.5) * L.dx : a === 'y' ? (j + 0.5) * L.dy : (k + 0.5) * L.dz;
     return v > this.cutBound();
   }
@@ -1701,7 +1716,9 @@ class Component extends DCLogic {
   // continuous gestures and runs their real actions, so what you see on
   // screen is the same code path a recognised gesture would take.
   tickGesture(now) {
-    if (!this.state.gestureOn) { this.gs = null; return; }
+    if (!this.state.gestureOn) { this.gs = null; if (this.live) this.stopLiveGestures(); return; }
+    if (!this.live) this.startLiveGestures();
+    if (this.live.ok) { this.liveDetect(now); return; }   // real tracking owns the view
     const demo = GESTURES.filter(g => g.demo);
     if (!this.gs) this.gs = { t0: now };
     const dwell = 3.4;
@@ -2094,6 +2111,7 @@ class Component extends DCLogic {
     }
   }
   drawHand(ctx, W, H, now) {
+    if (this.live && this.live.ok) { this.drawLiveHand(ctx, W, H); return; }
     const cx = W * 0.5 + Math.cos(now / 1400) * W * 0.18;
     const cy = H * 0.56 + Math.sin(now / 1100) * H * 0.12;
     const act = this.state.gestAct;
@@ -2445,6 +2463,190 @@ class Component extends DCLogic {
       vm: R.max.vm || 0, umax: R.max.umag || 0, energy: R.seTot || 0, wall: wall || 0 };
     const hist = this.state.history.concat([row]);
     this.setState({ history: hist.length > 40 ? hist.slice(-40) : hist });
+  }
+
+  // ======================== live gesture client ============================
+  // Browser = sensor (webcam + MediaPipe WASM), Python = brain. The engine is
+  // the same GesturePipeline the desktop app uses; start it with `make demo`
+  // and open this page from it (/workbench/) so the WebSocket is same-origin.
+  async startLiveGestures() {
+    const L = this.live = { ok: false, error: null, hud: null, hands: [], fps: 0, n: 0, t0: performance.now(), seq: 0 };
+    // ?tour plays the engine's scripted hand tour instead of the webcam - for
+    // presentations, and for checking the wiring on a machine with no camera
+    L.tour = /[?&]tour\b/.test(location.search);
+    try {
+      if (L.tour) { await this.connectGestureEngine(L); return; }
+      if (!navigator.mediaDevices) throw new Error('camera API unavailable (needs https or localhost)');
+      L.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+      L.video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, srcObject: L.stream });
+      await L.video.play();
+      const base = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MP_VERSION;
+      const { FilesetResolver, HandLandmarker } = await import(base + '/vision_bundle.mjs');
+      const files = await FilesetResolver.forVisionTasks(base + '/wasm');
+      L.marker = await HandLandmarker.createFromOptions(files, {
+        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
+        runningMode: 'VIDEO', numHands: 2,
+        minHandDetectionConfidence: 0.6, minHandPresenceConfidence: 0.6, minTrackingConfidence: 0.5 });
+      await this.connectGestureEngine(L);
+    } catch (err) {
+      L.error = (err && err.message) || String(err);
+      this.pushLog('gesture', 'live tracking unavailable — ' + L.error + ' · using the scripted driver', 'warn');
+      this.releaseLive(L);
+    }
+    this.setState({ gestAct: 'idle' });
+  }
+  async connectGestureEngine(L) {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = location.protocol.startsWith('http') ? location.host : 'localhost:8000';
+    L.ws = new WebSocket(proto + '://' + host + '/ws?profile=workbench');
+    L.ws.onmessage = e => this.onGestureMessage(JSON.parse(e.data));
+    L.ws.onclose = () => { if (this.live === L) { L.ok = false; L.error = 'gesture engine disconnected — run `make demo`'; } };
+    await new Promise((res, rej) => { L.ws.onopen = res; L.ws.onerror = () => rej(new Error('gesture engine not reachable — run `make demo`')); });
+    if (this.live !== L) return this.releaseLive(L);   // toggled off while starting
+    L.ok = true;
+    if (L.tour) L.ws.send(JSON.stringify({ type: 'demo' }));
+    this.pushLog('gesture', L.tour ? 'scripted hand tour → gesture engine' : 'live tracking · MediaPipe ' + MP_VERSION + ' → gesture engine', 'ok');
+  }
+  releaseLive(L) {
+    try { L.stream && L.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    try { L.ws && L.ws.close(); } catch (e) {}
+    try { L.marker && L.marker.close(); } catch (e) {}
+  }
+  stopLiveGestures() {
+    if (!this.live) return;
+    this.releaseLive(this.live);
+    this.live = null;
+  }
+  liveDetect(now) {
+    const L = this.live, v = L.video;
+    if (L.tour || !v || v.readyState < 2 || v.currentTime === L.lastT) return;
+    L.lastT = v.currentTime;
+    const r = L.marker.detectForVideo(v, now);
+    const hd = r.handednesses || r.handedness || [];
+    const hands = r.landmarks.map((lm, i) => ({
+      landmarks: lm.map(p => [p.x, p.y, p.z]),
+      handedness: hd[i] && hd[i][0] ? hd[i][0].categoryName : 'Right',
+      score: hd[i] && hd[i][0] ? hd[i][0].score : 1 }));
+    L.hands = hands.map(h => h.landmarks.map(p => [1 - p[0], p[1]]));   // selfie view for drawing
+    if (L.ws.readyState === 1 && (L.inflight || 0) < 3) {
+      L.ws.send(JSON.stringify({ type: 'frame', t: now, seq: L.seq++, hands, mirrored: false }));
+      L.inflight = (L.inflight || 0) + 1;
+    }
+    L.n++;
+    if (now - L.t0 > 1000) { L.fps = L.n; L.n = 0; L.t0 = now; }
+  }
+  onGestureMessage(m) {
+    const L = this.live;
+    if (!L) return;
+    if (m.type === 'demo_done' && L.tour && L.ws.readyState === 1) { L.ws.send(JSON.stringify({ type: 'demo' })); return; }
+    if (m.type !== 'state') return;
+    if (m.landmarks) L.hands = m.landmarks.map(lm => lm.map(p => [p[0], p[1]]));   // tour: already selfie view
+    L.inflight = Math.max(0, (L.inflight || 0) - 1);
+    if (m.hud) {
+      L.hud = m.hud;
+      const id = m.hud.mode ? GESTURE_BY_MODE[m.hud.mode] : 'idle';
+      if (m.demo) m.hud.tip = m.demo;
+      if (id && id !== this.state.gestAct) this.setState({ gestAct: id });
+      if (m.hud.toast) this.pushLog('gesture', m.hud.toast.toLowerCase(), 'ok');
+    }
+    for (const c of m.commands || []) {
+      try { this.applyGestureCommand(c); } catch (e) { console.error(e); }
+    }
+  }
+  // engine command -> the same state changes the mouse, menus and ▶ make
+  applyGestureCommand(cmd) {
+    const d = cmd.data || {}, st = this.state, R = Math.PI / 180;
+    switch (cmd.kind) {
+      case 'orbit':                                   // degrees; grab-and-drag sense, like the mouse
+        this.tgt.yaw += d.dx * R;
+        this.tgt.pitch = Math.max(-1.3, Math.min(1.3, this.tgt.pitch + d.dy * R));
+        break;
+      case 'zoom':
+        this.tgt.dist = Math.max(11, Math.min(80, this.tgt.dist * d.factor));
+        break;
+      case 'section':
+      case 'section_lock':
+        if (d.normal_view) this.setPalmPlane(d.normal_view, d.offset || 0);
+        break;
+      case 'section_off':
+        this.setState({ cutOn: false });
+        break;
+      case 'probe':
+        this.mouse.x = d.xy[0] * this.w; this.mouse.y = d.xy[1] * this.h;
+        break;
+      case 'probe_clear':
+        this.mouse.x = -1e4; this.mouse.y = -1e4;
+        break;
+      case 'probe_pin': {
+        const n = this.pickNode(d.xy[0] * this.w, d.xy[1] * this.h);
+        if (n >= 0) this.setState({ pick: n });
+        break;
+      }
+      case 'field':
+        this.cycleField(d.step || 1);
+        break;
+      case 'solve':
+        if (!st.solving) this.startSolve();
+        break;
+      case 'reset':
+        this.resetView();
+        break;
+    }
+  }
+  // palm normal (view space: x right, y up, z towards the viewer) -> model space,
+  // by undoing proj()'s pitch then yaw; the plane passes through the model centre
+  // and slides along its normal by the engine's offset (half-model units)
+  setPalmPlane(nv, offset) {
+    if (!this.g) return;
+    const c = this.cam, cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const X = nv[0], Y = nv[1], Zp = -nv[2];
+    const y = Y * cp + Zp * sp, Z = -Y * sp + Zp * cp;
+    const n = [X * cy - Z * sy, y, X * sy + Z * cy];
+    const len = Math.hypot(n[0], n[1], n[2]) || 1;
+    for (let i = 0; i < 3; i++) n[i] /= len;
+    const g = this.g, half = Math.max(g.W, g.H, g.D) / 2;
+    const o = this.ctr.map((v, i) => v + n[i] * offset * half);
+    this.setState({ cutOn: true, cutAxis: 'free', cutPlane: { n, o }, stage: 6 });   // as the palette's cut commands do
+  }
+  cycleField(step) {
+    const FM = this.fieldsMeta(), keys = Object.keys(FM);
+    const avail = keys.filter(k => FM[k].available);
+    const list = avail.length ? avail : keys;
+    const i = list.indexOf(this.state.field);
+    this.setState({ field: list[((i < 0 ? 0 : i) + step + list.length * 4) % list.length] });
+  }
+  resetView() {
+    this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; this.tgt.dist = 24;
+    this.setState({ cutOn: false, cutAxis: 'z', cutPlane: null, pick: null });
+  }
+  liveLabel(h) {
+    if (h.state === 'paused') return 'PAUSED — ' + (h.hints[0] || 'check the camera').toUpperCase();
+    if (h.mode_label) return h.mode_label.toUpperCase();
+    if (h.progress_label) return 'HOLD — ' + h.progress_label.toUpperCase() + ' ' + Math.round(h.progress * 100) + '%';
+    return h.state === 'no_hand' ? 'NO HAND' : 'READY · ' + h.pose.replace('_', ' ').toUpperCase();
+  }
+  drawLiveHand(ctx, W, H) {
+    const L = this.live, h = L.hud;
+    const bw = 176, bh = 132, bx = 14, by = H - bh - 44;
+    const col = !h ? '#6c7784' : h.state === 'active' ? '#7ee787' : h.state === 'arming' ? '#e6c98a'
+      : h.state === 'paused' ? '#ff6b81' : '#5ecfe0';
+    ctx.fillStyle = 'rgba(11,13,16,.72)'; ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#232a32'; ctx.lineWidth = 1; ctx.strokeRect(bx + .5, by + .5, bw - 1, bh - 1);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.6;
+    for (const lm of L.hands) {
+      const P = lm.map(p => [bx + p[0] * bw, by + p[1] * bh]);
+      ctx.beginPath();
+      for (const [a, b] of HAND_EDGES) { ctx.moveTo(P[a][0], P[a][1]); ctx.lineTo(P[b][0], P[b][1]); }
+      ctx.stroke();
+      for (const p of P) { ctx.beginPath(); ctx.arc(p[0], p[1], 1.8, 0, 6.284); ctx.fill(); }
+      if (h && h.progress > 0 && !h.mode) {            // hold-to-arm ring at the wrist
+        ctx.lineWidth = 3; ctx.beginPath();
+        ctx.arc(P[0][0], P[0][1], 13, -Math.PI / 2, -Math.PI / 2 + h.progress * 6.284); ctx.stroke();
+        ctx.lineWidth = 1.6;
+      }
+    }
+    ctx.font = "600 9.5px 'IBM Plex Mono'"; ctx.fillStyle = col;
+    ctx.fillText(h ? this.liveLabel(h).slice(0, 30) : 'CONNECTING…', bx + 6, by + 13);
   }
 
   // ======================== gesture vocabulary ============================
@@ -2956,12 +3158,16 @@ class Component extends DCLogic {
       gest: { on: st.gestureOn, bg: st.gestureOn ? 'rgba(94,207,224,.12)' : '#161a1f',
         bd: st.gestureOn ? 'rgba(94,207,224,.45)' : '#242b33', fg: st.gestureOn ? '#dff3f7' : '#8b96a2',
         dot: st.gestureOn ? A : '#3b4550',
-        label: { orbit: 'OPEN PALM — ORBIT', pinch: 'PINCH — ZOOM', blade: 'BLADE SWEEP — SECTION',
-          point: 'INDEX POINT — PROBE', fist: 'FIST — CONFIRM', idle: 'TRACKING' }[st.gestAct],
-        hint: 'depth camera · 34 ms latency · 2 hands',
+        label: this.live && this.live.ok && this.live.hud ? this.liveLabel(this.live.hud)
+          : { orbit: 'FIST — ORBIT', pinch: 'PINCH — ZOOM', blade: 'FLAT PALM — SECTION',
+          point: 'INDEX POINT — PROBE', field: 'V SIGN — FIELD', thumb: 'THUMBS-UP — SOLVE',
+          reset: 'BOTH PALMS — RESET', idle: 'TRACKING' }[st.gestAct] || 'TRACKING',
+        hint: this.live && this.live.ok
+          ? (this.live.hud ? (this.live.hud.hints[0] || this.live.hud.tip) : 'webcam · waiting for the gesture engine')
+          : (this.live && this.live.error) || 'no camera · scripted driver',
         mapState: st.gestureOn ? 'live' : 'off', mapFg: st.gestureOn ? A : '#3c4650',
         srcNote: st.gestureOn
-          ? 'scripted driver · ▶ fires a gesture by hand'
+          ? (this.live && this.live.ok ? 'webcam · MediaPipe · ' + (this.live.fps || 0) + ' fps' : 'scripted driver · ▶ fires a gesture by hand')
           : 'source: none — ▶ fires a gesture by hand' },
       ar: { on: st.arOn, bg: st.arOn ? 'rgba(230,201,138,.12)' : '#161a1f',
         bd: st.arOn ? 'rgba(230,201,138,.45)' : '#242b33', fg: st.arOn ? '#f0e0b8' : '#8b96a2',
