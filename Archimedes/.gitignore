@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# solver output
+backend/out/
+backend/studies/*.json
+*.xdmf
+*.h5
+*.msh
+*.vtu
+*.npz
+bracket_L_results.csv
+
+.DS_Store
+Thumbs.db

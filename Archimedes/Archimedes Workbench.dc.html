@@ -1,0 +1,3069 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;background:#0b0d10;color:#e6e9ec;font-family:'IBM Plex Sans',system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+a{color:#5ecfe0;text-decoration:none}
+a:hover{color:#93e5f2}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input{font-family:inherit;outline:none}
+input[type=range]{accent-color:#5ecfe0;height:2px;background:#242b33;border-radius:2px;appearance:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;border-radius:50%;background:#5ecfe0;box-shadow:0 0 0 3px rgba(94,207,224,.18);cursor:grab}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#232a32;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#333b45}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes kpulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes kpop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes kfade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+
+<div data-screen-label="Workbench" style="height:100vh;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:32px 28px 46px minmax(0,1fr) auto auto;background:#0b0d10;overflow:hidden">
+
+  <div style="display:flex;align-items:stretch;background:#0d1013;border-bottom:1px solid #161c22;-webkit-app-region:drag;user-select:none">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;min-width:0;overflow:hidden">
+      <div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#5ecfe0,#2b7f8e);box-shadow:0 0 10px rgba(94,207,224,.3);flex:0 0 auto"></div>
+      <div style="font:600 12px/1 'Segoe UI','Segoe UI Variable Text',system-ui;color:#c9d2da;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ winTitle }}</div>
+      <div style="font:400 11px/1 'Segoe UI',system-ui;color:#5a6570;white-space:nowrap;flex:0 0 auto">{{ savedLabel }}</div>
+    </div>
+    <div style="flex:1;min-width:8px"></div>
+    <div style="display:flex;align-items:center;gap:10px;padding-right:12px;font:400 11px/1 'Segoe UI',system-ui;color:#4d5866;flex:0 1 auto;overflow:hidden;white-space:nowrap">
+      <span>{{ dpiLabel }}</span>
+    </div>
+    <div style="display:flex;align-items:stretch;flex:0 0 auto;-webkit-app-region:no-drag">
+      <button title="Minimize" style="width:44px;display:flex;align-items:center;justify-content:center;color:#b6bfc8;transition:background .1s ease" style-hover="background:rgba(255,255,255,.07)">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"></path></svg>
+      </button>
+      <button onClick="{{ win.toggleMax }}" title="{{ win.maxTitle }}" style="width:44px;display:flex;align-items:center;justify-content:center;color:#b6bfc8;transition:background .1s ease" style-hover="background:rgba(255,255,255,.07)">
+        <sc-if value="{{ win.isMax }}" hint-placeholder-val="{{ true }}">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"></rect><path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" stroke-width="1"></path></svg>
+        </sc-if>
+        <sc-if value="{{ win.isRestored }}" hint-placeholder-val="{{ false }}">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"></rect></svg>
+        </sc-if>
+      </button>
+      <button title="Close" style="width:44px;display:flex;align-items:center;justify-content:center;color:#b6bfc8;transition:background .1s ease,color .1s ease" style-hover="background:#c42b1c;color:#fff">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <div data-menubar style="display:flex;align-items:stretch;padding:0 6px;background:#101317;border-bottom:1px solid #1e242b;position:relative;z-index:40;user-select:none;min-width:0;overflow:visible">
+    <sc-for list="{{ menus }}" as="m" hint-placeholder-count="6">
+      <div style="position:relative;display:flex;align-items:stretch">
+        <button onClick="{{ m.click }}" onMouseEnter="{{ m.hover }}" style="display:flex;align-items:center;padding:0 9px;background:{{ m.bg }};color:{{ m.fg }};font:400 12px/1 'Segoe UI','Segoe UI Variable Text',system-ui;transition:background .1s ease" style-hover="background:#1a212a;color:#e2e8ee">
+          <span>{{ m.pre }}</span><span style="text-decoration:underline;text-underline-offset:2px">{{ m.acc }}</span><span>{{ m.post }}</span>
+        </button>
+        <sc-if value="{{ m.open }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:100%;left:0;min-width:262px;padding:4px;background:#191d22;border:1px solid #2b333c;border-radius:7px;box-shadow:0 18px 44px -12px rgba(0,0,0,.8),0 2px 8px rgba(0,0,0,.5);animation:kfade .09s ease">
+            <sc-for list="{{ m.items }}" as="it" hint-placeholder-count="6">
+              <sc-if value="{{ it.isSep }}" hint-placeholder-val="{{ false }}">
+                <div style="height:1px;margin:4px 8px;background:#2b333c"></div>
+              </sc-if>
+              <sc-if value="{{ it.isItem }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ it.run }}" style="display:flex;align-items:center;gap:10px;width:100%;height:28px;padding:0 10px 0 6px;border-radius:4px;color:{{ it.fg }};font:400 12px/1 'Segoe UI','Segoe UI Variable Text',system-ui;transition:background .1s ease" style-hover="background:#262d36">
+                  <span style="width:16px;flex:0 0 auto;text-align:center;font:400 11px/1 'Segoe UI',system-ui;color:#5ecfe0">{{ it.check }}</span>
+                  <span style="text-align:left">{{ it.label }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font:400 11px/1 'Segoe UI',system-ui;color:#69747f;white-space:nowrap">{{ it.accel }}</span>
+                </button>
+              </sc-if>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;align-items:center;padding:0 12px 0 10px;background:#101317;border-bottom:1px solid #1e242b;min-width:0;overflow:hidden">
+    <div style="display:flex;align-items:stretch;height:100%;min-width:0;overflow:hidden">
+      <sc-for list="{{ stages }}" as="s" hint-placeholder-count="6">
+        <button onClick="{{ s.go }}" style="display:flex;align-items:center;gap:7px;padding:0 11px;background:{{ s.bg }};border-bottom:2px solid {{ s.bd }};color:{{ s.fg }};font:500 11.5px/1 'IBM Plex Sans';transition:background .14s ease,color .14s ease" style-hover="background:#161b21">
+          <span style="font:500 9px/1 'IBM Plex Mono';color:{{ s.num }}">{{ s.idx }}</span>{{ s.label }}
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+      <button onClick="{{ toggleGesture }}" style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:5px;background:{{ gest.bg }};border:1px solid {{ gest.bd }};color:{{ gest.fg }};font:500 11px/1 'IBM Plex Sans';transition:all .16s ease">
+        <span style="width:6px;height:6px;border-radius:50%;background:{{ gest.dot }};box-shadow:0 0 8px {{ gest.dot }}"></span>Gesture
+      </button>
+      <button onClick="{{ toggleAR }}" style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:5px;background:{{ ar.bg }};border:1px solid {{ ar.bd }};color:{{ ar.fg }};font:500 11px/1 'IBM Plex Sans';transition:all .16s ease">
+        <span style="width:6px;height:6px;border-radius:50%;background:{{ ar.dot }};box-shadow:0 0 8px {{ ar.dot }}"></span>AR
+      </button>
+      <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;padding:6px 8px 6px 10px;border-radius:5px;background:#161a1f;border:1px solid #242b33;color:#6f7b88;font:400 11px/1 'IBM Plex Sans';transition:all .16s ease" style-hover="border-color:#333c46;color:#a9b4bf">
+        <span style="white-space:nowrap">Search</span><span style="font:500 10px/1 'IBM Plex Mono';border:1px solid #2b333c;border-radius:3px;padding:3px 4px;color:#5e6b78;white-space:nowrap">Ctrl+K</span>
+      </button>
+      <button onClick="{{ runSolve }}" style="display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:5px;background:{{ solveBtn.bg }};color:{{ solveBtn.fg }};font:600 11.5px/1 'IBM Plex Sans';letter-spacing:.02em;box-shadow:0 4px 16px -8px rgba(94,207,224,.8);transition:filter .16s ease,transform .1s ease" style-hover="filter:brightness(1.09)" style-active="transform:translateY(1px)">
+        {{ solveBtn.label }}
+      </button>
+    </div>
+  </div>
+
+  <div style="display:flex;min-height:0;background:#0b0d10">
+
+    <div style="width:{{ leftW }}px;flex:0 0 auto;background:#0e1114;border-right:1px solid #1a2027;display:flex;flex-direction:column;min-width:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #171d24">
+        <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78">MODEL TREE</div>
+        <div style="font:400 10px/1 'IBM Plex Mono';color:#3f4a56">{{ treeCount }}</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:3px 0 10px">
+        <sc-for list="{{ tree }}" as="n" hint-placeholder-count="16">
+          <div onClick="{{ n.click }}" style="display:flex;align-items:center;gap:5px;height:19px;padding-right:8px;padding-left:{{ n.pad }}px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;border-left:2px solid {{ n.rail }};transition:background .12s ease,color .12s ease" style-hover="background:#151a20">
+            <span onClick="{{ n.toggle }}" style="width:9px;flex:0 0 auto;text-align:center;font:400 7px/1 'IBM Plex Mono';color:{{ n.caretFg }};transition:color .12s ease" style-hover="color:#9fdbe6">{{ n.caret }}</span>
+            <span style="width:5px;height:5px;border-radius:{{ n.dotR }};background:{{ n.dot }};flex:0 0 auto"></span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.label }}</span>
+            <span style="flex:1;min-width:3px"></span>
+            <span style="font:400 8.5px/1 'IBM Plex Mono';color:#414c58;white-space:nowrap">{{ n.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{ node.on }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;border-top:1px solid #171d24;padding:7px 10px 9px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">NODE {{ node.id }}</div>
+            <button onClick="{{ node.clear }}" style="width:15px;height:15px;border-radius:3px;color:#5b6672;font:400 9px/1 'IBM Plex Mono'" style-hover="background:#242c35;color:#dfe6ed">✕</button>
+          </div>
+          <sc-for list="{{ node.rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:flex;justify-content:space-between;gap:6px;font:400 9.5px/1.6 'IBM Plex Mono'">
+              <span style="color:#5b6672">{{ r.k }}</span><span style="color:#b9c3cd">{{ r.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <div onMouseDown="{{ dragLeft }}" style="width:5px;margin:0 -2px;flex:0 0 auto;cursor:col-resize;z-index:6"></div>
+
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+    <div style="display:flex;align-items:stretch;height:29px;flex:0 0 auto;background:#0d1013;border-bottom:1px solid #1a2027;padding:0 6px;gap:2px;overflow:hidden">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:6px;padding:0 4px 0 10px;border-radius:5px 5px 0 0;background:{{ t.bg }};border-bottom:2px solid {{ t.bd }};transition:background .14s ease">
+          <button onClick="{{ t.go }}" style="display:flex;align-items:center;gap:7px;height:100%;color:{{ t.fg }};font:500 11px/1 'IBM Plex Sans';white-space:nowrap">
+            <span style="width:5px;height:5px;border-radius:50%;background:{{ t.dot }}"></span>{{ t.label }}
+          </button>
+          <button onClick="{{ t.detach }}" title="Open in a separate window" style="width:16px;height:16px;border-radius:3px;color:{{ t.popFg }};font:400 10px/1 'IBM Plex Mono';transition:all .12s ease" style-hover="background:#242c35;color:#9fdbe6">⧉</button>
+        </div>
+      </sc-for>
+      <div style="flex:1;min-width:4px"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding-right:4px;font:400 9.5px/1 'IBM Plex Mono';color:#4d5866;white-space:nowrap">
+        <span>{{ tabHint }}</span>
+      </div>
+    </div>
+
+    <div ref="{{ viewportRef }}" style="flex:1;position:relative;min-width:0;overflow:hidden">
+      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;cursor:{{ vpCursor }}"></canvas>
+
+      <div style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:5px">
+          <sc-for list="{{ viewPresets }}" as="v" hint-placeholder-count="5">
+            <button onClick="{{ v.click }}" style="padding:6px 9px;border-radius:4px;background:rgba(16,19,23,.8);backdrop-filter:blur(8px);border:1px solid {{ v.bd }};color:{{ v.fg }};font:500 10px/1 'IBM Plex Mono';letter-spacing:.05em;transition:all .14s ease" style-hover="border-color:#3a4652;color:#dfe6ed">{{ v.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font:400 10px/1.65 'IBM Plex Mono';color:#4a5561;pointer-events:none">
+          <div>{{ vpLine1 }}</div>
+          <div>{{ vpLine2 }}</div>
+          <div style="color:{{ vpLine3Fg }}">{{ vpLine3 }}</div>
+        </div>
+      </div>
+
+      <sc-if value="{{ showLegend }}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute;top:118px;right:{{ legendRight }}px;width:112px;padding:9px;border-radius:6px;background:rgba(13,16,19,.85);backdrop-filter:blur(10px);border:1px solid #232a32;animation:kpop .22s ease both">
+          <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.13em;color:#6b7783;margin-bottom:4px">{{ legend.title }}</div>
+          <div style="font:400 9px/1 'IBM Plex Mono';color:#4a545f;margin-bottom:9px">{{ legend.unit }}</div>
+          <div style="display:flex;gap:8px;height:156px">
+            <div style="width:13px;border-radius:2px;border:1px solid #2a323b;background:{{ legend.gradient }}"></div>
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+              <sc-for list="{{ legend.ticks }}" as="t" hint-placeholder-count="6">
+                <div style="font:400 9.5px/1 'IBM Plex Mono';color:#8b96a2">{{ t.v }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="margin-top:9px;padding-top:8px;border-top:1px solid #232a32;font:400 9.5px/1.55 'IBM Plex Mono';color:#6b7783">
+            <div style="color:#c8d2dc">max {{ legend.max }}</div>
+            <div>{{ legend.maxLoc }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ probe.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:{{ probe.x }}px;top:{{ probe.y }}px;pointer-events:none;padding:7px 9px;border-radius:5px;background:rgba(11,14,17,.95);border:1px solid #2e3742;box-shadow:0 10px 30px -14px #000;animation:kfade .1s ease both">
+          <div style="font:500 10px/1.6 'IBM Plex Mono';color:#e2e8ee">{{ probe.l1 }}</div>
+          <div style="font:400 10px/1.6 'IBM Plex Mono';color:#7c8794">{{ probe.l2 }}</div>
+          <div style="font:400 10px/1.6 'IBM Plex Mono';color:#7c8794">{{ probe.l3 }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ gest.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;bottom:14px;right:14px;display:flex;align-items:center;gap:11px;padding:9px 13px;border-radius:6px;background:rgba(13,16,19,.86);backdrop-filter:blur(10px);border:1px solid #27444a;animation:kpop .22s ease both">
+          <div style="width:8px;height:8px;border-radius:50%;background:#5ecfe0;box-shadow:0 0 10px #5ecfe0;animation:kpulse 1.5s ease-in-out infinite"></div>
+          <div>
+            <div style="font:600 10.5px/1.35 'IBM Plex Sans';color:#cfe9ee;letter-spacing:.03em">{{ gest.label }}</div>
+            <div style="font:400 9.5px/1.35 'IBM Plex Mono';color:#6d8a90">{{ gest.hint }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ ar.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;bottom:14px;left:14px;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:rgba(13,16,19,.86);backdrop-filter:blur(10px);border:1px solid #3a3324;animation:kpop .22s ease both">
+          <div style="font:600 10px/1.35 'IBM Plex Sans';color:#e6c98a;letter-spacing:.08em">AR PLACEMENT</div>
+          <div style="font:400 9.5px/1.35 'IBM Plex Mono';color:#8a7c5c">{{ ar.hint }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tabIs.converge }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:25;background:#0b0d10;overflow-y:auto;padding:16px 18px">
+          <div style="font:600 10px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78;margin-bottom:4px">SOLVE HISTORY</div>
+          <div style="font:400 10.5px/1.5 'IBM Plex Mono';color:#4d5866;margin-bottom:14px">{{ conv.note }}</div>
+          <sc-if value="{{ conv.empty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:26px 0;font:400 11.5px/1.6 'IBM Plex Sans';color:#5b6672">No solves recorded yet. Each run appends a row — refine the mesh between runs to watch the answer converge.</div>
+          </sc-if>
+          <sc-for list="{{ conv.rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 9px;margin-bottom:3px;border-radius:5px;background:{{ r.bg }};border:1px solid {{ r.bd }}">
+              <span style="width:16px;font:500 10px/1 'IBM Plex Mono';color:#5e6b78">{{ r.n }}</span>
+              <span style="width:74px;font:500 9.5px/1 'IBM Plex Mono';color:{{ r.engFg }}">{{ r.engine }}</span>
+              <span style="width:74px;font:400 10px/1 'IBM Plex Mono';color:#8b96a2;text-align:right">{{ r.elements }} el</span>
+              <span style="width:78px;font:400 10px/1 'IBM Plex Mono';color:#8b96a2;text-align:right">{{ r.dof }} DOF</span>
+              <span style="width:52px;font:400 10px/1 'IBM Plex Mono';color:#6c7784;text-align:right">{{ r.iters }} it</span>
+              <span style="flex:1;min-width:40px;height:4px;border-radius:2px;background:#151b22;overflow:hidden">
+                <span style="display:block;height:100%;width:{{ r.pct }}%;background:{{ r.barFg }};border-radius:2px"></span>
+              </span>
+              <span style="width:84px;font:500 10px/1 'IBM Plex Mono';color:#dbe3ea;text-align:right">{{ r.vm }}</span>
+              <span style="width:74px;font:400 10px/1 'IBM Plex Mono';color:#93a0ad;text-align:right">{{ r.umax }}</span>
+              <span style="width:66px;font:400 10px/1 'IBM Plex Mono';color:#6c7784;text-align:right">{{ r.secs }}</span>
+            </div>
+          </sc-for>
+          <div style="margin-top:14px;display:flex;gap:8px">
+            <button onClick="{{ conv.clear }}" style="padding:6px 11px;border-radius:5px;border:1px solid #222a33;background:#12171d;color:#8b96a2;font:500 10px/1 'IBM Plex Mono';transition:all .14s ease" style-hover="border-color:#37424e;color:#dfe6ed">CLEAR HISTORY</button>
+            <button onClick="{{ conv.refine }}" style="padding:6px 11px;border-radius:5px;border:1px solid #2d5f68;background:#12191f;color:#7fd8e6;font:500 10px/1 'IBM Plex Mono';transition:all .14s ease" style-hover="background:#16222a">REFINE ×2 &amp; RE-SOLVE</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ aiClosed }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ chat.open }}" title="Open the design assistant" style="position:absolute;top:50%;right:0;transform:translateY(-50%);z-index:26;width:22px;padding:14px 0;border-radius:5px 0 0 5px;background:rgba(16,20,25,.92);border:1px solid #232b34;border-right:0;color:#7ee787;font:600 9px/1 'IBM Plex Mono';writing-mode:vertical-rl;letter-spacing:.14em;transition:all .15s ease" style-hover="background:#182029;color:#a8e8b4">AI ◂</button>
+      </sc-if>
+
+      <sc-if value="{{ aiOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:0;right:0;bottom:0;width:326px;max-width:78%;z-index:26;background:#0b0d10;border-left:1px solid #1e252d;box-shadow:-14px 0 34px -20px #000;display:flex;flex-direction:column">
+          <div style="flex:0 0 auto;padding:11px 16px;border-bottom:1px solid #171d24;display:flex;align-items:center;gap:10px">
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ chat.dot }}"></span>
+            <span style="flex:1;font:600 11px/1 'IBM Plex Sans';color:#dfe6ed;letter-spacing:.02em">Design Assistant</span>
+            <button onClick="{{ chat.close }}" title="Collapse" style="width:18px;height:18px;border-radius:3px;color:#6c7784;font:400 11px/1 'IBM Plex Mono';transition:all .13s ease" style-hover="background:#242c35;color:#dfe6ed">▸</button>
+          </div>
+          <div style="flex:0 0 auto;padding:5px 16px 0;font:400 9px/1.5 'IBM Plex Mono';color:{{ chat.stateFg }}">{{ chat.state }}</div>
+          <div ref="{{ chat.ref }}" style="flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px;min-height:0">
+            <sc-for list="{{ chat.msgs }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;align-items:{{ m.align }};gap:4px">
+                <div style="max-width:82%;padding:9px 12px;border-radius:{{ m.radius }};background:{{ m.bg }};border:1px solid {{ m.bd }};font:400 11.5px/1.65 'IBM Plex Sans';color:{{ m.fg }};white-space:pre-wrap">{{ m.text }}</div>
+                <sc-for list="{{ m.actions }}" as="a" hint-placeholder-count="2">
+                  <button onClick="{{ a.run }}" style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:6px;background:#12191f;border:1px solid #2d5f68;text-align:left;transition:all .14s ease" style-hover="background:#16222a;border-color:#3f7d88">
+                    <span style="font:600 9px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.1em">{{ a.verb }}</span>
+                    <span style="font:400 10.5px/1.4 'IBM Plex Sans';color:#c3ccd6">{{ a.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:0 0 auto;padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
+            <sc-for list="{{ chat.prompts }}" as="p" hint-placeholder-count="3">
+              <button onClick="{{ p.run }}" style="padding:6px 10px;border-radius:14px;background:#12171d;border:1px solid #232b34;color:#8b96a2;font:400 10.5px/1 'IBM Plex Sans';transition:all .14s ease" style-hover="border-color:#37424e;color:#dfe6ed">{{ p.label }}</button>
+            </sc-for>
+          </div>
+          <div style="flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:11px 16px 14px;border-top:1px solid #171d24">
+            <input value="{{ chat.input }}" onChange="{{ chat.onInput }}" onKeyDown="{{ chat.onKey }}" placeholder="Ask about the results, or describe a change…" aria-label="Message the design assistant" style="flex:1;background:#12171d;border:1px solid #232b34;border-radius:6px;padding:9px 11px;color:#e6ecf2;font:400 11.5px/1.3 'IBM Plex Sans'" />
+            <button onClick="{{ chat.send }}" style="padding:9px 15px;border-radius:6px;background:#5ecfe0;color:#07171a;font:600 11px/1 'IBM Plex Sans';transition:filter .14s ease" style-hover="filter:brightness(1.09)">SEND</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+    </div>
+
+    <div onMouseDown="{{ dragRight }}" style="width:5px;margin:0 -2px;flex:0 0 auto;cursor:col-resize;z-index:6"></div>
+
+    <div style="width:{{ rightW }}px;flex:0 0 auto;background:#0e1114;border-left:1px solid #1a2027;display:flex;flex-direction:column;min-width:0">
+      <div style="padding:10px 13px;border-bottom:1px solid #171d24">
+        <div style="font:600 11.5px/1.3 'IBM Plex Sans';color:#dfe6ed;letter-spacing:.02em">{{ panel.title }}</div>
+        <div style="font:400 10px/1.4 'IBM Plex Mono';color:#5b6672;margin-top:3px">{{ panel.sub }}</div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:4px 0 24px">
+
+        <sc-for list="{{ panel.sections }}" as="sec" hint-placeholder-count="2">
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:9px">{{ sec.title }}</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ sec.params }}" as="p" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;font:400 11px/1.3 'IBM Plex Sans';color:#8e99a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.label }}</div>
+                  <div style="display:flex;align-items:center;background:#131920;border:1px solid #232b34;border-radius:4px;overflow:hidden;transition:border-color .15s ease" style-hover="border-color:#334050">
+                    <button onClick="{{ p.dec }}" style="width:19px;height:24px;color:#5f6b78;font:400 13px/1 'IBM Plex Mono';transition:all .12s ease" style-hover="color:#5ecfe0;background:#182029">−</button>
+                    <input value="{{ p.val }}" onChange="{{ p.onEdit }}" onFocus="{{ p.onFocus }}" onBlur="{{ p.onCommit }}" onKeyDown="{{ p.onKeyDown }}" aria-label="{{ p.label }}" style="width:{{ p.w }}px;text-align:right;background:none;border:0;padding:0;font:500 11px/1 'IBM Plex Mono';color:#dbe3ea" />
+                    <div style="font:400 10px/1 'IBM Plex Mono';color:#57626e;padding:0 5px 0 4px;min-width:26px">{{ p.unit }}</div>
+                    <button onClick="{{ p.inc }}" style="width:19px;height:24px;color:#5f6b78;font:400 13px/1 'IBM Plex Mono';border-left:1px solid #1e252d;transition:all .12s ease" style-hover="color:#5ecfe0;background:#182029">+</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{ isMat }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:9px">LIBRARY</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <sc-for list="{{ materials }}" as="m" hint-placeholder-count="4">
+                <button onClick="{{ m.click }}" style="display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:5px;background:{{ m.bg }};border:1px solid {{ m.bd }};text-align:left;transition:all .15s ease" style-hover="border-color:#37424e">
+                  <span style="width:9px;height:9px;border-radius:2px;background:{{ m.swatch }};flex:0 0 auto"></span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font:500 11px/1.35 'IBM Plex Sans';color:{{ m.fg }}">{{ m.name }}</span>
+                    <span style="display:block;font:400 9.5px/1.35 'IBM Plex Mono';color:#5b6672">{{ m.spec }}</span>
+                  </span>
+                  <span style="font:400 9px/1 'IBM Plex Mono';color:{{ m.tagFg }}">{{ m.tag }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLoad }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:9px">BOUNDARY SET</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <sc-for list="{{ bcs }}" as="b" hint-placeholder-count="4">
+                <button onClick="{{ b.click }}" style="display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:5px;background:{{ b.bg }};border:1px solid {{ b.bd }};text-align:left;transition:all .15s ease" style-hover="border-color:#37424e">
+                  <span style="width:16px;height:16px;border-radius:3px;background:{{ b.iconBg }};color:{{ b.iconFg }};font:600 9px/16px 'IBM Plex Mono';text-align:center;flex:0 0 auto">{{ b.icon }}</span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font:500 11px/1.35 'IBM Plex Sans';color:{{ b.fg }}">{{ b.name }}</span>
+                    <span style="display:block;font:400 9.5px/1.35 'IBM Plex Mono';color:#5b6672">{{ b.target }}</span>
+                  </span>
+                  <span style="font:500 10px/1 'IBM Plex Mono';color:{{ b.valFg }}">{{ b.val }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMesh }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:10px">QUALITY</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ meshQuality }}" as="q" hint-placeholder-count="3">
+                <div>
+                  <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                    <span style="font:400 10.5px/1 'IBM Plex Sans';color:#8e99a5">{{ q.label }}</span>
+                    <span style="font:500 10px/1 'IBM Plex Mono';color:{{ q.fg }}">{{ q.val }}</span>
+                  </div>
+                  <div style="height:3px;border-radius:2px;background:#1a2028;overflow:hidden">
+                    <div style="height:100%;width:{{ q.pct }}%;background:{{ q.fg }};border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSolve }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:9px">ENGINE</div>
+            <div style="display:flex;gap:4px;margin-bottom:6px">
+              <sc-for list="{{ engineOpts }}" as="e" hint-placeholder-count="2">
+                <button onClick="{{ e.click }}" style="flex:1;padding:7px 0;border-radius:4px;background:{{ e.bg }};border:1px solid {{ e.bd }};color:{{ e.fg }};font:500 10px/1 'IBM Plex Mono';transition:all .15s ease">{{ e.label }}</button>
+              </sc-for>
+            </div>
+            <div style="font:400 9.5px/1.5 'IBM Plex Mono';color:{{ engineNoteFg }};margin-bottom:11px">{{ engineNote }}</div>
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:8px">MESHER</div>
+            <div style="display:flex;gap:4px">
+              <sc-for list="{{ mesherOpts }}" as="m" hint-placeholder-count="2">
+                <button onClick="{{ m.click }}" style="flex:1;padding:7px 0;border-radius:4px;background:{{ m.bg }};border:1px solid {{ m.bd }};color:{{ m.fg }};font:500 10px/1 'IBM Plex Mono';transition:all .15s ease">{{ m.label }}</button>
+              </sc-for>
+            </div>
+            <div style="font:400 9.5px/1.5 'IBM Plex Mono';color:#4d5866;margin-top:7px">{{ mesherNote }}</div>
+          </div>
+          <div style="padding:11px 13px;border-bottom:1px solid #161c22">
+            <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:9px">OUTPUT REQUESTS</div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ outputs }}" as="o" hint-placeholder-count="5">
+                <button onClick="{{ o.click }}" style="display:flex;align-items:center;gap:9px;padding:6px 4px;text-align:left;transition:opacity .15s ease">
+                  <span style="width:13px;height:13px;border-radius:3px;background:{{ o.boxBg }};border:1px solid {{ o.boxBd }};color:#07171a;font:700 9px/12px 'IBM Plex Mono';text-align:center;flex:0 0 auto;transition:all .15s ease">{{ o.check }}</span>
+                  <span style="flex:1;font:400 11px/1.3 'IBM Plex Sans';color:{{ o.fg }}">{{ o.label }}</span>
+                  <span style="font:400 9.5px/1 'IBM Plex Mono';color:#4d5866">{{ o.code }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRes }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 10px;border-bottom:1px solid #161c22">
+            <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78;margin-bottom:6px">FIELD</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
+              <sc-for list="{{ fields }}" as="f" hint-placeholder-count="4">
+                <button onClick="{{ f.click }}" title="{{ f.label }}" style="display:flex;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;border-radius:3px;background:{{ f.bg }};border:1px solid {{ f.bd }};transition:all .13s ease" style-hover="border-color:#37424e">
+                  <span style="font:600 10px/1 'IBM Plex Mono';color:{{ f.fg }}">{{ f.short }}</span>
+                  <span style="font:400 8.5px/1 'IBM Plex Mono';color:#5b6672">{{ f.unit }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="padding:8px 10px;border-bottom:1px solid #161c22">
+            <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78;margin-bottom:6px">DISPLAY</div>
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+              <sc-for list="{{ shadeOpts }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.click }}" title="{{ s.title }}" style="flex:1;padding:5px 0;border-radius:3px;background:{{ s.bg }};border:1px solid {{ s.bd }};color:{{ s.fg }};font:500 9px/1 'IBM Plex Mono';letter-spacing:.04em;transition:all .13s ease">{{ s.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:3px">
+              <sc-for list="{{ viewToggles }}" as="t" hint-placeholder-count="3">
+                <button onClick="{{ t.click }}" title="{{ t.title }}" style="flex:1;padding:5px 0;border-radius:3px;background:{{ t.bg }};border:1px solid {{ t.bd }};color:{{ t.fg }};font:500 9px/1 'IBM Plex Mono';transition:all .13s ease">{{ t.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="padding:8px 10px;border-bottom:1px solid #161c22">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">WARP</div>
+              <div style="font:500 9.5px/1 'IBM Plex Mono';color:#5ecfe0">{{ deformLabel }}</div>
+            </div>
+            <input type="range" min="0" max="100" step="1" value="{{ deformRaw }}" onChange="{{ onDeform }}" aria-label="Warp by vector scale" style="width:100%;margin:0" />
+          </div>
+
+          <div style="padding:8px 10px;border-bottom:1px solid #161c22">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">{{ time.title }}</div>
+              <button onClick="{{ time.toggleModal }}" style="padding:3px 6px;border-radius:3px;background:{{ time.mBg }};border:1px solid {{ time.mBd }};color:{{ time.mFg }};font:500 9px/1 'IBM Plex Mono';transition:all .13s ease">{{ time.mLabel }}</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px">
+              <input type="range" min="{{ time.min }}" max="{{ time.max }}" step="1" value="{{ time.raw }}" onChange="{{ time.onChange }}" aria-label="{{ time.title }}" style="flex:1;margin:0" />
+              <span style="font:500 9.5px/1 'IBM Plex Mono';color:#93a0ad;min-width:46px;text-align:right">{{ time.label }}</span>
+            </div>
+            <div style="font:400 9px/1.45 'IBM Plex Mono';color:#4d5866;margin-top:6px">{{ time.note }}</div>
+          </div>
+
+          <div style="padding:8px 10px;border-bottom:1px solid #161c22">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">SECTION</div>
+              <button onClick="{{ toggleCut }}" style="padding:3px 7px;border-radius:3px;background:{{ cut.tglBg }};border:1px solid {{ cut.tglBd }};color:{{ cut.tglFg }};font:500 9px/1 'IBM Plex Mono';transition:all .13s ease">{{ cut.tglLabel }}</button>
+            </div>
+            <sc-if value="{{ cut.on }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div style="display:flex;gap:3px;margin-bottom:6px">
+                  <sc-for list="{{ cut.axes }}" as="a" hint-placeholder-count="3">
+                    <button onClick="{{ a.click }}" style="flex:1;padding:5px 0;border-radius:3px;background:{{ a.bg }};border:1px solid {{ a.bd }};color:{{ a.fg }};font:500 9px/1 'IBM Plex Mono';letter-spacing:.05em;transition:all .13s ease">{{ a.label }}</button>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <input type="range" min="4" max="96" step="1" value="{{ cut.posRaw }}" onChange="{{ onCutPos }}" aria-label="Section cut position" style="flex:1;margin:0" />
+                  <span style="font:500 9.5px/1 'IBM Plex Mono';color:#93a0ad;min-width:40px;text-align:right">{{ cut.posLabel }}</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="padding:8px 10px 12px">
+            <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78;margin-bottom:6px">FILTERS</div>
+            <div style="display:flex;gap:3px">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="2">
+                <button onClick="{{ f.click }}" title="{{ f.api }}" style="flex:1;padding:5px 0;border-radius:3px;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.fg }};font:500 9px/1 'IBM Plex Mono';transition:all .13s ease">{{ f.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ thresh.on }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:8px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                  <span style="font:400 9.5px/1 'IBM Plex Sans';color:#8e99a5">Lower bound</span>
+                  <span style="font:500 9.5px/1 'IBM Plex Mono';color:#5ecfe0">{{ thresh.label }}</span>
+                </div>
+                <input type="range" min="0" max="92" step="1" value="{{ thresh.raw }}" onChange="{{ thresh.onChange }}" aria-label="Threshold lower bound" style="width:100%;margin:0" />
+              </div>
+            </sc-if>
+            <sc-if value="{{ iso.on }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:8px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                  <span style="font:400 9.5px/1 'IBM Plex Sans';color:#8e99a5">Bands</span>
+                  <span style="font:500 9.5px/1 'IBM Plex Mono';color:#5ecfe0">{{ iso.n }}</span>
+                </div>
+                <input type="range" min="3" max="24" step="1" value="{{ iso.n }}" onChange="{{ iso.onChange }}" aria-label="Contour bands" style="width:100%;margin:0" />
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ log.open }}" hint-placeholder-val="{{ false }}">
+    <div style="height:158px;display:flex;flex-direction:column;background:#0a0d10;border-top:1px solid #1a2027;min-height:0">
+      <div style="display:flex;align-items:center;gap:11px;padding:7px 13px;border-bottom:1px solid #161c22;flex:0 0 auto">
+        <div style="font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78">SOLVER LOG</div>
+        <div style="font:400 9.5px/1 'IBM Plex Mono';color:#3f4a56">{{ log.meta }}</div>
+        <div style="flex:1"></div>
+        <button onClick="{{ log.clear }}" style="padding:4px 7px;border-radius:4px;border:1px solid #222a33;background:#12171d;color:#6c7784;font:500 9.5px/1 'IBM Plex Mono';transition:all .14s ease" style-hover="border-color:#37424e;color:#a9b4bf">CLEAR</button>
+        <button onClick="{{ log.toggle }}" style="padding:4px 8px;border-radius:4px;border:1px solid #222a33;background:#12171d;color:#6c7784;font:500 9.5px/1 'IBM Plex Mono';transition:all .14s ease" style-hover="border-color:#37424e;color:#a9b4bf">HIDE ▾</button>
+      </div>
+      <div ref="{{ log.ref }}" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 13px 10px;min-height:0">
+        <sc-for list="{{ log.lines }}" as="l" hint-placeholder-count="8">
+          <div style="display:flex;gap:11px;font:400 10.5px/1.75 'IBM Plex Mono'">
+            <span style="flex:0 0 auto;width:50px;text-align:right;color:#323c46">{{ l.t }}</span>
+            <span style="flex:0 0 auto;width:62px;color:{{ l.chFg }}">{{ l.ch }}</span>
+            <span style="min-width:0;color:{{ l.fg }};word-break:break-word">{{ l.msg }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="height:44px;flex:0 0 auto;display:flex;align-items:center;gap:0;padding:0 13px;background:#0e1114;border-top:1px solid #1a2027;min-width:0;overflow:hidden">
+    <button onClick="{{ log.toggle }}" style="display:flex;align-items:center;gap:7px;flex:0 0 auto;padding:5px 8px;margin-right:8px;margin-left:-6px;border-radius:4px;font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.15em;color:{{ log.btnFg }};transition:all .14s ease" style-hover="background:#161c23;color:#a9b4bf">
+      PIPELINE<span style="font:400 8px/1 'IBM Plex Mono';color:{{ log.caretFg }}">{{ log.caret }}</span>
+    </button>
+    <div style="flex:1 1 0;min-width:0;overflow:hidden;display:flex;align-items:center;gap:3px;height:100%;padding:8px 0">
+      <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="6">
+        <div style="flex:{{ p.flex }} 1 0;min-width:0;height:100%;border-radius:3px;background:{{ p.bg }};border:1px solid {{ p.bd }};position:relative;overflow:hidden;display:flex;align-items:center;padding:0 9px;transition:background .3s ease,border-color .3s ease">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:{{ p.pct }}%;background:{{ p.fill }};transition:width .18s linear"></div>
+          <div style="position:relative;font:500 10px/1 'IBM Plex Mono';color:{{ p.fg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.label }}</div>
+          <div style="flex:1;min-width:4px"></div>
+          <div style="position:relative;flex:0 0 auto;font:400 9.5px/1 'IBM Plex Mono';color:{{ p.tFg }};white-space:nowrap">{{ p.time }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="flex:0 0 auto;padding-left:14px;font:500 10.5px/1 'IBM Plex Mono';color:{{ solveStatusFg }};text-align:right;white-space:nowrap">{{ solveStatus }}</div>
+  </div>
+
+  <div style="height:26px;flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:0 14px;background:#0b0d10;border-top:1px solid #161c22;font:400 10px/1 'IBM Plex Mono';color:#4d5866;min-width:0;white-space:nowrap">
+    <div style="display:flex;align-items:center;gap:14px;min-width:0;overflow:hidden;flex:0 1 auto">
+      <sc-for list="{{ statusLeft }}" as="s" hint-placeholder-count="4">
+        <div style="display:flex;gap:6px;flex:0 0 auto"><span style="color:#3c4650">{{ s.k }}</span><span style="color:#8b96a2">{{ s.v }}</span></div>
+      </sc-for>
+    </div>
+    <div data-units-menu="1" style="position:relative;flex:0 0 auto">
+      <button onClick="{{ unitBtn.toggle }}" style="display:flex;align-items:center;gap:6px;padding:3px 7px;margin:0 -3px;border-radius:3px;border:1px solid #1f272f;background:#0f1418;font:400 10px/1 'IBM Plex Mono';transition:all .15s ease" style-hover="border-color:#2d5f68;background:#12191f">
+        <span style="color:#3c4650">UNITS</span><span style="color:#5ecfe0">{{ unitBtn.label }}</span><span style="color:#3c4650;font-size:8px">{{ unitBtn.caret }}</span>
+      </button>
+      <sc-if value="{{ unitBtn.open }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;bottom:24px;left:-3px;z-index:60;min-width:186px;padding:5px;border-radius:6px;background:#12161b;border:1px solid #283039;box-shadow:0 -18px 44px -18px #000;animation:kpop .14s ease both">
+          <div style="padding:6px 8px 7px;font:600 8.5px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78">UNIT SYSTEM</div>
+          <sc-for list="{{ unitBtn.options }}" as="o" hint-placeholder-count="3">
+            <button onClick="{{ o.pick }}" style="display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border-radius:4px;background:{{ o.bg }};text-align:left;transition:background .12s ease" style-hover="background:#1b2129">
+              <span style="width:8px;font:400 8px/1 'IBM Plex Mono';color:{{ o.markFg }};flex:0 0 auto">{{ o.check }}</span>
+              <span style="flex:1;font:500 11px/1.3 'IBM Plex Mono';color:{{ o.fg }}">{{ o.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+    <button onClick="{{ bridge.toggle }}" style="display:flex;align-items:center;gap:7px;flex:0 0 auto;padding:3px 7px;border-radius:3px;border:1px solid {{ bridge.bd }};background:#0f1418;font:400 10px/1 'IBM Plex Mono';transition:all .15s ease" style-hover="background:#12191f">
+      <span style="width:5px;height:5px;border-radius:50%;background:{{ bridge.dot }};box-shadow:0 0 7px {{ bridge.dot }};flex:0 0 auto"></span>
+      <span style="color:#3c4650">BRIDGE</span><span style="color:{{ bridge.fg }}">{{ bridge.label }}</span>
+    </button>
+    <div style="flex:1 1 0;min-width:10px"></div>
+    <div style="display:flex;align-items:center;gap:14px;flex:0 0 auto">
+      <sc-for list="{{ statusRight }}" as="s" hint-placeholder-count="3">
+        <div style="display:flex;gap:6px;flex:0 0 auto"><span style="color:#3c4650">{{ s.k }}</span><span style="color:#8b96a2">{{ s.v }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ pal.open }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;background:rgba(6,8,10,.62);backdrop-filter:blur(3px);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding-top:14vh;animation:kfade .12s ease both">
+      <div onClick="{{ stop }}" style="width:560px;max-width:92vw;border-radius:8px;background:#12161b;border:1px solid #283039;box-shadow:0 40px 90px -30px #000;overflow:hidden;animation:kpop .16s cubic-bezier(.2,.8,.2,1) both">
+        <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #1e252d">
+          <span style="font:400 12px/1 'IBM Plex Mono';color:#5ecfe0">›</span>
+          <input ref="{{ pal.inputRef }}" value="{{ pal.query }}" onChange="{{ pal.onQuery }}" placeholder="Run a command…" style="flex:1;background:none;border:0;color:#e6ecf2;font:400 13px/1.2 'IBM Plex Sans'" />
+          <span style="font:400 9.5px/1 'IBM Plex Mono';color:#4d5866;border:1px solid #262e37;border-radius:3px;padding:3px 5px">ESC</span>
+        </div>
+        <div style="max-height:320px;overflow-y:auto;padding:6px">
+          <sc-for list="{{ pal.items }}" as="c" hint-placeholder-count="7">
+            <button onClick="{{ c.run }}" style="display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border-radius:5px;background:{{ c.bg }};text-align:left;transition:background .1s ease" style-hover="background:#1b2129">
+              <span style="width:5px;height:5px;border-radius:50%;background:{{ c.dot }};flex:0 0 auto"></span>
+              <span style="flex:1;font:400 12px/1.3 'IBM Plex Sans';color:{{ c.fg }}">{{ c.label }}</span>
+              <span style="font:400 9.5px/1 'IBM Plex Mono';color:#4d5866">{{ c.group }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+// One contour ramp, the structural blue-to-red every FE post-processor uses.
+// Section caps take the same ramp, so a cut face reads as a continuation of
+// the field rather than as decoration.
+const CMAP = ['#2f4bb5', '#1f9ad6', '#37c26e', '#f0cf3a', '#ef7d2e', '#d92d20'];
+// base working units are mm · N · MPa · tonne/mm3 — the solver never leaves them,
+// these factors only convert for display.
+const UNITS = {
+  mm: { label: 'mm·N·MPa', len: ['mm', 1], force: ['kN', 0.001], stress: ['MPa', 1], mod: ['GPa', 0.001], dens: ['kg/m³', 1] },
+  m:  { label: 'm·kN·kPa', len: ['m', 0.001], force: ['kN', 0.001], stress: ['kPa', 1000], mod: ['GPa', 0.001], dens: ['kg/m³', 1] },
+  imp:{ label: 'in·lbf·ksi', len: ['in', 0.0393701], force: ['lbf', 0.224809], stress: ['ksi', 0.145038], mod: ['Msi', 1.45038e-4], dens: ['lb/ft³', 0.062428] }
+};
+const UORDER = ['mm', 'm', 'imp'];
+
+// E [MPa] · rho [kg/m3] · alpha [1/K] · sy yield [MPa]
+const MATS = [
+  { id: 'al7075', name: 'Al 7075-T6',   E: 71700,  nu: 0.33, rho: 2810, alpha: 23.6e-6, sy: 503, sw: '#9aa6b3' },
+  { id: 'steel',  name: 'Steel 4340',   E: 205000, nu: 0.29, rho: 7850, alpha: 12.3e-6, sy: 470, sw: '#7f8896' },
+  { id: 'ti64',   name: 'Ti-6Al-4V',    E: 113800, nu: 0.34, rho: 4430, alpha: 8.6e-6,  sy: 880, sw: '#8b93a6' },
+  { id: 'cfrp',   name: 'CFRP [0/90]s', E: 135000, nu: 0.31, rho: 1570, alpha: 2.1e-6,  sy: 600, sw: '#3a3f47' }
+];
+const MAT = {};
+MATS.forEach(m => { MAT[m.id] = m; });
+const GRAV = 9810;   // mm/s2
+
+function sig(v) {
+  if (!isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a === 0) return '0';
+  if (a >= 1000) return v.toFixed(0);
+  if (a >= 100) return v.toFixed(1);
+  if (a >= 1) return v.toFixed(2);
+  if (a >= 0.01) return v.toFixed(3);
+  return v.toExponential(2);
+}
+const grp = n => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+function niceStep(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, v)))), m = v / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+const hex2rgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+function ramp(stops, t) {
+  t = Math.max(0, Math.min(1, t));
+  const n = stops.length - 1, i = Math.min(n - 1, Math.floor(t * n)), f = t * n - i;
+  const a = hex2rgb(stops[i]), b = hex2rgb(stops[i + 1]);
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+// even-odd test against a screen-space quad (view-cube face hit testing)
+function pointInQuad(x, y, q) {
+  let inside = false;
+  for (let i = 0, j = 3; i < 4; j = i++) {
+    const xi = q[i][0], yi = q[i][1], xj = q[j][0], yj = q[j][1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const cssRamp = stops => 'linear-gradient(to top,' + stops.join(',') + ')';
+const cssRampH = stops => 'linear-gradient(to right,' + stops.join(',') + ')';
+
+// ===========================================================================
+// FE kernel — 8-node trilinear hexahedron, 2x2x2 Gauss, isotropic elasticity.
+// The voxel core is uniform, so a single Ke serves every element: one 24x24
+// matrix built once per solve, applied matrix-free inside the CG loop.
+// ===========================================================================
+const GP = 1 / Math.sqrt(3);
+const CORN = [];                                  // local node n = a + 2b + 4c
+for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) CORN.push([a, b, c]);
+
+function shapeGrad(dx, dy, dz, xi, et, ze, out) {
+  for (let n = 0; n < 8; n++) {
+    const a = CORN[n][0] * 2 - 1, b = CORN[n][1] * 2 - 1, c = CORN[n][2] * 2 - 1;
+    out[n*3]     = 0.25 * a * (1 + b * et) * (1 + c * ze) / dx;
+    out[n*3 + 1] = 0.25 * b * (1 + a * xi) * (1 + c * ze) / dy;
+    out[n*3 + 2] = 0.25 * c * (1 + a * xi) * (1 + b * et) / dz;
+  }
+  return out;
+}
+const lame = (E, nu) => ({ lam: E * nu / ((1 + nu) * (1 - 2 * nu)), mu: E / (2 * (1 + nu)) });
+
+function hexKe(dx, dy, dz, E, nu) {
+  const { lam, mu } = lame(E, nu);
+  const Ke = new Float64Array(576), gr = new Float64Array(24), det = dx * dy * dz / 8;
+  const g = [-GP, GP];
+  for (const xi of g) for (const et of g) for (const ze of g) {
+    shapeGrad(dx, dy, dz, xi, et, ze, gr);
+    for (let i = 0; i < 8; i++) {
+      const ix = gr[i*3], iy = gr[i*3+1], iz = gr[i*3+2];
+      for (let j = 0; j < 8; j++) {
+        const jx = gr[j*3], jy = gr[j*3+1], jz = gr[j*3+2];
+        const dot = ix*jx + iy*jy + iz*jz;
+        // B_i^T D B_j for the isotropic tensor, written out per 3x3 block
+        const r0 = (i*3) * 24 + j*3;
+        Ke[r0]         += ((lam + mu) * ix*jx + mu * dot) * det;
+        Ke[r0 + 1]     += (lam * ix*jy + mu * iy*jx) * det;
+        Ke[r0 + 2]     += (lam * ix*jz + mu * iz*jx) * det;
+        Ke[r0 + 24]    += (lam * iy*jx + mu * ix*jy) * det;
+        Ke[r0 + 25]    += ((lam + mu) * iy*jy + mu * dot) * det;
+        Ke[r0 + 26]    += (lam * iy*jz + mu * iz*jy) * det;
+        Ke[r0 + 48]    += (lam * iz*jx + mu * ix*jz) * det;
+        Ke[r0 + 49]    += (lam * iz*jy + mu * iy*jz) * det;
+        Ke[r0 + 50]    += ((lam + mu) * iz*jz + mu * dot) * det;
+      }
+    }
+  }
+  return Ke;
+}
+function hexThermal(dx, dy, dz, E, nu, alpha, dT) {
+  const { lam, mu } = lame(E, nu), k = (3 * lam + 2 * mu) * alpha * dT, det = dx * dy * dz / 8;
+  const f = new Float64Array(24), gr = new Float64Array(24), g = [-GP, GP];
+  for (const xi of g) for (const et of g) for (const ze of g) {
+    shapeGrad(dx, dy, dz, xi, et, ze, gr);
+    for (let i = 0; i < 24; i++) f[i] += gr[i] * k * det;
+  }
+  return f;
+}
+// largest eigenvalue of a symmetric 3x3 stress tensor (Cardano)
+function maxPrincipal(sx, sy, sz, txy, tyz, tzx) {
+  const q = (sx + sy + sz) / 3;
+  const p2 = (sx-q)*(sx-q) + (sy-q)*(sy-q) + (sz-q)*(sz-q) + 2*(txy*txy + tyz*tyz + tzx*tzx);
+  if (p2 < 1e-20) return q;
+  const p = Math.sqrt(p2 / 6);
+  const a = (sx - q) / p, b = (sy - q) / p, c = (sz - q) / p;
+  const d = txy / p, e = tyz / p, f = tzx / p;
+  const det = a*(b*c - e*e) - d*(d*c - e*f) + f*(d*e - b*f);
+  const r = Math.max(-1, Math.min(1, det / 2));
+  return q + 2 * p * Math.cos(Math.acos(r) / 3);
+}
+
+// ---------------------------------------------------------------------------
+// geometry: L-bracket — vertical leg of thickness t, top arm of thickness t,
+// filleted at the re-entrant corner with radius r. Extruded through depth D.
+// ---------------------------------------------------------------------------
+function inSolid(x, y, g) {
+  if (x <= g.t) return true;
+  if (y >= g.H - g.t) return true;
+  if (g.r > 0 && x <= g.t + g.r && y >= g.H - g.t - g.r) {
+    const a = x - (g.t + g.r), b = y - (g.H - g.t - g.r);
+    return a*a + b*b >= g.r*g.r;
+  }
+  return false;
+}
+
+// The in-plane spacing is snapped so the wall is a whole number of cells
+// (dx = t/m). Sampling occupancy at cell centres on an unsnapped grid makes the
+// *effective* wall thickness wobble with h — at t=30 a naive grid gives
+// 24/32/30/28 mm for h=12/8/6/4 — and bending stiffness goes as t^3, so that
+// error swamps the discretisation error and refinement stops converging.
+// The backend voxel mesher applies the identical snap, so both engines agree.
+function buildLevel(g, hx, hz) {
+  const m = Math.max(1, Math.round(g.t / hx));
+  const dx = g.t / m, dy = dx;
+  const nx = Math.max(m + 1, Math.round(g.W / dx));
+  const ny = Math.max(m + 1, Math.round(g.H / dy));
+  const nz = Math.max(1, Math.round(g.D / hz));
+  const dz = g.D / nz;
+  const geff = { W: nx * dx, H: ny * dy, D: g.D, t: g.t, r: g.r };
+  const solid = new Uint8Array(nx * ny * nz);
+  let ne = 0;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    if (inSolid((i + 0.5) * dx, (j + 0.5) * dy, geff)) { solid[(k*ny + j)*nx + i] = 1; ne++; }
+  }
+  const NX = nx + 1, NY = ny + 1, NZ = nz + 1;
+  const nid = new Int32Array(NX * NY * NZ).fill(-1);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    if (!solid[(k*ny + j)*nx + i]) continue;
+    for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++)
+      nid[((k+c)*NY + (j+b))*NX + (i+a)] = 0;
+  }
+  let nn = 0;
+  for (let q = 0; q < nid.length; q++) if (nid[q] === 0) nid[q] = nn++;
+  const ni = new Int32Array(nn), nj = new Int32Array(nn), nk = new Int32Array(nn);
+  const px = new Float64Array(nn), py = new Float64Array(nn), pz = new Float64Array(nn);
+  for (let k = 0; k < NZ; k++) for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const n = nid[(k*NY + j)*NX + i];
+    if (n < 0) continue;
+    ni[n] = i; nj[n] = j; nk[n] = k;
+    px[n] = i * dx; py[n] = j * dy; pz[n] = k * dz;
+  }
+  const en = new Int32Array(ne * 8), ecell = new Int32Array(ne);
+  let e = 0;
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const ci = (k*ny + j)*nx + i;
+    if (!solid[ci]) continue;
+    ecell[e] = ci;
+    for (let n = 0; n < 8; n++)
+      en[e*8 + n] = nid[((k + CORN[n][2])*NY + (j + CORN[n][1]))*NX + (i + CORN[n][0])];
+    e++;
+  }
+  return { nx, ny, nz, dx, dy, dz, NX, NY, NZ, solid, nid, ni, nj, nk, px, py, pz, en, ecell, ne, nn, geff };
+}
+
+// nodal field transfer coarse -> fine (used as the CG initial guess)
+function prolongate(C, F, uc) {
+  const out = new Float64Array(F.nn * 3);
+  for (let n = 0; n < F.nn; n++) {
+    const x = F.px[n], y = F.py[n], z = F.pz[n];
+    let ci = Math.min(C.nx - 1, Math.max(0, Math.floor(x / C.dx)));
+    let cj = Math.min(C.ny - 1, Math.max(0, Math.floor(y / C.dy)));
+    let ck = Math.min(C.nz - 1, Math.max(0, Math.floor(z / C.dz)));
+    let hit = -1;
+    for (let rad = 0; rad <= 2 && hit < 0; rad++)
+      for (let dk = -rad; dk <= rad && hit < 0; dk++)
+        for (let dj = -rad; dj <= rad && hit < 0; dj++)
+          for (let di = -rad; di <= rad && hit < 0; di++) {
+            const i = ci + di, j = cj + dj, k = ck + dk;
+            if (i < 0 || j < 0 || k < 0 || i >= C.nx || j >= C.ny || k >= C.nz) continue;
+            if (C.solid[(k*C.ny + j)*C.nx + i]) hit = (k*C.ny + j)*C.nx + i;
+          }
+    if (hit < 0) continue;
+    const i = hit % C.nx, j = Math.floor(hit / C.nx) % C.ny, k = Math.floor(hit / (C.nx * C.ny));
+    const fx = Math.min(1, Math.max(0, x / C.dx - i)),
+          fy = Math.min(1, Math.max(0, y / C.dy - j)),
+          fz = Math.min(1, Math.max(0, z / C.dz - k));
+    let ux = 0, uy = 0, uz = 0;
+    for (let m = 0; m < 8; m++) {
+      const a = CORN[m][0], b = CORN[m][1], c = CORN[m][2];
+      const w = (a ? fx : 1 - fx) * (b ? fy : 1 - fy) * (c ? fz : 1 - fz);
+      if (w === 0) continue;
+      const cn = C.nid[((k + c)*C.NY + (j + b))*C.NX + (i + a)] * 3;
+      ux += w * uc[cn]; uy += w * uc[cn + 1]; uz += w * uc[cn + 2];
+    }
+    out[n*3] = ux; out[n*3 + 1] = uy; out[n*3 + 2] = uz;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// boundary conditions + consistent nodal load vector
+// ---------------------------------------------------------------------------
+function buildLoads(L, g, p, mat, Ke) {
+  const nd = L.nn * 3;
+  const free = new Uint8Array(nd).fill(1);
+  const f = new Float64Array(nd);
+  const tag = { fixed: 0, tip: 0, press: 0 };
+
+  if (p.enc) for (let n = 0; n < L.nn; n++) if (L.nj[n] === 0) {
+    free[3*n] = 0; free[3*n + 1] = 0; free[3*n + 2] = 0; tag.fixed++;
+  }
+  if (p.sym) {
+    const kk = Math.round(L.nz / 2);
+    for (let n = 0; n < L.nn; n++) if (L.nk[n] === kk) free[3*n + 2] = 0;
+  }
+
+  // resultant tip force spread over the outer t of the top face, area weighted
+  if (p.force && p.F !== 0) {
+    const w = new Float64Array(L.nn);
+    const i0 = Math.max(0, L.nx - Math.max(1, Math.round(g.t / L.dx)));
+    let tot = 0;
+    for (let e = 0; e < L.ne; e++) {
+      const ci = L.ecell[e], i = ci % L.nx, j = Math.floor(ci / L.nx) % L.ny;
+      if (j !== L.ny - 1 || i < i0) continue;
+      const A = L.dx * L.dz / 4;
+      for (const m of [2, 3, 6, 7]) { w[L.en[e*8 + m]] += A; tot += A; }
+      tag.tip++;
+    }
+    if (tot > 0) {
+      const dx = Math.sin(p.theta), dy = -Math.cos(p.theta);
+      for (let n = 0; n < L.nn; n++) if (w[n] > 0) {
+        const s = p.F * w[n] / tot;
+        f[3*n] += s * dx; f[3*n + 1] += s * dy;
+      }
+    }
+  }
+  // uniform pressure on the outer web face (x = 0), acting into the part
+  if (p.press && p.P !== 0) {
+    for (let e = 0; e < L.ne; e++) {
+      if (L.ecell[e] % L.nx !== 0) continue;
+      const fn = p.P * L.dy * L.dz / 4;
+      for (const m of [0, 2, 4, 6]) f[3 * L.en[e*8 + m]] += fn;
+      tag.press++;
+    }
+  }
+  // self weight
+  if (p.grav) {
+    const wn = mat.rho * p.mScale * 1e-12 * GRAV * L.dx * L.dy * L.dz / 8;
+    for (let e = 0; e < L.ne; e++)
+      for (let m = 0; m < 8; m++) f[3 * L.en[e*8 + m] + 1] -= wn;
+  }
+  // uniform temperature offset from the stress-free reference
+  if (p.therm && p.dT !== 0) {
+    const fth = hexThermal(L.dx, L.dy, L.dz, mat.E, mat.nu, mat.alpha, p.dT);
+    for (let e = 0; e < L.ne; e++) for (let m = 0; m < 8; m++) {
+      const n3 = L.en[e*8 + m] * 3;
+      f[n3] += fth[m*3]; f[n3 + 1] += fth[m*3 + 1]; f[n3 + 2] += fth[m*3 + 2];
+    }
+  }
+  const fext = Float64Array.from(f);
+  for (let i = 0; i < nd; i++) if (!free[i]) f[i] = 0;
+  return { free, f, fext, tag };
+}
+
+// matrix-free K·u restricted to the free subspace
+function applyK(L, Ke, free, u, out) {
+  out.fill(0);
+  const en = L.en, ne = L.ne;
+  const ue = new Float64Array(24), fe = new Float64Array(24);
+  for (let e = 0; e < ne; e++) {
+    const o = e * 8;
+    for (let a = 0; a < 8; a++) {
+      const n3 = en[o + a] * 3, a3 = a * 3;
+      ue[a3] = u[n3]; ue[a3 + 1] = u[n3 + 1]; ue[a3 + 2] = u[n3 + 2];
+    }
+    for (let i = 0; i < 24; i++) {
+      let s = 0; const r = i * 24;
+      for (let j = 0; j < 24; j++) s += Ke[r + j] * ue[j];
+      fe[i] = s;
+    }
+    for (let a = 0; a < 8; a++) {
+      const n3 = en[o + a] * 3, a3 = a * 3;
+      out[n3] += fe[a3]; out[n3 + 1] += fe[a3 + 1]; out[n3 + 2] += fe[a3 + 2];
+    }
+  }
+  if (free) for (let i = 0; i < out.length; i++) if (!free[i]) out[i] = 0;
+}
+function diagOf(L, Ke, free) {
+  const d = new Float64Array(L.nn * 3);
+  for (let e = 0; e < L.ne; e++) for (let a = 0; a < 8; a++) {
+    const n3 = L.en[e*8 + a] * 3, a3 = a * 3;
+    d[n3]     += Ke[(a3) * 24 + a3];
+    d[n3 + 1] += Ke[(a3 + 1) * 24 + a3 + 1];
+    d[n3 + 2] += Ke[(a3 + 2) * 24 + a3 + 2];
+  }
+  for (let i = 0; i < d.length; i++) if (!free[i] || d[i] <= 0) d[i] = 1;
+  return d;
+}
+
+// Jacobi-preconditioned CG, written as a generator so the caller can spend a
+// fixed slice of each animation frame on it and keep the window responsive.
+function* pcg(L, Ke, free, b, x, tol, maxit, report) {
+  const n = b.length;
+  const r = new Float64Array(n), z = new Float64Array(n), p = new Float64Array(n), ap = new Float64Array(n);
+  const diag = diagOf(L, Ke, free);
+  for (let i = 0; i < n; i++) if (!free[i]) x[i] = 0;
+  applyK(L, Ke, free, x, ap);
+  let bn = 0;
+  for (let i = 0; i < n; i++) { r[i] = b[i] - ap[i]; bn += b[i] * b[i]; }
+  bn = Math.sqrt(bn);
+  if (bn === 0) return { it: 0, res: 0, bn: 0, conv: true };
+  let rz = 0;
+  for (let i = 0; i < n; i++) { z[i] = r[i] / diag[i]; p[i] = z[i]; rz += r[i] * z[i]; }
+  let rn = 0;
+  for (let i = 0; i < n; i++) rn += r[i] * r[i];
+  rn = Math.sqrt(rn);
+  const r0 = rn;
+  let it = 0;
+  while (it < maxit && rn > tol * bn) {
+    it++;
+    applyK(L, Ke, free, p, ap);
+    let pap = 0;
+    for (let i = 0; i < n; i++) pap += p[i] * ap[i];
+    if (!(pap > 0)) break;
+    const al = rz / pap;
+    rn = 0;
+    for (let i = 0; i < n; i++) { x[i] += al * p[i]; r[i] -= al * ap[i]; rn += r[i] * r[i]; }
+    rn = Math.sqrt(rn);
+    let rz2 = 0;
+    for (let i = 0; i < n; i++) { z[i] = r[i] / diag[i]; rz2 += r[i] * z[i]; }
+    const be = rz2 / rz; rz = rz2;
+    for (let i = 0; i < n; i++) p[i] = z[i] + be * p[i];
+    if (it % 20 === 0) {
+      if (report) report(it, rn / bn, Math.log(r0 / rn) / Math.log(r0 / (tol * bn)));
+      yield;
+    }
+  }
+  if (report) report(it, rn / bn, 1);
+  return { it, res: rn / bn, bn, conv: rn <= tol * bn };
+}
+
+// ---------------------------------------------------------------------------
+// nodal stress / strain-energy recovery (corner sampling, averaged per node)
+// ---------------------------------------------------------------------------
+function recover(L, u, mat, dT, want) {
+  const { lam, mu } = lame(mat.E, mat.nu);
+  const nn = L.nn;
+  const umag = new Float64Array(nn);
+  const vm = want.s ? new Float64Array(nn) : null;
+  const p1 = want.s ? new Float64Array(nn) : null;
+  const se = want.e ? new Float64Array(nn) : null;
+  const cnt = new Float64Array(nn);
+  const gr = [], gg = [];
+  for (let c = 0; c < 8; c++) {
+    const a = CORN[c][0]*2 - 1, b = CORN[c][1]*2 - 1, d = CORN[c][2]*2 - 1;
+    gr.push(shapeGrad(L.dx, L.dy, L.dz, a, b, d, new Float64Array(24)));           // corners — peaky nodal field
+    gg.push(shapeGrad(L.dx, L.dy, L.dz, a*GP, b*GP, d*GP, new Float64Array(24)));  // Gauss — exact energy
+  }
+  const ue = new Float64Array(24);
+  const eth = mat.alpha * dT;
+  let seTot = 0;
+  const V = L.dx * L.dy * L.dz;
+  for (let n = 0; n < nn; n++)
+    umag[n] = Math.hypot(u[3*n], u[3*n + 1], u[3*n + 2]);
+  if (want.s || want.e) {
+    for (let e = 0; e < L.ne; e++) {
+      const o = e * 8;
+      for (let a = 0; a < 8; a++) {
+        const n3 = L.en[o + a] * 3, a3 = a * 3;
+        ue[a3] = u[n3]; ue[a3 + 1] = u[n3 + 1]; ue[a3 + 2] = u[n3 + 2];
+      }
+      for (let c = 0; c < 8; c++) {
+        const G = gr[c];
+        let ex = 0, ey = 0, ez = 0, gxy = 0, gyz = 0, gzx = 0;
+        for (let a = 0; a < 8; a++) {
+          const ax = G[a*3], ay = G[a*3 + 1], az = G[a*3 + 2];
+          const vx = ue[a*3], vy = ue[a*3 + 1], vz = ue[a*3 + 2];
+          ex += ax * vx; ey += ay * vy; ez += az * vz;
+          gxy += ay * vx + ax * vy; gyz += az * vy + ay * vz; gzx += az * vx + ax * vz;
+        }
+        const mx = ex - eth, my = ey - eth, mz = ez - eth;   // mechanical strain
+        const tr = mx + my + mz;
+        const sx = lam * tr + 2*mu*mx, sy = lam * tr + 2*mu*my, sz = lam * tr + 2*mu*mz;
+        const txy = mu * gxy, tyz = mu * gyz, tzx = mu * gzx;
+        const node = L.en[o + c];
+        if (want.s) {
+          vm[node] += Math.sqrt(0.5 * ((sx-sy)*(sx-sy) + (sy-sz)*(sy-sz) + (sz-sx)*(sz-sx)
+            + 6 * (txy*txy + tyz*tyz + tzx*tzx)));
+          p1[node] += maxPrincipal(sx, sy, sz, txy, tyz, tzx);
+        }
+        if (want.e) se[node] += 0.5 * (sx*mx + sy*my + sz*mz + txy*gxy + tyz*gyz + tzx*gzx);
+        cnt[node]++;
+      }
+      // corner sampling over-integrates a quadratic density, so the reported
+      // total comes off the 2x2x2 rule, which is exact for this element
+      for (let q = 0; q < 8; q++) {
+        const G = gg[q];
+        let ex = 0, ey = 0, ez = 0, gxy = 0, gyz = 0, gzx = 0;
+        for (let a = 0; a < 8; a++) {
+          const ax = G[a*3], ay = G[a*3 + 1], az = G[a*3 + 2];
+          const vx = ue[a*3], vy = ue[a*3 + 1], vz = ue[a*3 + 2];
+          ex += ax * vx; ey += ay * vy; ez += az * vz;
+          gxy += ay * vx + ax * vy; gyz += az * vy + ay * vz; gzx += az * vx + ax * vz;
+        }
+        const mx = ex - eth, my = ey - eth, mz = ez - eth, tr = mx + my + mz;
+        seTot += 0.5 * ((lam*tr + 2*mu*mx)*mx + (lam*tr + 2*mu*my)*my + (lam*tr + 2*mu*mz)*mz
+          + mu * (gxy*gxy + gyz*gyz + gzx*gzx)) * V / 8;
+      }
+    }
+    for (let n = 0; n < nn; n++) {
+      const c = cnt[n] || 1;
+      if (want.s) { vm[n] /= c; p1[n] /= c; }
+      if (want.e) se[n] /= c;
+    }
+  }
+  const out = { umag, vm, p1, se, seTot, max: {}, argmax: {} };
+  for (const k of ['umag', 'vm', 'p1', 'se']) {
+    const arr = out[k];
+    if (!arr) { out.max[k] = 0; out.argmax[k] = 0; continue; }
+    let m = 0, am = 0;
+    for (let n = 0; n < nn; n++) if (arr[n] > m) { m = arr[n]; am = n; }
+    out.max[k] = m; out.argmax[k] = am;
+  }
+  return out;
+}
+
+// lumped-mass inverse iteration with M-orthogonal deflation — the lowest few
+// natural frequencies, run on the coarsest level of the cascade.
+function* eigenModes(L, Ke, free, mat, mScale, nModes, tol, report) {
+  const nd = L.nn * 3;
+  const M = new Float64Array(nd);
+  const mn = mat.rho * mScale * 1e-12 * L.dx * L.dy * L.dz / 8;
+  for (let e = 0; e < L.ne; e++) for (let a = 0; a < 8; a++) {
+    const n3 = L.en[e*8 + a] * 3;
+    M[n3] += mn; M[n3 + 1] += mn; M[n3 + 2] += mn;
+  }
+  for (let i = 0; i < nd; i++) if (!free[i]) M[i] = 0;
+  const modes = [], rhs = new Float64Array(nd), kx = new Float64Array(nd);
+  for (let m = 0; m < nModes; m++) {
+    let x = new Float64Array(nd);
+    let s = 1;
+    for (let i = 0; i < nd; i++) { s = (s * 1103515245 + 12345) & 0x7fffffff; x[i] = free[i] ? (s / 0x7fffffff - 0.5) : 0; }
+    let lambda = 0;
+    for (let iter = 0; iter < 14; iter++) {
+      for (const q of modes) {                       // M-orthogonalise
+        let d = 0;
+        for (let i = 0; i < nd; i++) d += x[i] * M[i] * q[i];
+        for (let i = 0; i < nd; i++) x[i] -= d * q[i];
+      }
+      for (let i = 0; i < nd; i++) rhs[i] = M[i] * x[i];
+      const y = new Float64Array(nd);
+      yield* pcg(L, Ke, free, rhs, y, tol, 4000, null);
+      for (const q of modes) {
+        let d = 0;
+        for (let i = 0; i < nd; i++) d += y[i] * M[i] * q[i];
+        for (let i = 0; i < nd; i++) y[i] -= d * q[i];
+      }
+      let ym = 0;
+      for (let i = 0; i < nd; i++) ym += y[i] * M[i] * y[i];
+      if (!(ym > 0)) break;
+      const inv = 1 / Math.sqrt(ym);
+      for (let i = 0; i < nd; i++) y[i] *= inv;
+      applyK(L, Ke, free, y, kx);
+      let num = 0;
+      for (let i = 0; i < nd; i++) num += y[i] * kx[i];
+      const prev = lambda; lambda = num;
+      x = y;
+      if (iter > 2 && Math.abs(lambda - prev) < 1e-6 * Math.abs(lambda)) break;
+      yield;
+    }
+    modes.push(x);
+    const hz = Math.sqrt(Math.max(0, lambda)) / (2 * Math.PI);
+    if (report) report(m, hz);
+    yield;
+  }
+  return modes;
+}
+
+const PIPE = ['Geometry', 'Material', 'Loads', 'Mesh', 'PCG solve', 'Recover fields'];
+const BRIDGE_URL = 'ws://127.0.0.1:8791';
+const TABS = [
+  { id: 'view', label: '3D VIEW', dot: '#5ecfe0' },
+  { id: 'converge', label: 'CONVERGENCE', dot: '#a78bfa' }
+];
+
+// The gesture vocabulary. Each entry is a real command: `act` runs the same
+// code path the mouse and menus use, so a recognised gesture and a click are
+// indistinguishable downstream. `demo` marks the ones the scripted driver
+// cycles through — the rest are discrete commands that would fire on
+// recognition, and can be test-fired from the panel.
+const GESTURES = [
+  { id: 'orbit', icon: '⟳', pose: 'open palm · drag', does: 'Orbit the camera', demo: true,
+    act: c => { c.tgt.yaw += 0.0055; } },
+  { id: 'pinch', icon: '⇔', pose: 'thumb + index · spread', does: 'Dolly zoom', demo: true,
+    act: (c, ph) => { c.tgt.dist = Math.max(11, Math.min(80,
+      c.tgt.dist + (ph === 'fire' ? -3 : Math.sin(performance.now() / 360) * 0.32))); } },
+  { id: 'blade', icon: '▬', pose: 'flat blade · sweep across', does: 'Drag the section plane', demo: true,
+    act: (c, ph) => {
+      const p = ph === 'fire' ? (c.state.cutPos + 12) % 92 + 4
+        : 30 + 50 * (0.5 - 0.5 * Math.cos(performance.now() / 1600));
+      if (Math.abs(p - c.state.cutPos) > 0.8) c.setState({ cutPos: Math.round(p), cutOn: true });
+    } },
+  { id: 'point', icon: '↑', pose: 'index point · hold 400 ms', does: 'Probe the peak value', demo: true,
+    act: c => c.probePeak() },
+  { id: 'fist', icon: '●', pose: 'closed fist · hold 400 ms', does: 'Advance to the next stage',
+    act: c => c.setState({ stage: Math.min(6, c.state.stage + 1) }) },
+  { id: 'swipeL', icon: '◀', pose: 'quick palm sweep left', does: 'Previous stage',
+    act: c => c.setState({ stage: Math.max(1, c.state.stage - 1) }) },
+  { id: 'swipeR', icon: '▶', pose: 'quick palm sweep right', does: 'Next stage',
+    act: c => c.setState({ stage: Math.min(6, c.state.stage + 1) }) },
+  { id: 'thumb', icon: '▲', pose: 'thumb up · fingers curled', does: 'Run the solve',
+    act: c => { if (!c.state.solving) c.startSolve(); } },
+  { id: 'spread', icon: '⇿', pose: 'two palms · vary separation', does: 'Scale the displacement warp',
+    act: c => c.setState({ deform: Math.max(1, Math.min(100, c.state.deform + 6)) }) },
+  { id: 'palmDown', icon: '▼', pose: 'palm down · press', does: 'Toggle the section cut',
+    act: c => c.setState({ cutOn: !c.state.cutOn }) }
+];
+
+class Component extends DCLogic {
+  state = {
+    units: 'mm', unitsOpen: false, collapsed: {},
+    iso: false, isoN: 8, thresh: false, threshLo: 22, timeStep: 12, modal: false, mode: 1,
+    stage: 6, leftW: 200, rightW: 236, sel: 'res-vm',
+    gestureOn: false, arOn: false, palOpen: false, palQuery: '', palIdx: 0,
+    menu: null, maxed: true, savedAgo: '· saved 2 min ago',
+    field: 'vm', deform: 12,
+    cutOn: false, cutAxis: 'z', cutPos: 52,
+    shade: 'shaded', planes: false, pick: null,
+    gestOpen: false, aiOpen: false,
+    material: 'al7075', outputs: { u: true, s: true, e: true, rf: true, mode: false },
+    bcOn: { enc: true, force: true, press: true, sym: false },
+    solving: false, solvePct: 0, stagePct: 0, solved: false, solveStep: 0,
+    logOpen: false, bridge: 'off', bridgeEngine: null, log: [],
+    engine: 'auto', mesher: 'voxel',
+    tab: 'view', focus: null, history: [], chat: [], chatInput: '',
+    probe: null, fps: 60, gestAct: 'idle', edit: null, editText: '',
+    stats: null, quality: null, times: null, wall: 0, modes: null,
+    nums: {
+      gWidth: 120, gDepth: 60, gHeight: 180, gFillet: 10, gThk: 30,
+      mTemp: 22, mScale: 1,
+      lForce: 4200, lAngle: 0, lPress: 0.8,
+      hSize: 6, hThick: 2, hAspect: 1, hBudget: 24,
+      sTol: 6, sIncr: 12, sMaxIt: 4000
+    }
+  };
+
+  // these must exist before the first render — the template asks for the refs
+  cam = { yaw: -0.62, pitch: 0.42, dist: 24 };
+  tgt = { yaw: -0.62, pitch: 0.42, dist: 24 };
+  mouse = { x: -1e4, y: -1e4, down: false, lx: 0, ly: 0 };
+  prog = { step: 0, pct: 0 };
+  faces = [];
+  res = null;
+  job = null;
+  pops = {};
+  refCanvas = el => { this.canvas = el; };
+  refViewport = el => { this.viewport = el; };
+  refLog = el => { this.logEl = el; };
+  refPal = el => { this.palInput = el; };
+  refChat = el => { this.chatEl = el; };
+
+  // ---------- lifecycle ----------
+  componentDidMount() {
+    this.frames = 0; this.fpsT = performance.now(); this.lastProbe = 0;
+    this.syncModel();
+
+    const c = this.canvas, vp = this.viewport;
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(vp);
+    this.resize();
+
+    this.onDown = e => {
+      const r = c.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      if (this.gizmoClick(mx, my)) return;               // view cube swallows the press
+      if (this.state.shade === 'nodes') {
+        const n = this.pickNode(mx, my);
+        if (n >= 0) { this.setState({ pick: n }); return; }
+      }
+      this.mouse.down = true; this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
+      this.setState({ vpDown: true });
+    };
+    this.onUp = () => { if (this.mouse.down) { this.mouse.down = false; this.setState({ vpDown: false }); } };
+    this.onMove = e => {
+      const r = c.getBoundingClientRect();
+      this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
+      if (this.mouse.down) {
+        this.tgt.yaw += (e.clientX - this.mouse.lx) * 0.008;
+        this.tgt.pitch = Math.max(-1.3, Math.min(1.3, this.tgt.pitch + (e.clientY - this.mouse.ly) * 0.006));
+        this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
+      }
+    };
+    this.onWheel = e => { e.preventDefault(); this.tgt.dist = Math.max(11, Math.min(80, this.tgt.dist * (1 + e.deltaY * 0.0012))); };
+    this.onLeave = () => { this.mouse.x = -1e4; this.mouse.y = -1e4; };
+    c.addEventListener('mousedown', this.onDown);
+    window.addEventListener('mouseup', this.onUp);
+    c.addEventListener('mousemove', this.onMove);
+    c.addEventListener('mouseleave', this.onLeave);
+    c.addEventListener('wheel', this.onWheel, { passive: false });
+
+    this.onDocDown = e => {
+      const t = e.target;
+      if (this.state.unitsOpen && !(t.closest && t.closest('[data-units-menu]'))) this.setState({ unitsOpen: false });
+      if (this.state.menu && !(t.closest && t.closest('[data-menubar]'))) this.setState({ menu: null });
+    };
+    window.addEventListener('mousedown', this.onDocDown, true);
+    this.onKey = e => {
+      const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+      const typing = e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
+      if (mod && k === 'k') { e.preventDefault(); this.setState({ palOpen: !this.state.palOpen, palQuery: '', palIdx: 0, menu: null }); return; }
+      if (e.key === 'Escape') { this.setState({ palOpen: false, menu: null, edit: null }); if (e.shiftKey) this.abortSolve('cancelled by operator'); return; }
+      if (this.state.palOpen) {
+        const n = this.palList().length;
+        if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ palIdx: n ? (this.state.palIdx + 1) % n : 0 }); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState({ palIdx: n ? (this.state.palIdx + n - 1) % n : 0 }); }
+        else if (e.key === 'Enter') { e.preventDefault(); this.runPalette(this.state.palIdx); }
+        return;
+      }
+      if (typing && !mod) return;                       // never steal keys from a field
+      if (mod && k === 'l') { e.preventDefault(); this.setState({ logOpen: !this.state.logOpen }); }
+      else if (mod && k === 'g') { e.preventDefault(); this.setState({ gestureOn: !this.state.gestureOn }); }
+      else if (mod && k === 's') { e.preventDefault(); this.setState({ savedAgo: '· saved just now' }); }
+      else if (e.key === 'F5') { e.preventDefault(); if (!this.state.solving) this.startSolve(); }
+      else if (e.key === 'F4' && !e.altKey) { e.preventDefault(); this.setState({ stage: 4 }); }
+      else if (e.key === 'F9') { e.preventDefault(); this.setState({ arOn: !this.state.arOn }); }
+      else if (e.key === 'Alt' || (e.altKey && k === 'f')) { e.preventDefault(); this.setState({ menu: this.state.menu ? null : 'File' }); }
+      else if (e.key >= '1' && e.key <= '6') this.setState({ stage: +e.key });
+      else if (k === 'g') this.setState({ gestureOn: !this.state.gestureOn });
+    };
+    window.addEventListener('keydown', this.onKey);
+
+    this.lastFrame = 0;
+    this.draw(performance.now());
+    this.raf = requestAnimationFrame(this.loop);
+    // Background tabs get their animation frames throttled to a crawl or
+    // stopped outright, which would leave a local solve frozen mid-run. The
+    // watchdog keeps the job advancing on a plain timer when that happens.
+    this.watchdog = setInterval(() => {
+      if (performance.now() - this.lastFrame > 400) {
+        if (this.job) this.tickSolve(120);
+        this.resize();
+        this.draw(performance.now());
+      }
+    }, 300);
+    // try the DOLFINx container; if it is not up we simply stay on the
+    // in-browser core, which is why the first solve never blocks on it
+    this.connectBridge(true);
+    setTimeout(() => this.startSolve(true), 350);       // open on real results
+  }
+  componentWillUnmount() {
+    cancelAnimationFrame(this.raf);
+    clearInterval(this.watchdog);
+    this.closePops();
+    this.disconnectBridge();
+    this.ro && this.ro.disconnect();
+    window.removeEventListener('mouseup', this.onUp);
+    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('mousedown', this.onDocDown, true);
+  }
+  componentDidUpdate() {
+    // the runtime hands componentDidUpdate prevProps only, so track prev state here
+    this.syncModel();
+    if (this.state.palOpen && !this.prevPal && this.palInput) setTimeout(() => this.palInput && this.palInput.focus(), 30);
+    this.prevPal = this.state.palOpen;
+    if (this.logEl && (this.logDirty || (this.state.logOpen && !this.prevLog))) {
+      this.logDirty = false;
+      this.logEl.scrollTop = this.logEl.scrollHeight;
+    }
+    this.prevLog = this.state.logOpen;
+    if (this.chatEl && this.chatDirty) { this.chatDirty = false; this.chatEl.scrollTop = this.chatEl.scrollHeight; }
+  }
+
+  // ---------- model spec ----------
+  geom() {
+    const n = this.state.nums;
+    const W = n.gWidth, H = n.gHeight, D = n.gDepth;
+    const t = Math.max(1, Math.min(n.gThk, Math.min(W, H) * 0.7));
+    const r = Math.max(0, Math.min(n.gFillet, Math.min(W - t, H - t) * 0.85));
+    return { W, H, D, t, r };
+  }
+  sizes(g) {
+    const n = this.state.nums;
+    const fill = (t => (t * g.H + g.W * t - t * t) / (g.W * g.H))(g.t);
+    const est = (hx, hz) => Math.round(g.W / hx) * Math.round(g.H / hx) * Math.max(1, Math.round(g.D / hz)) * fill;
+    let hx = Math.max(0.4, Math.min(n.hSize, g.t / Math.max(1, n.hThick)));
+    let hz = Math.max(0.4, hx * n.hAspect);
+    const budget = n.hBudget * 1000;
+    let clamped = false, guard = 0;
+    while (est(hx, hz) > budget && guard++ < 400) { hx *= 1.06; hz *= 1.06; clamped = true; }
+    return { hx, hz, clamped };
+  }
+  modelSig() {
+    const g = this.geom(), n = this.state.nums;
+    return [g.W, g.H, g.D, g.t, g.r, n.hSize, n.hThick, n.hAspect, n.hBudget].join('|');
+  }
+  inputSig() {
+    const n = this.state.nums, s = this.state;
+    return [this.modelSig(), s.material, n.mTemp, n.mScale, n.lForce, n.lAngle, n.lPress,
+      n.sTol, n.sMaxIt, JSON.stringify(s.bcOn), JSON.stringify(s.outputs)].join('|');
+  }
+  // rebuild the display mesh when geometry changes; invalidate stale results
+  syncModel() {
+    const ms = this.modelSig();
+    if (ms !== this.msig) {
+      this.msig = ms;
+      const fine = this.sizes(this.geom());
+      this.mesh = buildLevel(this.geom(), fine.hx, fine.hz);
+      // downstream drawing, cuts and BC placement all work on the geometry the
+      // mesh actually realises, not the requested box
+      const g = this.g = this.mesh.geff;
+      this.ctr = [g.W / 2, g.H / 2, g.D / 2];
+      this.vs = 10 / Math.max(g.W, g.H);
+      this.sx = new Float32Array(this.mesh.nn);
+      this.sy = new Float32Array(this.mesh.nn);
+      this.sz = new Float32Array(this.mesh.nn);
+      this.qual = this.quality(this.mesh, g);
+      this.fsig = null;
+    }
+    const is = this.inputSig();
+    if (this.isig === undefined) this.isig = is;
+    else if (is !== this.isig) {
+      this.isig = is;
+      if (this.res) { this.res = null; this.setState({ solved: false, modes: null }); }
+    }
+    const fs = this.faceSig();
+    if (fs !== this.fsig) { this.fsig = fs; this.rebuildValues(); this.rebuildFaces(); }
+  }
+  faceSig() {
+    const s = this.state;
+    return [this.msig, s.cutOn, s.cutAxis, s.cutPos, s.thresh, s.threshLo, s.stage,
+      s.solved, s.field, s.timeStep, s.modal, s.mode, !!this.res].join('|');
+  }
+
+  // ---------- solve job ----------
+  startSolve(initial) {
+    this.solveT0 = performance.now();
+    this.prog = { step: 1, pct: 0 };
+    const base = { solving: true, solved: false, solvePct: 0, stagePct: 0, solveStep: 1,
+      stage: initial ? this.state.stage : 5, log: [], modes: null };
+    if (this.useRemote()) {
+      this.remote = true;
+      this.job = null;
+      this.setState(base);
+      this.pushLog('core', 'dispatching study to the solver core (' + this.state.mesher
+        + ' mesher)', 'info');
+      this.ws.send(JSON.stringify({ op: 'solve', id: 'ui-' + Date.now(), study: this.studySpec() }));
+      return;
+    }
+    this.remote = false;
+    this.job = this.runSolve();
+    this.setState(base);
+  }
+  abortSolve(why) {
+    if (!this.state.solving) return;
+    if (this.remote && this.ws && this.ws.readyState === 1) {
+      this.ws.send(JSON.stringify({ op: 'cancel', id: 'ui' }));
+    }
+    this.remote = false;
+    this.job = null;
+    this.pushLog('core', 'aborted — ' + why, 'warn');
+    this.setState({ solving: false, solved: false, solveStep: 0, solvePct: 0 });
+  }
+  pushLog(ch, msg, kind) {
+    const t = ((performance.now() - (this.solveT0 || performance.now())) / 1000).toFixed(2);
+    const log = this.state.log.concat([[t, ch, msg, kind || 'info']]);
+    this.setState({ log: log.length > 200 ? log.slice(-200) : log });
+    this.logDirty = true;
+  }
+
+  *runSolve() {
+    const st = this.state, n = st.nums, mat = MAT[st.material], want = st.outputs;
+    const g = this.geom();
+    const times = [0, 0, 0, 0, 0, 0];
+    let t0 = performance.now();
+    const mark = i => { times[i] = performance.now() - t0; t0 = performance.now(); };
+
+    // 1 · geometry -----------------------------------------------------------
+    this.prog = { step: 1, pct: 0 };
+    this.pushLog('geom', 'L-bracket ' + sig(g.W) + ' × ' + sig(g.H) + ' × ' + sig(g.D)
+      + ' mm · wall ' + sig(g.t) + ' · fillet r' + sig(g.r), 'info');
+    yield;
+    const sz = this.sizes(g);
+    if (sz.clamped) this.pushLog('geom', 'element size raised to ' + sig(sz.hx)
+      + ' mm to stay inside the ' + n.hBudget + 'k element budget', 'warn');
+    const F = buildLevel(g, sz.hx, sz.hz);
+    this.prog.pct = 100; yield;
+    if (F.ne === 0) { this.pushLog('geom', 'no material inside the bounding box — check thickness', 'err'); this.job = null; this.setState({ solving: false }); return; }
+    mark(0);
+
+    // 2 · material -----------------------------------------------------------
+    this.prog = { step: 2, pct: 0 };
+    const { lam, mu } = lame(mat.E, mat.nu);
+    this.pushLog('mat', mat.name + ' — E ' + sig(mat.E / 1000) + ' GPa · ν ' + mat.nu
+      + ' · λ ' + sig(lam / 1000) + ' GPa · μ ' + sig(mu / 1000) + ' GPa', 'info');
+    const Kf = hexKe(F.dx, F.dy, F.dz, mat.E, mat.nu);
+    yield;
+    mark(1);
+
+    // 3 · loads --------------------------------------------------------------
+    this.prog = { step: 3, pct: 0 };
+    const p = { enc: st.bcOn.enc, sym: st.bcOn.sym, force: st.bcOn.force, press: st.bcOn.press,
+      grav: true, therm: true, F: n.lForce, theta: n.lAngle * Math.PI / 180,
+      P: n.lPress, dT: n.mTemp - 22, mScale: n.mScale };
+    const S = buildLoads(F, g, p, mat, Kf);
+    if (S.tag.fixed === 0) this.pushLog('load', 'no Dirichlet set — the system is singular', 'err');
+    this.pushLog('load', S.tag.fixed + ' nodes encastré · tip resultant ' + sig(n.lForce / 1000)
+      + ' kN at ' + sig(n.lAngle) + '° · web ' + sig(n.lPress) + ' MPa'
+      + (p.dT ? ' · ΔT ' + sig(p.dT) + ' K' : ''), 'info');
+    yield;
+    mark(2);
+
+    // 4 · mesh ---------------------------------------------------------------
+    this.prog = { step: 4, pct: 0 };
+    this.pushLog('mesh', 'voxel core ' + F.nx + '×' + F.ny + '×' + F.nz + ' — ' + grp(F.ne)
+      + ' hex8 · ' + grp(F.nn) + ' nodes · ' + grp(F.nn * 3) + ' DOF', 'info');
+    const quality = this.quality(F, g);
+    if (quality.thin > 0) this.pushLog('mesh', quality.thin + ' elements span the wall alone — '
+      + 'raise "through-thickness min" for bending accuracy', 'warn');
+    yield;
+    mark(3);
+
+    // 5 · solve --------------------------------------------------------------
+    this.prog = { step: 5, pct: 0 };
+    const tol = Math.pow(10, -n.sTol);
+    const x = new Float64Array(F.nn * 3);
+    const kr = yield* pcg(F, Kf, S.free, S.f, x, tol, n.sMaxIt, (it, rel, frac) => {
+      this.prog.pct = 100 * Math.max(0, Math.min(1, frac));
+      this.prog.note = 'it ' + it + ' · ‖r‖/‖b‖ ' + rel.toExponential(1);
+    });
+    this.pushLog('solve', 'PCG ' + kr.it + ' it · ‖r‖/‖b‖ ' + kr.res.toExponential(2)
+      + (kr.conv ? ' — converged' : ' — hit the ' + n.sMaxIt + ' iteration ceiling'), kr.conv ? 'ok' : 'warn');
+    mark(4);
+
+    // 6 · recover ------------------------------------------------------------
+    this.prog = { step: 6, pct: 0 };
+    yield;
+    const R = recover(F, x, mat, p.dT, want);
+    R.u = x; R.level = F; R.mat = mat;
+    if (want.rf) {
+      const kv = new Float64Array(F.nn * 3);
+      applyK(F, Kf, null, x, kv);
+      let rx = 0, ry = 0, rz = 0;
+      for (let nn = 0; nn < F.nn; nn++) if (!S.free[3*nn]) {
+        rx += kv[3*nn] - S.fext[3*nn]; ry += kv[3*nn+1] - S.fext[3*nn+1]; rz += kv[3*nn+2] - S.fext[3*nn+2];
+      }
+      R.rf = [rx, ry, rz]; R.rfMag = Math.hypot(rx, ry, rz);
+      this.pushLog('post', 'reaction resultant ' + sig(R.rfMag / 1000) + ' kN at the encastré face', 'info');
+    }
+    this.prog.pct = 60; yield;
+    if (want.s) this.pushLog('post', 'σ_vm max ' + sig(R.max.vm) + ' MPa · yield ' + mat.sy
+      + ' MPa · SF ' + (R.max.vm > 0 ? sig(mat.sy / R.max.vm) : '∞'), R.max.vm > mat.sy ? 'warn' : 'ok');
+    this.pushLog('post', '|U| max ' + sig(R.max.umag) + ' mm · strain energy ' + sig(R.seTot) + ' mJ', 'info');
+    mark(5);
+
+    // 7 · optional modal -----------------------------------------------------
+    let modes = null;
+    if (want.mode) {
+      // eigen extraction is many solves deep, so it runs on a ~500 element
+      // reduction of the same geometry and is prolongated back for display
+      const cf = F.ne > 900 ? Math.cbrt(F.ne / 500) : 1;
+      const C = cf > 1.05 ? buildLevel(g, F.dx * cf, F.dz * cf) : F;
+      const KeC = C === F ? Kf : hexKe(C.dx, C.dy, C.dz, mat.E, mat.nu);
+      const SC = C === F ? S : buildLoads(C, g, p, mat, KeC);
+      const nModes = 3;
+      this.pushLog('modal', 'inverse iteration on ' + grp(C.ne) + ' elements · lumped mass', 'info');
+      const hz = [];
+      const raw = yield* eigenModes(C, KeC, SC.free, mat, n.mScale, nModes, 1e-5,
+        (m, f) => { hz[m] = f; this.pushLog('modal', 'mode ' + (m + 1) + ' — ' + sig(f) + ' Hz', 'ok'); });
+      modes = raw.map((v, i) => {
+        const phi = C === F ? v : prolongate(C, F, v);
+        let mx = 0;
+        for (let q = 0; q < F.nn; q++) mx = Math.max(mx, Math.hypot(phi[3*q], phi[3*q+1], phi[3*q+2]));
+        return { phi, hz: hz[i] || 0, amp: mx > 0 ? 1 / mx : 1, max: mx };
+      });
+    }
+
+    const wall = performance.now() - this.solveT0;      // includes the eigen pass
+    this.res = R;
+    this.isig = this.inputSig();
+    this.msig = this.modelSig();
+    this.mesh = F;
+    this.sx = new Float32Array(F.nn); this.sy = new Float32Array(F.nn); this.sz = new Float32Array(F.nn);
+    this.fsig = null;
+    this.job = null;
+    const diag = Math.hypot(g.W, g.H, g.D);
+    const dspl = R.max.umag > 0 ? Math.round(0.06 * diag / R.max.umag) : 12;
+    this.pushLog('core', 'complete in ' + (wall / 1000).toFixed(2) + ' s', 'ok');
+    this.recordSolve('in-browser hex8', { elements: F.ne, dof: F.nn * 3, it: kr.it }, R, wall);
+    this.setState({
+      solving: false, solved: true, solvePct: 100, stagePct: 100, solveStep: 6, stage: 6,
+      times, wall, modes, deform: Math.max(1, Math.min(100, dspl)),
+      stats: { ne: F.ne, nn: F.nn, dof: F.nn * 3, it: kr.it, res: kr.res, hx: F.dx }
+    });
+  }
+  quality(L, g) {
+    const e = [L.dx, L.dy, L.dz];
+    const ar = Math.max(...e) / Math.min(...e);
+    let thin = 0;
+    for (let i = 0; i < L.ne; i++) {
+      const ci = L.ecell[i], x = ci % L.nx, y = Math.floor(ci / L.nx) % L.ny;
+      let open = 0;
+      for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx2 = x + d[0], ny2 = y + d[1];
+        if (nx2 < 0 || ny2 < 0 || nx2 >= L.nx || ny2 >= L.ny) { open++; continue; }
+        if (!L.solid[(Math.floor(ci / (L.nx * L.ny)) * L.ny + ny2) * L.nx + nx2]) open++;
+      }
+      if (open >= 3) thin++;
+    }
+    return { ar, thin, ne: L.ne, span: Math.round(g.t / L.dx) };
+  }
+
+  // ---------- derived display data ----------
+  lf() { return this.state.modal ? (this.modalAmp === undefined ? 1 : this.modalAmp) : this.state.timeStep / Math.max(1, this.state.nums.sIncr); }
+  activeMode() {
+    const m = this.state.modes;
+    return m && m.length ? m[Math.min(m.length - 1, this.state.mode - 1)] : null;
+  }
+  fieldArray() {
+    const R = this.res;
+    if (!R) return null;
+    const k = { vm: 'vm', u: 'umag', p1: 'p1', en: 'se' }[this.state.field] || 'vm';
+    return R[k] ? { arr: R[k], max: R.max[k], am: R.argmax[k], key: k } : null;
+  }
+  // per-node normalised colour value for the current field / step
+  rebuildValues() {
+    const L = this.mesh;
+    if (!L) return;
+    if (!this.nv || this.nv.length !== L.nn) this.nv = new Float32Array(L.nn);
+    const md = this.state.modal ? this.activeMode() : null;
+    if (md) {
+      const mx = md.max || 1;
+      for (let n = 0; n < L.nn; n++)
+        this.nv[n] = Math.hypot(md.phi[3*n], md.phi[3*n+1], md.phi[3*n+2]) / mx;
+      return;
+    }
+    const F = this.fieldArray();
+    if (!F || !this.state.solved || F.max <= 0) { this.nv.fill(0); return; }
+    const inv = 1 / F.max;
+    for (let n = 0; n < L.nn; n++) this.nv[n] = F.arr[n] * inv;
+  }
+  cellVal(ci) {
+    const L = this.mesh, nx = L.nx, ny = L.ny;
+    const i = ci % nx, j = Math.floor(ci / nx) % ny, k = Math.floor(ci / (nx * ny));
+    let s = 0;
+    for (let m = 0; m < 8; m++)
+      s += this.nv[L.nid[((k + CORN[m][2]) * L.NY + (j + CORN[m][1])) * L.NX + (i + CORN[m][0])]];
+    return s / 8;
+  }
+  cutBound() {
+    const g = this.g, a = this.state.cutAxis;
+    return (a === 'x' ? g.W : a === 'y' ? g.H : g.D) * (this.state.cutPos / 100);
+  }
+  culled(i, j, k) {
+    const L = this.mesh, st = this.state;
+    if (!st.cutOn || st.stage < 4) return false;
+    const a = st.cutAxis;
+    const v = a === 'x' ? (i + 0.5) * L.dx : a === 'y' ? (j + 0.5) * L.dy : (k + 0.5) * L.dz;
+    return v > this.cutBound();
+  }
+  belowThreshold(ci) {
+    const st = this.state;
+    return st.thresh && st.stage === 6 && st.solved && this.cellVal(ci) < st.threshLo / 100;
+  }
+  // visible skin: outer faces plus the caps opened up by the section / threshold
+  rebuildFaces() {
+    const L = this.mesh;
+    if (!L) { this.faces = []; return; }
+    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    const quads = [
+      [[1,0,0],[1,1,0],[1,1,1],[1,0,1]], [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
+      [[0,1,0],[0,1,1],[1,1,1],[1,1,0]], [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+      [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], [[0,0,0],[0,1,0],[1,1,0],[1,0,0]]
+    ];
+    const nx = L.nx, ny = L.ny, nz = L.nz;
+    const vis = (i, j, k) => {
+      if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return 0;
+      const ci = (k*ny + j)*nx + i;
+      if (!L.solid[ci]) return 0;
+      if (this.culled(i, j, k)) return 2;                 // hidden by the cut
+      if (this.belowThreshold(ci)) return 3;              // hidden by the threshold
+      return 1;
+    };
+    const faces = [];
+    for (let e = 0; e < L.ne; e++) {
+      const ci = L.ecell[e], i = ci % nx, j = Math.floor(ci / nx) % ny, k = Math.floor(ci / (nx * ny));
+      if (vis(i, j, k) !== 1) continue;
+      for (let d = 0; d < 6; d++) {
+        const s = vis(i + dirs[d][0], j + dirs[d][1], k + dirs[d][2]);
+        if (s === 1) continue;
+        const q = quads[d], n = [0, 0, 0, 0];
+        for (let m = 0; m < 4; m++)
+          n[m] = L.nid[((k + q[m][2]) * L.NY + (j + q[m][1])) * L.NX + (i + q[m][0])];
+        faces.push({ n, d, cap: s === 2, iface: s === 3, ci, gx: i, gy: j, gz: k });
+      }
+    }
+    this.faces = faces;
+    this.order = new Int32Array(faces.length);
+    this.fcx = new Float32Array(faces.length);
+    this.fcy = new Float32Array(faces.length);
+    // every node belonging to a visible cell — the node view shows the whole
+    // lattice, not only the skin
+    const seen = new Uint8Array(L.nn), nodes = [];
+    for (let e = 0; e < L.ne; e++) {
+      const ci = L.ecell[e], i = ci % nx, j = Math.floor(ci / nx) % ny, k = Math.floor(ci / (nx * ny));
+      if (vis(i, j, k) !== 1) continue;
+      for (let m = 0; m < 8; m++) {
+        const n = L.en[e * 8 + m];
+        if (!seen[n]) { seen[n] = 1; nodes.push(n); }
+      }
+    }
+    this.visNodes = nodes;
+  }
+
+  // ---------- render loop ----------
+  resize() {
+    const vp = this.viewport, c = this.canvas;
+    if (!vp || !c) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.w = vp.clientWidth; this.h = vp.clientHeight;
+    c.width = Math.floor(this.w * dpr); c.height = Math.floor(this.h * dpr);
+    this.ctx = c.getContext('2d');
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  loop = () => {
+    this.raf = requestAnimationFrame(this.loop);
+    const now = performance.now();
+    this.lastFrame = now;
+    this.frames++;
+    if (now - this.fpsT > 500) {
+      const fps = Math.round(this.frames * 1000 / (now - this.fpsT));
+      this.frames = 0; this.fpsT = now;
+      if (fps !== this.state.fps) this.setState({ fps });
+    }
+    this.tickSolve(now);
+    this.tickModal(now);
+    this.tickGesture(now);
+    const c = this.cam, t = this.tgt, k = 0.14;
+    c.yaw += (t.yaw - c.yaw) * k; c.pitch += (t.pitch - c.pitch) * k; c.dist += (t.dist - c.dist) * k;
+    this.draw(now);
+    this.syncPops(now);
+  };
+  // spend a bounded slice of the frame on the solver so the window stays live
+  tickSolve(budget) {
+    if (!this.job) return;
+    const t0 = performance.now();
+    const ms = budget || 9;
+    let r;
+    try {
+      do { r = this.job.next(); } while (!r.done && performance.now() - t0 < ms);
+    } catch (err) {
+      console.error(err);
+      this.job = null;
+      this.pushLog('core', 'solver fault — ' + (err && err.message || err), 'err');
+      this.setState({ solving: false, solved: false });
+      return;
+    }
+    if (r.done) return;
+    const P = this.prog, step = P.step || 1;
+    const w = [8, 3, 4, 8, 68, 9], off = w.slice(0, step - 1).reduce((a, b) => a + b, 0);
+    const pct = Math.min(99.5, off + w[step - 1] * (P.pct || 0) / 100);
+    if (Math.abs(pct - this.state.solvePct) > 0.4 || step !== this.state.solveStep)
+      this.setState({ solvePct: pct, solveStep: step, stagePct: P.pct || 0 });
+  }
+  tickModal(now) {
+    if (!this.state.modal) { this.modalAmp = 1; return; }
+    this.modalAmp = Math.sin(now / 620);
+  }
+  // The scripted driver stands in for the hand tracker: it walks the
+  // continuous gestures and runs their real actions, so what you see on
+  // screen is the same code path a recognised gesture would take.
+  tickGesture(now) {
+    if (!this.state.gestureOn) { this.gs = null; return; }
+    const demo = GESTURES.filter(g => g.demo);
+    if (!this.gs) this.gs = { t0: now };
+    const dwell = 3.4;
+    const el = ((now - this.gs.t0) / 1000) % (demo.length * dwell);
+    const G = demo[Math.min(demo.length - 1, Math.floor(el / dwell))];
+    if (G.id !== this.state.gestAct) this.setState({ gestAct: G.id });
+    try { G.act(this, 'hold'); } catch (e) { /* never break the frame loop */ }
+    this.gsEl = el;
+  }
+
+  proj(p) {
+    const c = this.cam, s0 = this.vs;
+    const x = (p[0] - this.ctr[0]) * s0, y = (p[1] - this.ctr[1]) * s0, z = (p[2] - this.ctr[2]) * s0;
+    const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw);
+    let X = x * cy + z * sy, Z = -x * sy + z * cy;
+    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const Y = y * cp - Z * sp; Z = y * sp + Z * cp;
+    const d = Z + c.dist;
+    const s = this.h * 1.02 / Math.max(1, d);
+    return [this.w / 2 + X * s, this.h / 2 - Y * s, d];
+  }
+  projectNodes() {
+    const L = this.mesh, R = this.res, st = this.state, c = this.cam;
+    const md = st.modal ? this.activeMode() : null;
+    const showResult = st.stage === 6 && (st.solved || md);
+    let src = null, sc = 0;
+    if (md) { src = md.phi; sc = st.deform * md.amp * this.modalAmp * 0.02 * Math.max(this.g.W, this.g.H); }
+    else if (showResult && R) { src = R.u; sc = st.deform * this.lf(); }
+    const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const vs = this.vs, cx = this.ctr[0], cyy = this.ctr[1], cz = this.ctr[2];
+    const f = this.h * 1.02, hw = this.w / 2, hh = this.h / 2;
+    const sx = this.sx, sy2 = this.sy, sz2 = this.sz;
+    for (let n = 0; n < L.nn; n++) {
+      let x = L.px[n], y = L.py[n], z = L.pz[n];
+      if (src) { x += src[3*n] * sc; y += src[3*n+1] * sc; z += src[3*n+2] * sc; }
+      x = (x - cx) * vs; y = (y - cyy) * vs; z = (z - cz) * vs;
+      let X = x * cy + z * sy, Z = -x * sy + z * cy;
+      const Y = y * cp - Z * sp; Z = y * sp + Z * cp;
+      const d = Z + c.dist, s = f / (d > 1 ? d : 1);
+      sx[n] = hw + X * s; sy2[n] = hh - Y * s; sz2[n] = d;
+    }
+  }
+
+  draw(now) {
+    try { this._draw(now); } catch (e) { console.error(e); }
+  }
+  _draw(now) {
+    const ctx = this.ctx; if (!ctx || !this.mesh) return;
+    const W = this.w, H = this.h, st = this.state;
+    ctx.clearRect(0, 0, W, H);
+    if (st.arOn) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#171310'); g.addColorStop(0.55, '#100e0c'); g.addColorStop(1, '#0a0908');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else {
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, Math.max(W, H) * 0.75);
+      g.addColorStop(0, '#12171c'); g.addColorStop(1, '#0a0c0f');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    if (st.gridOn !== false) this.drawGrid(ctx, st);
+    this.drawContact(ctx);
+    if (st.planes) this.drawPlanes(ctx);
+
+    this.projectNodes();
+    const faces = this.faces, nf = faces.length;
+    const md = st.modal ? this.activeMode() : null;
+    const showResult = st.stage === 6 && (st.solved || md);
+    const stops = CMAP;
+    const sx = this.sx, sy = this.sy, sz = this.sz, nv = this.nv;
+    const ord = [];
+    const depth = this.fdepth && this.fdepth.length === nf ? this.fdepth : (this.fdepth = new Float32Array(nf));
+    for (let i = 0; i < nf; i++) {
+      const n = faces[i].n;
+      const ax = sx[n[1]] - sx[n[0]], ay = sy[n[1]] - sy[n[0]];
+      const bx = sx[n[2]] - sx[n[1]], by = sy[n[2]] - sy[n[1]];
+      if (ax * by - ay * bx >= 0) { depth[i] = -1; continue; }        // backface (screen y down)
+      depth[i] = (sz[n[0]] + sz[n[1]] + sz[n[2]] + sz[n[3]]) * 0.25;
+      this.fcx[i] = (sx[n[0]] + sx[n[2]]) * 0.5;
+      this.fcy[i] = (sy[n[0]] + sy[n[2]]) * 0.5;
+      ord.push(i);
+    }
+    ord.sort((a, b) => depth[b] - depth[a]);
+
+    if (st.shade === 'nodes') { this.drawNodes(ctx, showResult, stops); this.afterModel(ctx, W, H, now); return; }
+
+    const L = [0.42, 0.78, 0.47];
+    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    const wire = st.shade === 'wire';
+    const showEdges = wire || st.stage === 4 || nf < 1400;
+    const edge = st.stage === 4 ? 0.55 : showResult ? 0.24 : 0.5;
+    const matCol = { al7075: [150,162,175], steel: [128,136,146], ti64: [136,146,160], cfrp: [42,46,52] }[st.material] || [150,162,175];
+    for (const i of ord) {
+      const f = faces[i], n = f.n;
+      const v = (nv[n[0]] + nv[n[1]] + nv[n[2]] + nv[n[3]]) * 0.25;
+      let r, g, b;
+      if (f.cap && !showResult) {
+        r = 176; g = 122; b = 96;                        // machined-face tint
+      } else if (showResult) {
+        let fv = v;
+        if (st.iso) fv = Math.round(fv * st.isoN) / st.isoN;
+        const c = ramp(stops, fv); r = c[0]; g = c[1]; b = c[2];
+      } else if (st.stage === 2) { r = matCol[0]; g = matCol[1]; b = matCol[2]; }
+      else if (st.stage === 4) { r = 118; g = 136; b = 154; }
+      else { r = 132; g = 148; b = 164; }
+
+      const nr = dirs[f.d];
+      const sh = 0.5 + 0.5 * Math.max(0, nr[0] * L[0] + nr[1] * L[1] + nr[2] * L[2]);
+      ctx.beginPath();
+      ctx.moveTo(sx[n[0]], sy[n[0]]);
+      ctx.lineTo(sx[n[1]], sy[n[1]]);
+      ctx.lineTo(sx[n[2]], sy[n[2]]);
+      ctx.lineTo(sx[n[3]], sy[n[3]]);
+      ctx.closePath();
+      if (wire) {
+        // still painter-sorted, so the far side stays hidden — a hidden-line
+        // wireframe rather than a see-through one
+        ctx.fillStyle = '#0c0f13'; ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgb(' + (r * sh | 0) + ',' + (g * sh | 0) + ',' + (b * sh | 0) + ')';
+        ctx.fill();
+      }
+      if (wire) {
+        const c = showResult ? ramp(stops, st.iso ? Math.round(v * st.isoN) / st.isoN : v) : [110, 130, 150];
+        ctx.strokeStyle = 'rgb(' + (c[0]|0) + ',' + (c[1]|0) + ',' + (c[2]|0) + ')';
+        ctx.lineWidth = 0.7; ctx.stroke();
+      } else if (showEdges) {
+        ctx.strokeStyle = 'rgba(8,11,14,' + edge + ')';
+        ctx.lineWidth = st.stage === 4 ? 0.8 : 0.6; ctx.stroke();
+      }
+    }
+    this.visOrder = ord;
+    this.afterModel(ctx, W, H, now);
+  }
+
+  drawContact(ctx) {
+    const g = this.g;
+    const gp = this.proj([g.t / 2, 0.02, g.D / 2]);
+    const r = 2600 / Math.max(1, gp[2]);
+    ctx.save(); ctx.translate(gp[0], gp[1]); ctx.scale(1, 0.28);
+    const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    sg.addColorStop(0, 'rgba(0,0,0,.6)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.284); ctx.fill(); ctx.restore();
+  }
+  drawGrid(ctx, st) {
+    const g = this.g, S = Math.max(g.W, g.D);
+    const step = niceStep(S / 5), k = st.arOn ? 1.5 : 1;
+    const lo = -Math.ceil(S * 0.7 / step) * step, hi = Math.ceil((S + S * 0.7) / step) * step;
+    ctx.lineWidth = 1;
+    const line = (a, b, alpha) => {
+      ctx.strokeStyle = st.arOn ? 'rgba(230,201,138,' + alpha * k + ')' : 'rgba(140,175,200,' + alpha * k + ')';
+      const p = this.proj(a), q = this.proj(b);
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    };
+    for (let v = lo, i = 0; v <= hi + 1e-6; v += step, i++) {
+      const alpha = Math.abs(v) < 1e-6 ? 0.26 : i % 5 === 0 ? 0.10 : 0.04;
+      line([v, 0, lo], [v, 0, hi], alpha);
+      line([lo, 0, v], [hi, 0, v], alpha);
+    }
+  }
+  drawAxes(ctx, W, H) {
+    const o = [W - 54, H - 52], L = 24;
+    const c = this.cam, cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const ax = [[1,0,0,'X','#ff6b81'],[0,1,0,'Y','#7ee787'],[0,0,1,'Z','#5ecfe0']];
+    ctx.font = "500 9px 'IBM Plex Mono'";
+    for (const a of ax) {
+      let X = a[0] * cy + a[2] * sy, Z = -a[0] * sy + a[2] * cy;
+      const Y = a[1] * cp - Z * sp;
+      ctx.strokeStyle = a[4]; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(o[0] + X * L, o[1] - Y * L); ctx.stroke();
+      ctx.fillStyle = a[4]; ctx.fillText(a[3], o[0] + X * L * 1.35 - 3, o[1] - Y * L * 1.35 + 3);
+    }
+  }
+  // overlays that sit on top of whichever model representation was drawn
+  afterModel(ctx, W, H, now) {
+    const st = this.state;
+    if (st.stage === 1) this.drawDims(ctx);
+    if (st.stage === 3) this.drawBCs(ctx);
+    if (st.arOn) this.drawReticle(ctx, W, H, now);
+    if (st.gestureOn) this.drawHand(ctx, W, H, now);
+    if (st.solving) this.drawSolveOverlay(ctx, W, H);
+    this.drawGizmo(ctx, W, H);
+    if (!this._offscreen) this.updateProbe(now);
+  }
+
+  // node cloud — every node of every visible cell, not just the skin, so the
+  // interior lattice is legible the way it is in a node-based pre-processor
+  drawNodes(ctx, showResult, stops) {
+    const L = this.mesh, st = this.state;
+    const sx = this.sx, sy = this.sy, sz = this.sz, nv = this.nv;
+    const list = this.visNodes || [];
+    const ord = list.slice().sort((a, b) => sz[b] - sz[a]);
+    for (const n of ord) {
+      const r = Math.max(1.0, 170 / Math.max(1, sz[n]));
+      if (showResult) {
+        const t = st.iso ? Math.round(nv[n] * st.isoN) / st.isoN : nv[n];
+        const c = ramp(stops, t);
+        ctx.fillStyle = 'rgb(' + (c[0]|0) + ',' + (c[1]|0) + ',' + (c[2]|0) + ')';
+      } else ctx.fillStyle = '#76889b';
+      ctx.beginPath(); ctx.arc(sx[n], sy[n], r, 0, 6.284); ctx.fill();
+    }
+    const p = st.pick;
+    if (p != null && p < L.nn) {
+      ctx.strokeStyle = '#5ecfe0'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(sx[p], sy[p], 8, 0, 6.284); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx[p] - 12, sy[p]); ctx.lineTo(sx[p] - 5, sy[p]);
+      ctx.moveTo(sx[p] + 5, sy[p]); ctx.lineTo(sx[p] + 12, sy[p]);
+      ctx.moveTo(sx[p], sy[p] - 12); ctx.lineTo(sx[p], sy[p] - 5);
+      ctx.moveTo(sx[p], sy[p] + 5); ctx.lineTo(sx[p], sy[p] + 12);
+      ctx.stroke();
+    }
+  }
+
+  // XY / YZ / ZX datum planes through the model origin
+  drawPlanes(ctx) {
+    const g = this.g;
+    const ex = g.W * 0.7, ey = g.H * 0.7, ez = g.D * 1.6;
+    const c = [g.W / 2, g.H / 2, g.D / 2];
+    const defs = [
+      { n: 'XY', col: '94,207,224', pts: [[-ex,-ey,0],[ex,-ey,0],[ex,ey,0],[-ex,ey,0]] },
+      { n: 'YZ', col: '255,107,129', pts: [[0,-ey,-ez],[0,ey,-ez],[0,ey,ez],[0,-ey,ez]] },
+      { n: 'ZX', col: '126,231,135', pts: [[-ex,0,-ez],[ex,0,-ez],[ex,0,ez],[-ex,0,ez]] }
+    ];
+    for (const d of defs) {
+      const p = d.pts.map(q => this.proj([c[0] + q[0], c[1] + q[1], c[2] + q[2]]));
+      ctx.beginPath();
+      ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(' + d.col + ',.05)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(' + d.col + ',.40)'; ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(' + d.col + ',.8)';
+      ctx.font = "500 9px 'IBM Plex Mono'";
+      ctx.fillText(d.n, p[2][0] + 4, p[2][1] - 3);
+    }
+  }
+
+  // ---------- view cube ----------
+  // Faces map to the same yaw/pitch pairs the view preset buttons use, so the
+  // cube and the presets can never disagree.
+  gizmoFaces() {
+    return [
+      { i: [1,2,6,5], l: 'X',  view: [-1.5708, 0] },
+      { i: [0,4,7,3], l: '-X', view: [1.5708, 0] },
+      { i: [3,7,6,2], l: 'Y',  view: [0, 1.28] },
+      { i: [0,1,5,4], l: '-Y', view: [0, -1.28] },
+      { i: [4,5,6,7], l: 'Z',  view: [0, 0] },
+      { i: [0,3,2,1], l: '-Z', view: [3.1416, 0] }
+    ];
+  }
+  drawGizmo(ctx, W, H) {
+    // slide clear of the assistant drawer so the cube stays reachable
+    const inset = (!this._offscreen && this.state.aiOpen) ? 334 : 0;
+    const cx = W - 54 - inset, cy = 54, s = 25;
+    const c = this.cam;
+    const cw = Math.cos(c.yaw), sw = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const tf = p => {
+      let X = p[0] * cw + p[2] * sw, Z = -p[0] * sw + p[2] * cw;
+      const Y = p[1] * cp - Z * sp; Z = p[1] * sp + Z * cp;
+      return [cx + X * s, cy - Y * s, Z];
+    };
+    const V = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(tf);
+    const hit = [];
+    const vis = this.gizmoFaces().map(f => {
+      const p = f.i.map(k => V[k]);
+      const a = (p[1][0]-p[0][0]) * (p[2][1]-p[1][1]) - (p[1][1]-p[0][1]) * (p[2][0]-p[1][0]);
+      return { f, p, back: a >= 0, d: (p[0][2]+p[1][2]+p[2][2]+p[3][2]) / 4 };
+    }).filter(o => !o.back).sort((a, b) => b.d - a.d);
+
+    const mx = this.mouse.x, my = this.mouse.y;
+    for (const o of vis) {
+      const p = o.p;
+      const over = this._offscreen ? false : pointInQuad(mx, my, p);
+      ctx.beginPath();
+      ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = over ? 'rgba(94,207,224,.30)' : 'rgba(32,40,49,.88)';
+      ctx.fill();
+      ctx.strokeStyle = over ? '#5ecfe0' : '#3c4854';
+      ctx.lineWidth = 1; ctx.stroke();
+      const mid = [(p[0][0]+p[1][0]+p[2][0]+p[3][0]) / 4, (p[0][1]+p[1][1]+p[2][1]+p[3][1]) / 4];
+      ctx.fillStyle = over ? '#eaf7fa' : '#8b96a2';
+      ctx.font = "600 9px 'IBM Plex Mono'";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(o.f.l, mid[0], mid[1]);
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      hit.push({ p, view: o.f.view });
+    }
+    // small axis triad under the cube
+    const o2 = [cx, cy + s * 2.2];
+    for (const a of [[1,0,0,'X','#ff6b81'],[0,1,0,'Y','#7ee787'],[0,0,1,'Z','#5ecfe0']]) {
+      let X = a[0] * cw + a[2] * sw, Z = -a[0] * sw + a[2] * cw;
+      const Y = a[1] * cp - Z * sp;
+      ctx.strokeStyle = a[4]; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(o2[0], o2[1]); ctx.lineTo(o2[0] + X * 14, o2[1] - Y * 14); ctx.stroke();
+      ctx.fillStyle = a[4]; ctx.font = "500 8px 'IBM Plex Mono'";
+      ctx.fillText(a[3], o2[0] + X * 19 - 2, o2[1] - Y * 19 + 3);
+    }
+    if (!this._offscreen) this.gizmoHit = hit.reverse();   // front-most first
+  }
+  // returns true when the press was consumed by the cube
+  gizmoClick(x, y) {
+    for (const h of (this.gizmoHit || [])) {
+      if (pointInQuad(x, y, h.p)) {
+        this.tgt.yaw = h.view[0];
+        this.tgt.pitch = h.view[1];
+        return true;
+      }
+    }
+    return false;
+  }
+  // nearest node to a screen point, for node picking
+  pickNode(x, y) {
+    const list = this.visNodes || [];
+    const sx = this.sx, sy = this.sy;
+    let best = -1, bd = 14 * 14;
+    for (const n of list) {
+      const d = (sx[n] - x) * (sx[n] - x) + (sy[n] - y) * (sy[n] - y);
+      if (d < bd) { bd = d; best = n; }
+    }
+    return best;
+  }
+  drawDims(ctx) {
+    const g = this.g, c = this.cv('len'), off = Math.max(g.W, g.H) * 0.1;
+    const line = (p, q, txt) => {
+      const a = this.proj(p), b = this.proj(q);
+      ctx.strokeStyle = 'rgba(94,207,224,.45)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#7fd8e6'; ctx.font = "500 10px 'IBM Plex Mono'";
+      ctx.fillText(txt, (a[0] + b[0]) / 2 + 6, (a[1] + b[1]) / 2 - 4);
+    };
+    const u = v => sig(v * c[1]) + ' ' + c[0];
+    line([0, -off, 0], [g.W, -off, 0], u(g.W));
+    line([g.W + off, 0, 0], [g.W + off, g.H, 0], u(g.H));
+    line([0, -off, g.D], [0, -off, 0], u(g.D));
+    line([0, g.H + off * 0.4, 0], [g.t, g.H + off * 0.4, 0], u(g.t) + ' wall');
+  }
+  drawBCs(ctx) {
+    const g = this.g, st = this.state, n = st.nums;
+    if (st.bcOn.enc) {
+      ctx.strokeStyle = '#7ee787'; ctx.lineWidth = 1.2;
+      const hs = g.t / 6;
+      for (let x = 0; x <= g.t + 1e-6; x += hs) for (const z of [0, g.D]) {
+        const a = this.proj([x, 0, z]), b = this.proj([x - hs, -g.H * 0.045, z]);
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      }
+      const ba = this.proj([0, -g.H * 0.05, g.D / 2]);
+      ctx.fillStyle = '#7ee787'; ctx.font = "500 10px 'IBM Plex Mono'";
+      ctx.fillText('ENCASTRE  U1=U2=U3=0', ba[0] - 40, ba[1] + 22);
+    }
+    if (st.bcOn.force && n.lForce) {
+      const th = n.lAngle * Math.PI / 180, dx = Math.sin(th), dy = -Math.cos(th);
+      const len = g.H * 0.16;
+      ctx.strokeStyle = '#ff6b81'; ctx.fillStyle = '#ff6b81'; ctx.lineWidth = 1.6;
+      for (let q = 0.2; q <= 0.85; q += 0.3) {
+        const z = g.D * q, x = g.W - g.t / 2;
+        const tip = this.proj([x, g.H + g.H * 0.01, z]);
+        const top = this.proj([x - dx * len, g.H + g.H * 0.01 - dy * len, z]);
+        ctx.beginPath(); ctx.moveTo(top[0], top[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
+        const a = Math.atan2(tip[1] - top[1], tip[0] - top[0]);
+        ctx.beginPath();
+        ctx.moveTo(tip[0], tip[1]);
+        ctx.lineTo(tip[0] - 7 * Math.cos(a - 0.4), tip[1] - 7 * Math.sin(a - 0.4));
+        ctx.lineTo(tip[0] - 7 * Math.cos(a + 0.4), tip[1] - 7 * Math.sin(a + 0.4));
+        ctx.closePath(); ctx.fill();
+      }
+      const lp = this.proj([g.W - g.t / 2, g.H + g.H * 0.19, g.D / 2]);
+      ctx.font = "500 10px 'IBM Plex Mono'";
+      ctx.fillText('F = ' + sig(n.lForce * this.cv('force')[1]) + ' ' + this.cv('force')[0]
+        + '  ' + sig(n.lAngle) + '°', lp[0] - 34, lp[1] - 6);
+    }
+    if (st.bcOn.press && n.lPress) {
+      ctx.strokeStyle = '#ffa23a'; ctx.fillStyle = '#ffa23a'; ctx.lineWidth = 1.3;
+      for (let q = 0.15; q <= 0.9; q += 0.25) {
+        const a = this.proj([-g.t * 0.7, g.H * q, g.D / 2]), b = this.proj([0, g.H * q, g.D / 2]);
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[0] - 6, b[1] - 3); ctx.lineTo(b[0] - 6, b[1] + 3); ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+  drawReticle(ctx, W, H, now) {
+    const s = 0.5 + 0.5 * Math.sin(now / 700);
+    ctx.strokeStyle = 'rgba(230,201,138,' + (0.35 + s * 0.35) + ')'; ctx.lineWidth = 1.4;
+    const m = 46, L = 26;
+    for (const c of [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]]) {
+      ctx.beginPath();
+      ctx.moveTo(c[0] + c[2] * L, c[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(c[0], c[1] + c[3] * L);
+      ctx.stroke();
+    }
+  }
+  drawHand(ctx, W, H, now) {
+    const cx = W * 0.5 + Math.cos(now / 1400) * W * 0.18;
+    const cy = H * 0.56 + Math.sin(now / 1100) * H * 0.12;
+    const act = this.state.gestAct;
+    const spread = act === 'pinch' ? 6 + 6 * Math.abs(Math.sin(now / 380)) : act === 'blade' ? 3 : act === 'fist' ? 0 : 15;
+    ctx.strokeStyle = 'rgba(94,207,224,.85)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.arc(cx, cy, 26 + spread * 0.6, 0, 6.284); ctx.stroke();
+    ctx.strokeStyle = 'rgba(94,207,224,.35)';
+    ctx.beginPath(); ctx.arc(cx, cy, 40 + spread, 0, 6.284); ctx.stroke();
+    ctx.fillStyle = '#5ecfe0';
+    for (let i = 0; i < 5; i++) {
+      const a = -1.9 + i * 0.5, rr = act === 'blade' ? 14 : act === 'fist' ? 10 : 18 + spread;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2.6, 0, 6.284); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(94,207,224,.9)'; ctx.font = "600 10px 'IBM Plex Mono'";
+    ctx.fillText(act.toUpperCase(), cx + 48 + spread, cy + 4);
+  }
+  drawSolveOverlay(ctx, W, H) {
+    const p = this.state.solvePct / 100;
+    ctx.fillStyle = 'rgba(94,207,224,.06)'; ctx.fillRect(0, H * (1 - p), W, 2);
+    ctx.fillStyle = 'rgba(94,207,224,.55)'; ctx.fillRect(0, H * (1 - p), W, 1.5);
+  }
+  updateProbe(now) {
+    const st = this.state, F = this.fieldArray();
+    if (st.stage !== 6 || !st.solved || !F || this.mouse.x < -100) { if (st.probe) this.setState({ probe: null }); return; }
+    if (now - this.lastProbe < 55) return;
+    this.lastProbe = now;
+    let best = -1, bd = 46 * 46;
+    for (const i of (this.visOrder || [])) {
+      const d = (this.fcx[i] - this.mouse.x) ** 2 + (this.fcy[i] - this.mouse.y) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0) { if (st.probe) this.setState({ probe: null }); return; }
+    const fc = this.faces[best], L = this.mesh;
+    let node = fc.n[0];
+    for (const q of fc.n) if (F.arr[q] > F.arr[node]) node = q;
+    const M = this.fieldsMeta()[st.field], c = this.cv('len');
+    this.setState({ probe: {
+      x: Math.min(this.w - 190, this.mouse.x + 16), y: Math.max(8, this.mouse.y - 30),
+      l1: M.short + ' ' + sig(F.arr[node] * M.conv * this.lf()) + ' ' + M.unit,
+      l2: 'node ' + node + ' · |U| ' + sig(this.res.umag[node] * c[1] * this.lf()) + ' ' + c[0],
+      l3: 'xyz ' + sig(L.px[node] * c[1]) + ', ' + sig(L.py[node] * c[1]) + ', ' + sig(L.pz[node] * c[1]) + ' ' + c[0]
+    } });
+  }
+
+  fieldsMeta() {
+    const R = this.res, lf = this.lf();
+    const c = this.cv('len'), s = this.cv('stress');
+    const raw = {
+      vm: { label: 'Von Mises stress', short: 'σ_vm', key: 'vm',   unit: s[0], conv: s[1], need: 's' },
+      u:  { label: 'Displacement mag.', short: '|U|', key: 'umag', unit: c[0], conv: c[1], need: 'u' },
+      p1: { label: 'Max principal',     short: 'σ₁',  key: 'p1',   unit: s[0], conv: s[1], need: 's' },
+      en: { label: 'Strain energy dens.', short: 'SED', key: 'se', unit: 'mJ/mm³', conv: 1, need: 'e' }
+    };
+    const out = {};
+    for (const k in raw) {
+      const f = raw[k];
+      const have = R && R[f.key];
+      const max = have ? R.max[f.key] * f.conv * Math.abs(lf) : 0;
+      const am = have ? R.argmax[f.key] : 0;
+      out[k] = { label: f.label, short: f.short, unit: f.unit, conv: f.conv, need: f.need,
+        available: !!have && !!this.state.outputs[f.need], max,
+        loc: have && this.mesh ? 'node ' + am + ' · ' + sig(this.mesh.px[am] * c[1]) + ', '
+          + sig(this.mesh.py[am] * c[1]) + ', ' + sig(this.mesh.pz[am] * c[1]) + ' ' + c[0] : '—' };
+    }
+    return out;
+  }
+
+  // ---------- parameter plumbing ----------
+  cv(kind) { return UNITS[this.state.units][kind]; }
+  setNum(k, v, min, max, dp) {
+    const n = { ...this.state.nums };
+    n[k] = Math.max(min, Math.min(max, +(+v).toFixed(dp || 0)));
+    if (!isFinite(n[k])) return;
+    this.setState({ nums: n });
+  }
+  // one editable, unit-aware numeric field
+  p(k, label, unit, step, min, max, dp, w) {
+    const st = this.state;
+    const base = st.nums[k];
+    let cf = 1, u = unit;
+    if (unit && unit[0] === '@') { const c = this.cv(unit.slice(1)); cf = c[1]; u = c[0]; }
+    const shown = cf !== 1 ? sig(base * cf) : (dp ? base.toFixed(dp) : String(base));
+    const bump = d => () => this.setNum(k, base + d, min, max, dp);
+    const commit = txt => {
+      const v = parseFloat(String(txt).replace(/[^0-9eE+\-.]/g, ''));
+      if (isFinite(v)) this.setNum(k, v / cf, min, max, cf !== 1 ? 4 : dp);
+    };
+    return {
+      label, unit: u, val: st.edit === k ? st.editText : shown, w: w || (cf !== 1 ? 54 : 44),
+      dec: bump(-step), inc: bump(step),
+      onFocus: () => this.setState({ edit: k, editText: shown }),
+      onEdit: e => this.setState({ editText: e.target.value }),
+      onCommit: () => { commit(this.state.editText); this.setState({ edit: null }); },
+      onKeyDown: e => {
+        if (e.key === 'Enter') { commit(e.target.value); this.setState({ edit: null }); e.target.blur(); }
+        else if (e.key === 'Escape') { this.setState({ edit: null }); e.target.blur(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); this.setNum(k, base + step, min, max, dp); this.setState({ edit: null }); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); this.setNum(k, base - step, min, max, dp); this.setState({ edit: null }); }
+      }
+    };
+  }
+
+  commands() {
+    const s = this.state;
+    return [
+      { label: 'Solve — static, linear elastic', group: 'SOLVE', dot: '#5ecfe0', run: () => this.startSolve() },
+      { label: 'Cancel solve', group: 'SOLVE', dot: '#5ecfe0', run: () => this.abortSolve('cancelled by operator') },
+      { label: 'Toggle gesture control', group: 'INPUT', dot: '#7ee787', run: () => this.setState({ gestureOn: !s.gestureOn }) },
+      { label: 'Enter AR placement mode', group: 'VIEW', dot: '#e6c98a', run: () => this.setState({ arOn: !s.arOn }) },
+      { label: 'Section cut — Z axis', group: 'VIEW', dot: '#ff6b81', run: () => this.setState({ cutOn: true, cutAxis: 'z', stage: 6 }) },
+      { label: 'Section cut — X axis', group: 'VIEW', dot: '#ff6b81', run: () => this.setState({ cutOn: true, cutAxis: 'x', stage: 6 }) },
+      { label: 'Field › Von Mises stress', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ field: 'vm', stage: 6 }) },
+      { label: 'Field › Displacement magnitude', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ field: 'u', stage: 6 }) },
+      { label: 'Colormap › Inferno', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ cmap: 'inferno' }) },
+      { label: 'Colormap › Ice', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ cmap: 'ice' }) },
+      { label: 'Assign material › Ti-6Al-4V', group: 'MATERIAL', dot: '#ffa23a', run: () => this.setState({ material: 'ti64', stage: 2 }) },
+      { label: 'Refine mesh — halve element size', group: 'MESH', dot: '#38bdf8',
+        run: () => { this.setNum('hSize', s.nums.hSize / 2, 0.5, 40, 2); this.setState({ stage: 4 }); } },
+      { label: 'Coarsen mesh — double element size', group: 'MESH', dot: '#38bdf8',
+        run: () => { this.setNum('hSize', s.nums.hSize * 2, 0.5, 40, 2); this.setState({ stage: 4 }); } },
+      { label: 'Fit view to model', group: 'VIEW', dot: '#e6c98a', run: () => { this.tgt.dist = 24; this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; } },
+      { label: 'Export results › CSV', group: 'FILE', dot: '#8b96a2', run: () => this.exportCsv() },
+      { label: 'Filter › Threshold', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ thresh: !s.thresh, stage: 6 }) },
+      { label: 'Filter › Contour bands', group: 'RESULTS', dot: '#a78bfa', run: () => this.setState({ iso: !s.iso, stage: 6 }) },
+      { label: 'Animate mode shape', group: 'RESULTS', dot: '#a78bfa', run: () => this.wantModal(!s.modal) },
+      { label: 'Toggle solver log', group: 'SOLVE', dot: '#5ecfe0', run: () => this.setState({ logOpen: !s.logOpen }) },
+      { label: 'Detach / attach solver core', group: 'SOLVE', dot: '#5ecfe0', run: () => this.toggleBridge() }
+    ];
+  }
+  palList() {
+    const q = this.state.palQuery.toLowerCase();
+    return this.commands().filter(c => !q || c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q));
+  }
+  runPalette(i) {
+    const c = this.palList()[i];
+    this.setState({ palOpen: false, palQuery: '', palIdx: 0 });
+    if (c) c.run();
+  }
+  wantModal(on) {
+    if (on && !this.state.modes) {
+      this.setState({ outputs: { ...this.state.outputs, mode: true }, modal: true }, () => this.startSolve());
+      return;
+    }
+    this.setState({ modal: on });
+  }
+  exportCsv() {
+    const R = this.res, L = this.mesh;
+    if (!R) { this.pushLog('io', 'nothing to export — solve first', 'warn'); return; }
+    const rows = ['node,x,y,z,ux,uy,uz,umag' + (R.vm ? ',vm,p1' : '') + (R.se ? ',sed' : '')];
+    for (let n = 0; n < L.nn; n++) {
+      let r = n + ',' + L.px[n].toFixed(3) + ',' + L.py[n].toFixed(3) + ',' + L.pz[n].toFixed(3)
+        + ',' + R.u[3*n].toExponential(5) + ',' + R.u[3*n+1].toExponential(5) + ',' + R.u[3*n+2].toExponential(5)
+        + ',' + R.umag[n].toExponential(5);
+      if (R.vm) r += ',' + R.vm[n].toFixed(4) + ',' + R.p1[n].toFixed(4);
+      if (R.se) r += ',' + R.se[n].toExponential(5);
+      rows.push(r);
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'bracket_L_results.csv';
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    this.pushLog('io', 'wrote bracket_L_results.csv — ' + grp(L.nn) + ' nodes', 'ok');
+  }
+  menuDefs() {
+    const s = this.state, set = o => () => this.setState(o);
+    return [
+      { label: 'File', ai: 0, items: [
+        ['New Study', 'Ctrl+N'], ['Open Geometry…', 'Ctrl+O'], ['Import IFC / STEP…', 'Ctrl+Shift+I'], '-',
+        ['Save Study', 'Ctrl+S', set({ savedAgo: '· saved just now' })], ['Save Study As…', 'Ctrl+Shift+S'], '-',
+        ['Export Results (CSV)…', '', () => this.exportCsv()], ['Exit', 'Alt+F4']] },
+      { label: 'Edit', ai: 0, items: [
+        ['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Y'], '-',
+        ['Delete Selected', 'Del'], ['Select All Faces', 'Ctrl+A'], '-', ['Preferences…', 'Ctrl+,']] },
+      { label: 'View', ai: 0, items: [
+        ['Solver Log', 'Ctrl+L', set({ logOpen: !s.logOpen }), s.logOpen],
+        ['Gesture Overlay', 'Ctrl+G', set({ gestureOn: !s.gestureOn }), s.gestureOn],
+        ['AR Mode', 'F9', set({ arOn: !s.arOn }), s.arOn], '-',
+        ['Section Cut', '', set({ cutOn: !s.cutOn }), s.cutOn],
+        ['Element Edges', '', set({ stage: 4 })],
+        ['Reset Camera', 'Home', () => { this.tgt.dist = 24; this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; }], '-',
+        ['Full Screen', 'F11']] },
+      { label: 'Solve', ai: 0, items: [
+        ['Generate Mesh', 'F4', set({ stage: 4 })],
+        ['Run Solve', 'F5', s.solving ? null : () => this.startSolve()],
+        ['Cancel Solve', 'Shift+Esc', s.solving ? () => this.abortSolve('cancelled by operator') : null], '-',
+        ['Solver Settings…', '', set({ stage: 5 })],
+        ['Detach Solver Core', '', () => this.toggleBridge(), s.bridge !== 'live']] },
+      { label: 'Gestures', ai: 0, items: [
+        ['Gesture control', 'Ctrl+G', set({ gestureOn: !s.gestureOn }), s.gestureOn], '-'].concat(
+        GESTURES.map(g => [g.does, g.icon + '  ' + g.pose, () => this.fireGesture(g.id)])) },
+      { label: 'Results', ai: 0, items: [
+        ['Deformation Scale…', '', set({ stage: 6 })],
+        ['Animate Mode Shape', 'Ctrl+M', () => this.wantModal(!s.modal), s.modal],
+        ['Probe Values', '', set({ stage: 6 })], '-', ['Export CSV…', '', () => this.exportCsv()]] },
+      { label: 'Help', ai: 0, items: [
+        ['Documentation', 'F1'], ['Command Palette', 'Ctrl+K', () => this.setState({ palOpen: true, palQuery: '', palIdx: 0 })], '-',
+        ['About Archimedes', '']] }
+    ];
+  }
+  startDrag(e, key, sign) {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = this.state[key];
+    const mv = ev => this.setState({ [key]: Math.max(180, Math.min(460, w0 + (ev.clientX - x0) * sign)) });
+    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  }
+
+
+  // ======================== DOLFINx bridge ================================
+  // The workbench keeps its own hex8 core for instant preview; when the
+  // container is up, solves are handed to DOLFINx instead and the results
+  // come back in this mesh's own node order, so nothing has to be remeshed.
+  // The container may come up after the page does, so a quiet attempt retries
+  // a few times with backoff before giving up and staying on the local core.
+  connectBridge(quiet, attempt) {
+    if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
+    const tries = attempt || 0;
+    this.bridgeTry = tries;
+    let ws;
+    try { ws = new WebSocket(BRIDGE_URL); }
+    catch (e) { this.setState({ bridge: 'off' }); return; }
+    this.ws = ws;
+    this.setState({ bridge: 'connecting' });
+    ws.onopen = () => ws.send(JSON.stringify({ op: 'hello', protocol: 1 }));
+    ws.onmessage = e => { try { this.onBridge(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      const wasLive = this.state.bridge === 'live';
+      this.ws = null;
+      this.setState({ bridge: 'off', bridgeEngine: null });
+      if (this.remote && this.state.solving) { this.remote = false; this.abortSolve('bridge closed mid-solve'); }
+      if (wasLive) {
+        this.pushLog('core', 'solver core detached — falling back to the in-browser hex8 core', 'warn');
+      } else if (quiet && tries < 3 && !this.bridgeStop) {
+        this.bridgeTimer = setTimeout(() => this.connectBridge(true, tries + 1), 900 * (tries + 1));
+      } else if (!quiet) {
+        this.pushLog('core', 'no solver core on ' + BRIDGE_URL
+          + ' — start it with: docker compose up (in backend/)', 'warn');
+      }
+    };
+  }
+  disconnectBridge() {
+    this.bridgeStop = true;
+    clearTimeout(this.bridgeTimer);
+    if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+    this.setState({ bridge: 'off', bridgeEngine: null });
+  }
+  toggleBridge() {
+    if (this.state.bridge === 'live') { this.disconnectBridge(); return; }
+    this.bridgeStop = false;
+    this.setState({ logOpen: true });
+    this.connectBridge(false);
+  }
+  onBridge(m) {
+    if (m.op === 'hello') {
+      this.setState({ bridge: 'live', bridgeEngine: m.engine });
+      this.pushLog('core', 'solver core attached — ' + m.engine + ' · protocol v' + m.protocol, 'ok');
+    } else if (m.op === 'log') {
+      this.pushLog(m.ch, m.msg, m.kind);
+    } else if (m.op === 'progress') {
+      this.prog = { step: m.stage, pct: m.pct, note: m.note };
+      const w = [8, 3, 4, 8, 68, 9], s = Math.max(1, Math.min(6, m.stage));
+      const off = w.slice(0, s - 1).reduce((a, b) => a + b, 0);
+      this.setState({ solveStep: s, stagePct: m.pct,
+        solvePct: Math.min(99.5, off + w[s - 1] * m.pct / 100) });
+    } else if (m.op === 'error') {
+      this.remote = false;
+      this.pushLog('core', m.msg, 'err');
+      this.setState({ solving: false, solved: false });
+    } else if (m.op === 'result') {
+      this.adoptRemote(m);
+    }
+  }
+  b64f32(f) {
+    const bin = atob(f.b64), n = bin.length;
+    const bytes = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+    return new Float32Array(bytes.buffer);
+  }
+  adoptRemote(m) {
+    const L = this.mesh, g = m.grid || {};
+    if (g.nn !== L.nn) {
+      this.pushLog('core', 'grid mismatch — core reports ' + g.nn + ' nodes, viewport has '
+        + L.nn + '; discarding (re-solve after the geometry settles)', 'err');
+      this.remote = false;
+      this.setState({ solving: false, solved: false });
+      return;
+    }
+    const F = m.fields || {};
+    const R = { u: this.b64f32(F.u), umag: this.b64f32(F.umag),
+      vm: F.vm ? this.b64f32(F.vm) : null,
+      p1: F.p1 ? this.b64f32(F.p1) : null,
+      se: F.sed ? this.b64f32(F.sed) : null,
+      seTot: m.strain_energy || 0, remote: true, engine: m.engine,
+      max: {}, argmax: {} };
+    if (m.reaction) { R.rf = m.reaction; R.rfMag = Math.hypot(m.reaction[0], m.reaction[1], m.reaction[2]); }
+    for (const k of ['umag', 'vm', 'p1', 'se']) {
+      const a = R[k];
+      if (!a) { R.max[k] = 0; R.argmax[k] = 0; continue; }
+      let mx = 0, am = 0;
+      for (let i = 0; i < a.length; i++) if (a[i] > mx) { mx = a[i]; am = i; }
+      R.max[k] = mx; R.argmax[k] = am;
+    }
+    const modes = (m.modes || []).map(md => {
+      const phi = this.b64f32(md.phi);
+      let mx = 0;
+      for (let i = 0; i < L.nn; i++) mx = Math.max(mx, Math.hypot(phi[3*i], phi[3*i+1], phi[3*i+2]));
+      return { phi, hz: md.hz, amp: mx > 0 ? 1 / mx : 1, max: mx };
+    });
+    this.res = R;
+    this.remote = false;
+    this.fsig = null;
+    this.isig = this.inputSig();
+    const diag = Math.hypot(this.g.W, this.g.H, this.g.D);
+    const dspl = R.max.umag > 0 ? Math.round(0.06 * diag / R.max.umag) : 12;
+    const st = m.stats || {};
+    const times = m.times || {};
+    const tArr = ['mesh', 'material', 'loads', 'mesh', 'solve', 'recover']
+      .map((k, i) => times[i === 3 ? 'mesh' : k] || 0);
+    this.recordSolve(m.engine, st, R, m.wall || 0);
+    this.setState({ solving: false, solved: true, solvePct: 100, stagePct: 100,
+      solveStep: 6, stage: 6, modes: modes.length ? modes : null,
+      deform: Math.max(1, Math.min(100, dspl)), times: tArr, wall: m.wall || 0,
+      stats: { ne: st.elements || L.ne, nn: st.nodes || L.nn, dof: st.dof || L.nn * 3,
+        it: st.iterations || 0, res: st.residual || 0, hx: st.h || L.dx } });
+  }
+  studySpec() {
+    const n = this.state.nums, m = MAT[this.state.material], b = this.state.bcOn, o = this.state.outputs;
+    return {
+      name: 'bracket_L', version: 1,
+      geometry: { W: n.gWidth, H: n.gHeight, D: n.gDepth, t: n.gThk, r: n.gFillet },
+      material: { id: m.id, name: m.name, E: m.E, nu: m.nu, rho: m.rho, alpha: m.alpha, sy: m.sy },
+      mesh: { mesher: this.state.mesher, h: n.hSize, hz: n.hSize * n.hAspect,
+        across: n.hThick, budget: n.hBudget * 1000, order: this.state.mesher === 'gmsh' ? 2 : 1 },
+      loads: { tip_force: n.lForce, theta: n.lAngle, pressure: n.lPress,
+        dT: n.mTemp - 22, gravity: true, density_scale: n.mScale },
+      bcs: { enc: b.enc, force: b.force, press: b.press, sym: b.sym },
+      solver: { rtol: Math.pow(10, -n.sTol), maxit: n.sMaxIt, ksp: 'cg', pc: 'gamg' },
+      outputs: { u: o.u, s: o.s, e: o.e, rf: o.rf, modes: o.mode ? 3 : 0 }
+    };
+  }
+  useRemote() {
+    return this.state.engine !== 'local' && this.state.bridge === 'live'
+      && this.ws && this.ws.readyState === 1;
+  }
+  recordSolve(engine, st, R, wall) {
+    const row = { engine, elements: st.elements || (this.mesh && this.mesh.ne) || 0,
+      dof: st.dof || (this.mesh && this.mesh.nn * 3) || 0, iters: st.it || st.iterations || 0,
+      vm: R.max.vm || 0, umax: R.max.umag || 0, energy: R.seTot || 0, wall: wall || 0 };
+    const hist = this.state.history.concat([row]);
+    this.setState({ history: hist.length > 40 ? hist.slice(-40) : hist });
+  }
+
+  // ======================== gesture vocabulary ============================
+  fireGesture(id) {
+    const G = GESTURES.find(g => g.id === id);
+    if (!G) return;
+    this.setState({ gestAct: id });
+    this.gsHold = performance.now();
+    try { G.act(this, 'fire'); } catch (e) { console.error(e); }
+  }
+  probePeak() {
+    const F = this.fieldArray();
+    if (!F || !this.state.solved) return;
+    const n = F.am, M = this.fieldsMeta()[this.state.field], c = this.cv('len');
+    this.setState({ probe: {
+      x: Math.max(12, (this.w || 400) * 0.5), y: Math.max(12, (this.h || 300) * 0.32),
+      l1: M.short + ' ' + sig(F.arr[n] * M.conv * this.lf()) + ' ' + M.unit + '  (peak)',
+      l2: 'node ' + n + ' · pointed',
+      l3: 'xyz ' + sig(this.mesh.px[n] * c[1]) + ', ' + sig(this.mesh.py[n] * c[1])
+        + ', ' + sig(this.mesh.pz[n] * c[1]) + ' ' + c[0] } });
+  }
+
+  // ======================== tabs and detached windows =====================
+  openTab(id) { this.setState({ tab: id }); }
+  detachTab(id) {
+    const meta = TABS.find(t => t.id === id) || TABS[0];
+    let w;
+    try { w = window.open('', 'archimedes_' + id, 'width=920,height=680'); } catch (e) { w = null; }
+    if (!w) {
+      // sandboxed hosts (and popup blockers) refuse window.open outright, so
+      // fall back to maximising the tab over the docked panels
+      const on = this.state.focus === id;
+      this.setState({ focus: on ? null : id, tab: id });
+      this.pushLog('ui', on ? meta.label + ' restored to the docked layout'
+        : 'pop-out blocked by the browser — ' + meta.label
+          + ' maximised instead (click ⧉ again to restore)', 'warn');
+      return;
+    }
+    w.document.open();
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'
+      + meta.label + ' — Archimedes</title><style>'
+      + "html,body{margin:0;height:100%;background:#0b0d10;color:#e6e9ec;"
+      + "font-family:'IBM Plex Sans',system-ui,sans-serif;overflow:hidden}"
+      + '#c{display:block;width:100%;height:100%}'
+      + '#m{padding:14px 16px;overflow-y:auto;height:100%;box-sizing:border-box;'
+      + "font:400 11.5px/1.7 'IBM Plex Mono',monospace;white-space:pre-wrap}"
+      + '</style></head><body>'
+      + (id === 'view' ? '<canvas id="c"></canvas>' : '<div id="m"></div>')
+      + '</body></html>');
+    w.document.close();
+    this.pops[id] = w;
+    w.addEventListener('beforeunload', () => { delete this.pops[id]; });
+    this.pushLog('ui', meta.label + ' detached into its own window', 'info');
+  }
+  closePops() {
+    for (const k in this.pops) { try { this.pops[k].close(); } catch (e) {} }
+    this.pops = {};
+  }
+  // draw the same scene into a detached window's canvas
+  renderTo(ctx, w, h, now) {
+    const sc = this.ctx, sw = this.w, sh = this.h;
+    this.ctx = ctx; this.w = w; this.h = h; this._offscreen = true;
+    try { this._draw(now); } catch (e) { /* keep the main loop alive */ }
+    this.ctx = sc; this.w = sw; this.h = sh; this._offscreen = false;
+  }
+  syncPops(now) {
+    if (!this.pops) return;
+    for (const id in this.pops) {
+      const w = this.pops[id];
+      if (!w || w.closed) { delete this.pops[id]; continue; }
+      if (id === 'view') {
+        const cv = w.document.getElementById('c');
+        if (!cv) continue;
+        const dpr = Math.min(2, w.devicePixelRatio || 1);
+        const cw = w.innerWidth, ch = w.innerHeight;
+        if (cv.width !== Math.floor(cw * dpr) || cv.height !== Math.floor(ch * dpr)) {
+          cv.width = Math.floor(cw * dpr); cv.height = Math.floor(ch * dpr);
+        }
+        const c2 = cv.getContext('2d');
+        c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.renderTo(c2, cw, ch, now);
+      } else if (now - (this.popT || 0) > 400) {
+        const el = w.document.getElementById('m');
+        if (el) el.textContent = this.popText(id);
+      }
+    }
+    if (now - (this.popT || 0) > 400) this.popT = now;
+  }
+  popText(id) {
+    const st = this.state;
+    if (id === 'log') return st.log.map(l => l[0].padStart(6) + '  ' + l[1].padEnd(7) + l[2]).join('\n');
+    if (id === 'converge') {
+      const head = '  #  engine        elements       DOF   iters      vm_max      |U|max        energy';
+      return head + '\n' + st.history.map((r, i) =>
+        String(i + 1).padStart(3) + '  ' + String(r.engine).slice(0, 12).padEnd(12)
+        + String(r.elements).padStart(10) + String(r.dof).padStart(10)
+        + String(r.iters).padStart(8) + sig(r.vm).padStart(12)
+        + sig(r.umax).padStart(12) + sig(r.energy).padStart(14)).join('\n');
+    }
+    if (id === 'chat') return st.chat.map(m => '[' + m.role + '] ' + m.text).join('\n\n');
+    return '';
+  }
+
+  // ======================== design assistant (UI only) ====================
+  chatContext() {
+    const st = this.state, R = this.res, m = MAT[st.material], FM = this.fieldsMeta();
+    const sf = R && R.max.vm ? m.sy / (R.max.vm * Math.abs(this.lf())) : null;
+    return {
+      study: this.studySpec(),
+      solved: !!st.solved,
+      engine: R && R.engine ? R.engine : (st.solved ? 'in-browser hex8' : null),
+      results: R ? {
+        vm_max_MPa: +(R.max.vm || 0).toFixed(2),
+        u_max_mm: +(R.max.umag || 0).toFixed(4),
+        strain_energy_mJ: +(R.seTot || 0).toFixed(2),
+        reaction_N: R.rf || null,
+        safety_factor: sf ? +sf.toFixed(2) : null,
+        peak_location: FM[st.field] ? FM[st.field].loc : null
+      } : null,
+      mesh: st.stats || null,
+      frequencies_Hz: (st.modes || []).map(x => +x.hz.toFixed(1))
+    };
+  }
+  sendChat(text) {
+    const msg = (text != null ? text : this.state.chatInput).trim();
+    if (!msg) return;
+    const ctx = this.chatContext();
+    const R = this.res, m = MAT[this.state.material];
+    const actions = [];
+    // Proposed actions come from plain arithmetic on the last solve, not from
+    // any model — the panel says so. They are here to show the action-card
+    // mechanism an assistant backend would drive.
+    if (R && R.max.vm > 0) {
+      const sf = m.sy / R.max.vm;
+      if (sf < 2) {
+        const t = this.state.nums.gThk * Math.sqrt(2 / sf);
+        actions.push({ verb: 'APPLY', label: 'Wall thickness → ' + sig(t)
+          + ' mm (bending estimate for SF 2.0)',
+          apply: () => this.setNum('gThk', t, 2, 200, 0) });
+      }
+    }
+    actions.push({ verb: 'APPLY', label: 'Halve the element size and re-solve',
+      apply: () => { this.setNum('hSize', this.state.nums.hSize / 2, 0.5, 40, 2);
+        setTimeout(() => this.startSolve(), 60); } });
+
+    const reply = 'No assistant backend is connected, so I cannot answer that yet — '
+      + 'this panel is the interface only.\n\n'
+      + 'The request would be sent as:\n'
+      + JSON.stringify({ message: msg, context: ctx }, null, 2).slice(0, 1400)
+      + '\n\nThe cards below are computed locally by arithmetic on the last solve, '
+      + 'not by a model.';
+    const next = this.state.chat.concat([
+      { role: 'user', text: msg, actions: [] },
+      { role: 'assistant', text: reply, actions }
+    ]);
+    this.chatDirty = true;
+    this.setState({ chat: next, chatInput: '' });
+  }
+  renderVals() {
+    if (!this.mesh) this.syncModel();                    // first paint runs before didMount
+    const st = this.state, S = st.stage, N = st.nums, A = '#5ecfe0';
+    const mat = MAT[st.material];
+    const sel = (on, base) => on ? { bg: 'rgba(94,207,224,.10)', bd: 'rgba(94,207,224,.42)', fg: '#dff3f7' }
+                                 : { bg: base || '#13181e', bd: '#222a33', fg: '#93a0ad' };
+    const FM = this.fieldsMeta();
+    const F = FM[st.field] || FM.vm;
+    const stops = CMAP;
+    // counts describe the mesh on screen (always current); `st.stats` only
+    // carries facts about the last actual solve
+    const M = this.mesh, stats = st.stats, R = this.res, lf = this.lf();
+    const showResults = S === 6 && (st.solved || (st.modal && st.modes));
+    const stale = !st.solved && !st.solving && !!stats;
+
+    const stages = [['01','GEOMETRY'],['02','MATERIAL'],['03','LOADS'],['04','MESH'],['05','SOLVE'],['06','RESULTS']]
+      .map((s, i) => {
+        const on = S === i + 1;
+        return { idx: s[0], label: s[1], go: () => this.setState({ stage: i + 1 }),
+          bg: on ? '#161c23' : 'transparent', bd: on ? A : 'transparent',
+          fg: on ? '#eaf1f6' : '#7b8794', num: on ? A : '#495563' };
+      });
+
+    const g = this.geom(), cl = this.cv('len'), cs = this.cv('stress'), cf = this.cv('force');
+    const q = this.qual;
+    const treeDef = [
+      ['root', 0, 'bracket_L', '#5ecfe0', '50%', '600 11px/1 IBM Plex Sans', 'L-bracket', 'geo'],
+      ['geo', 1, 'Geometry', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'implicit', 'geo'],
+      ['geo-b', 2, 'Body — extruded profile', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.W * cl[1]) + cl[0], 'geo'],
+      ['geo-w', 2, 'Wall thickness', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.t * cl[1]) + cl[0], 'geo'],
+      ['geo-f', 2, 'Fillet — re-entrant corner', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', 'r' + sig(g.r * cl[1]), 'geo'],
+      ['mat', 1, 'Materials', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'mat'],
+      ['mat-1', 2, mat.name, '#ffa23a', '2px', '400 10.5px/1 IBM Plex Sans', sig(mat.E * this.cv('mod')[1]) + this.cv('mod')[0], 'mat'],
+      ['load', 1, 'Interactions', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'load'],
+      ['load-e', 2, 'fixed — base face', '#7ee787', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.enc ? 'U=0' : 'off', 'load'],
+      ['load-f', 2, 'load — arm tip', '#ff6b81', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.force ? sig(N.lForce * cf[1]) + cf[0] : 'off', 'load'],
+      ['load-p', 2, 'pressure — web outer', '#ff6b81', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.press ? sig(N.lPress * cs[1]) + cs[0] : 'off', 'load'],
+      ['mesh', 1, 'Mesh', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'HEX8', 'mesh'],
+      ['mesh-s', 2, 'Element size', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(M.dx * cl[1]) + cl[0], 'mesh'],
+      ['mesh-n', 2, 'Elements', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', grp(M.ne), 'mesh'],
+      ['solve', 1, 'Step-1 — LinearProblem', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', stats ? stats.it + ' it' : 'PCG', 'solve'],
+      ['res', 1, 'Results', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', st.solved ? 'ok' : 'stale', 'res'],
+      ['res-vm', 2, 'S — Von Mises', '#a78bfa', '2px', '400 10.5px/1 IBM Plex Sans', R && R.vm ? sig(R.max.vm * cs[1]) : '—', 'res'],
+      ['res-u', 2, 'U — Displacement', '#a78bfa', '2px', '400 10.5px/1 IBM Plex Sans', R ? sig(R.max.umag * cl[1]) : '—', 'res'],
+      ['res-rf', 2, 'RF — Reactions', '#a78bfa', '2px', '400 10.5px/1 IBM Plex Sans', R && R.rfMag ? sig(R.rfMag * cf[1]) + cf[0] : '—', 'res']
+    ];
+    const stageOf = { geo: 1, mat: 2, load: 3, mesh: 4, solve: 5, res: 6 };
+    const tree = [];
+    let hideBelow = -1;
+    treeDef.forEach((t, i) => {
+      const depth = t[1];
+      if (hideBelow >= 0 && depth > hideBelow) return;
+      hideBelow = -1;
+      const kids = treeDef[i + 1] && treeDef[i + 1][1] > depth;
+      const shut = !!st.collapsed[t[0]];
+      if (kids && shut) hideBelow = depth;
+      const on = st.sel === t[0], active = stageOf[t[7]] === S;
+      tree.push({ pad: 10 + depth * 13, label: t[2], meta: t[6], dot: t[3], dotR: t[4], font: t[5],
+        caret: kids ? (shut ? '▸' : '▾') : '',
+        caretFg: on ? '#9fdbe6' : '#4d5866',
+        bg: on ? 'rgba(94,207,224,.09)' : 'transparent',
+        fg: on ? '#e6eef4' : active ? '#b3bec9' : '#7c8794',
+        rail: on ? A : active ? '#242e37' : 'transparent',
+        click: () => {
+          const next = { ...st.collapsed };
+          if (kids) next[t[0]] = !next[t[0]];
+          this.setState({ sel: t[0], stage: stageOf[t[7]], collapsed: next });
+        },
+        toggle: e => {
+          e.stopPropagation();
+          if (!kids) return;
+          this.setState({ collapsed: { ...st.collapsed, [t[0]]: !st.collapsed[t[0]] } });
+        } });
+    });
+
+    const gestureMap = GESTURES.map(x => {
+      const on = st.gestureOn && st.gestAct === x.id;
+      return { icon: x.icon, does: x.does, pose: x.pose,
+        bg: on ? 'rgba(94,207,224,.10)' : 'transparent',
+        icFg: on ? A : x.demo ? '#5b6672' : '#414c58',
+        fg: on ? '#dff3f7' : '#9aa5b1', poseFg: on ? '#7fd8e6' : '#4d5866',
+        kfg: on ? '#07171a' : '#5e6b78', kbg: on ? A : '#12171d', kbd: on ? A : '#232a32',
+        fire: () => this.fireGesture(x.id) };
+    });
+
+    // The view cube covers the six orthographic directions, so only the two
+    // it cannot express stay as buttons.
+    const camNow = [this.cam ? this.cam.yaw : 0, this.cam ? this.cam.pitch : 0];
+    const viewPresets = [['ISO', -0.62, 0.42], ['FIT', null, null]]
+      .map(v => {
+        const on = v[1] !== null && Math.abs(camNow[0] - v[1]) < 0.02 && Math.abs(camNow[1] - v[2]) < 0.02;
+        return { label: v[0], bd: on ? 'rgba(94,207,224,.5)' : '#242c35', fg: on ? '#dff3f7' : '#8b96a2',
+          click: () => { if (v[1] !== null) { this.tgt.yaw = v[1]; this.tgt.pitch = v[2]; } this.tgt.dist = 24; } };
+      });
+
+    const panels = {
+      1: { title: 'Geometry', sub: 'implicit L-profile · extruded',
+        sections: [
+          { title: 'BOUNDING BOX', params: [this.p('gWidth', 'Width', '@len', 5, 20, 600, 0), this.p('gDepth', 'Depth', '@len', 5, 10, 400, 0), this.p('gHeight', 'Height', '@len', 5, 20, 800, 0)] },
+          { title: 'FEATURES', params: [this.p('gThk', 'Wall thickness', '@len', 2, 2, 200, 0), this.p('gFillet', 'Fillet radius', '@len', 2, 0, 120, 0)] }
+        ] },
+      2: { title: 'Material', sub: 'isotropic · Lamé from E and ν',
+        sections: [{ title: 'CONDITIONS', params: [this.p('mTemp', 'Temperature', '°C', 5, -100, 400, 0), this.p('mScale', 'Density scale', '×', 0.05, 0.1, 3, 2)] }] },
+      3: { title: 'Loads & BCs', sub: 'consistent nodal loads',
+        sections: [{ title: 'MAGNITUDES', params: [this.p('lForce', 'Tip force', '@force', 100, 0, 400000, 0), this.p('lAngle', 'Direction θ', '°', 5, -180, 180, 0), this.p('lPress', 'Web pressure', '@stress', 0.1, 0, 50, 2)] }] },
+      4: { title: 'Mesh', sub: 'structured hex8 voxel core',
+        sections: [{ title: 'CHARACTERISTIC LENGTH', params: [this.p('hSize', 'Size max', '@len', 0.5, 0.5, 40, 1), this.p('hThick', 'Elements across wall', '', 1, 1, 6, 0), this.p('hAspect', 'Depth ratio', '×', 0.25, 0.25, 4, 2), this.p('hBudget', 'Budget', 'k el', 2, 2, 60, 0)] }] },
+      5: { title: 'Solve', sub: 'Jacobi-PCG · geometric cascade',
+        sections: [{ title: 'KRYLOV OPTIONS', params: [this.p('sTol', 'rtol 1e−n', '', 1, 2, 12, 0), this.p('sIncr', 'Load increments', '', 1, 1, 60, 0), this.p('sMaxIt', 'ksp max it', '', 250, 250, 40000, 0)] }] },
+      6: { title: 'Results', sub: st.solved ? 'nodal fields · averaged' : 'no current solution', sections: [] }
+    };
+
+    const materials = MATS.map(m => {
+      const on = st.material === m.id, s = sel(on);
+      const MOD = this.cv('mod'), DENS = this.cv('dens');
+      return { name: m.name, swatch: m.sw, tag: on ? 'ASSIGNED' : '', tagFg: A,
+        spec: 'E ' + sig(m.E * MOD[1]) + ' ' + MOD[0] + ' · ν ' + m.nu + ' · ρ ' + sig(m.rho * DENS[1]) + ' ' + DENS[0],
+        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#aeb9c4', click: () => this.setState({ material: m.id }) };
+    });
+
+    const bcs = [
+      ['enc', 'ENC', 'Encastre', 'face · base of leg', 'U=0', '#7ee787', 'rgba(126,231,135,.12)'],
+      ['force', 'F', 'Concentrated force', 'node set · arm tip', sig(N.lForce * cf[1]) + ' ' + cf[0], '#ff6b81', 'rgba(255,107,129,.12)'],
+      ['press', 'P', 'Pressure', 'face · web outer', sig(N.lPress * cs[1]) + ' ' + cs[0], '#ffa23a', 'rgba(255,162,58,.12)'],
+      ['sym', 'SYM', 'Symmetry Z', 'face · mid-plane', 'U3=0', '#38bdf8', 'rgba(56,189,248,.12)']
+    ].map(b => {
+      const on = st.bcOn[b[0]];
+      return { icon: b[1], name: b[2], target: b[3], val: on ? b[4] : 'suppressed',
+        valFg: on ? b[5] : '#4d5866', iconFg: on ? b[5] : '#5b6672', iconBg: on ? b[6] : '#161b21',
+        bg: on ? 'rgba(94,207,224,.07)' : '#13181e', bd: on ? 'rgba(94,207,224,.3)' : '#222a33',
+        fg: on ? '#c3ccd6' : '#6c7784',
+        click: () => this.setState({ bcOn: { ...st.bcOn, [b[0]]: !on } }) };
+    });
+
+    const meshQuality = q ? [
+      { label: 'Elements', val: grp(q.ne), pct: Math.min(100, 100 * q.ne / (N.hBudget * 1000)), fg: '#7ee787' },
+      { label: 'Scaled Jacobian', val: '1.000', pct: 100, fg: '#7ee787' },
+      { label: 'Aspect ratio', val: q.ar.toFixed(2) + ' max', pct: Math.max(6, Math.min(100, 100 / q.ar)), fg: q.ar > 3 ? '#e6c98a' : '#7ee787' },
+      { label: 'Elements across wall', val: String(q.span), pct: Math.min(100, q.span * 25), fg: q.span < 2 ? '#ff6b81' : '#7ee787' },
+      { label: 'Single-span elements', val: grp(q.thin), pct: Math.min(100, 100 * q.thin / Math.max(1, q.ne)), fg: q.thin ? '#e6c98a' : '#7ee787' }
+    ] : [{ label: 'Mesh', val: 'not generated', pct: 0, fg: '#5b6672' }];
+
+    const outputs = [['u', 'Displacement field', 'U'], ['s', 'Stress tensor', 'S'], ['e', 'Strain energy', 'E'],
+      ['rf', 'Reaction forces', 'RF'], ['mode', 'Modal (3 lowest)', 'MODE']].map(o => {
+      const on = st.outputs[o[0]];
+      return { label: o[1], code: o[2], check: on ? '✓' : '', fg: on ? '#c3ccd6' : '#6c7784',
+        boxBg: on ? A : 'transparent', boxBd: on ? A : '#2b333c',
+        click: () => this.setState({ outputs: { ...st.outputs, [o[0]]: !on } }) };
+    });
+
+    const fields = Object.keys(FM).filter(k => FM[k].available).map(k => {
+      const on = st.field === k, s = sel(on);
+      return { label: FM[k].label, short: FM[k].short, unit: FM[k].unit,
+        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#9aa5b1',
+        click: () => this.setState({ field: k }) };
+    });
+    const shadeOpts = [['shaded', 'SHADED', 'Filled elements'],
+      ['wire', 'WIRE', 'Element edges only'],
+      ['nodes', 'NODES', 'Node cloud — no element faces']].map(o => {
+      const on = st.shade === o[0], s = sel(on);
+      return { label: o[1], title: o[2], bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
+        click: () => this.setState({ shade: o[0] }) };
+    });
+    const viewToggles = [
+      ['planes', 'PLANES', 'Show the XY / YZ / ZX datum planes', st.planes],
+      ['gridOn', 'GRID', 'Show the ground grid', st.gridOn !== false],
+      ['legendOn', 'LEGEND', 'Show the contour legend', st.legendOn !== false]
+    ].map(t => {
+      const s = sel(t[3]);
+      return { label: t[1], title: t[2], bg: s.bg, bd: s.bd, fg: t[3] ? '#dff3f7' : '#7f8b98',
+        click: () => this.setState({ [t[0]]: !t[3] }) };
+    });
+    if (fields.length && !FM[st.field].available)
+      setTimeout(() => this.setState({ field: Object.keys(FM).find(k => FM[k].available) }), 0);
+
+    const cutAxes = ['x', 'y', 'z'].map(a => {
+      const on = st.cutAxis === a, s = sel(on);
+      return { label: a.toUpperCase() + ' PLANE', bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
+        click: () => this.setState({ cutAxis: a, cutOn: true }) };
+    });
+
+    const T = st.times;
+    const pipeline = PIPE.map((label, i) => {
+      const idx = i + 1;
+      const done = st.solveStep > idx || (st.solved && st.solveStep >= idx);
+      const active = st.solving && st.solveStep === idx;
+      const secs = T && T[i] != null ? (T[i] / 1000).toFixed(T[i] < 1000 ? 2 : 1) + ' s' : '—';
+      return { label: idx === 4 ? 'Mesh ' + grp(M.ne) + ' el' : label,
+        flex: [1, 1, 1, 1.2, 2, 1.2][i],
+        time: active ? 'running' : done ? secs : '—',
+        bg: active ? 'rgba(94,207,224,.06)' : '#0f1317', bd: active ? 'rgba(94,207,224,.35)' : '#1a2027',
+        fill: active ? 'rgba(94,207,224,.16)' : done ? 'rgba(126,231,135,.07)' : 'transparent',
+        pct: active ? st.stagePct : done ? 100 : 0,
+        fg: active ? '#dff3f7' : done ? '#93a0ad' : '#57626e', tFg: active ? A : '#4d5866' };
+    });
+
+    // ---- document tabs, detachable into their own windows ----------------
+    const tabs = TABS.map(t => {
+      const on = st.tab === t.id;
+      return { label: t.label, dot: on ? t.dot : '#3b4550',
+        bg: on ? '#0b0d10' : 'transparent', bd: on ? t.dot : 'transparent',
+        fg: on ? '#e6eef4' : '#7c8794', popFg: this.pops[t.id] ? A : '#4d5866',
+        go: () => this.openTab(t.id), detach: () => this.detachTab(t.id) };
+    });
+    const popped = Object.keys(this.pops || {});
+    const tabHint = st.focus ? 'maximised — ⧉ restores the docked panels'
+      : popped.length ? popped.length + ' window' + (popped.length > 1 ? 's' : '') + ' detached'
+      : '⧉ opens a tab in its own window';
+
+    // ---- convergence / solve history -------------------------------------
+    const hist = st.history || [];
+    const vmPeak = Math.max(1e-9, ...hist.map(r => r.vm || 0));
+    const conv = {
+      empty: hist.length === 0,
+      note: hist.length
+        ? 'Peak stress does not converge on a voxel mesh — the staircased fillet cannot '
+          + 'resolve the concentration. |U| and strain energy do. Use the gmsh mesher for the fillet.'
+        : 'Every completed solve is appended here, whichever engine ran it.',
+      rows: hist.map((r, i) => ({
+        n: String(i + 1), engine: r.engine.replace('dolfinx ', 'dolfinx '),
+        engFg: r.engine.indexOf('dolfinx') === 0 ? '#7ee787' : '#8b96a2',
+        elements: grp(r.elements), dof: grp(r.dof), iters: String(r.iters),
+        vm: sig(r.vm * cs[1]) + ' ' + cs[0], umax: sig(r.umax * cl[1]) + ' ' + cl[0],
+        secs: (r.wall / 1000).toFixed(2) + ' s',
+        pct: Math.round(100 * (r.vm || 0) / vmPeak),
+        barFg: i === hist.length - 1 ? A : '#2f3a45',
+        bg: i === hist.length - 1 ? 'rgba(94,207,224,.06)' : '#0e1114',
+        bd: i === hist.length - 1 ? 'rgba(94,207,224,.28)' : '#171d24'
+      })),
+      clear: () => this.setState({ history: [] }),
+      refine: () => { this.setNum('hSize', N.hSize / 2, 0.5, 40, 2); setTimeout(() => this.startSolve(), 60); }
+    };
+
+    // ---- assistant (interface only — no model behind it) ------------------
+    const chat = {
+      ref: this.refChat, input: st.chatInput,
+      dot: '#e6c98a', state: 'no backend connected · UI only',
+      stateFg: '#8a7c5c',
+      msgs: (st.chat.length ? st.chat : [{ role: 'assistant', actions: [],
+        text: 'I can read the current study and results once a backend is wired up.\n'
+          + 'Right now this panel is the interface only — send anything and I will show '
+          + 'you exactly what would be dispatched.' }]).map(mm => ({
+        text: mm.text, align: mm.role === 'user' ? 'flex-end' : 'flex-start',
+        radius: mm.role === 'user' ? '10px 10px 3px 10px' : '10px 10px 10px 3px',
+        bg: mm.role === 'user' ? 'rgba(94,207,224,.10)' : '#11161b',
+        bd: mm.role === 'user' ? 'rgba(94,207,224,.32)' : '#1e252d',
+        fg: mm.role === 'user' ? '#dff3f7' : '#b9c3cd',
+        actions: (mm.actions || []).map(x => ({ verb: x.verb, label: x.label,
+          run: () => x.apply() }))
+      })),
+      prompts: [
+        'Why is the stress highest there?',
+        'Is this design safe?',
+        'What thickness gives SF 2?',
+        'Has the mesh converged?'
+      ].map(q => ({ label: q, run: () => this.sendChat(q) })),
+      onInput: e => this.setState({ chatInput: e.target.value }),
+      onKey: e => { if (e.key === 'Enter') { e.preventDefault(); this.sendChat(); } },
+      send: () => this.sendChat(),
+      open: () => this.setState({ aiOpen: true }),
+      close: () => this.setState({ aiOpen: false })
+    };
+
+    // ---- picked-node inspector -------------------------------------------
+    const pk = st.pick;
+    const nodeRows = [];
+    if (pk != null && M && pk < M.nn) {
+      nodeRows.push({ k: 'x', v: sig(M.px[pk] * cl[1]) + ' ' + cl[0] });
+      nodeRows.push({ k: 'y', v: sig(M.py[pk] * cl[1]) + ' ' + cl[0] });
+      nodeRows.push({ k: 'z', v: sig(M.pz[pk] * cl[1]) + ' ' + cl[0] });
+      if (R) {
+        nodeRows.push({ k: '|U|', v: sig(R.umag[pk] * cl[1] * lf) + ' ' + cl[0] });
+        if (R.vm) nodeRows.push({ k: 'σ_vm', v: sig(R.vm[pk] * cs[1] * lf) + ' ' + cs[0] });
+        if (R.p1) nodeRows.push({ k: 'σ₁', v: sig(R.p1[pk] * cs[1] * lf) + ' ' + cs[0] });
+      }
+    }
+    const node = { on: nodeRows.length > 0, id: String(pk), rows: nodeRows,
+      clear: () => this.setState({ pick: null }) };
+
+    // ---- solver engine + mesher ------------------------------------------
+    const live = st.bridge === 'live';
+    const engineOpts = [['auto', 'DOLFINx'], ['local', 'IN-BROWSER']].map(e => {
+      const on = st.engine === e[0], s = sel(on);
+      return { label: e[1], bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
+        click: () => this.setState({ engine: e[0] }) };
+    });
+    const engineNote = st.engine === 'local'
+      ? 'hex8 · Jacobi-PCG · runs in this tab'
+      : live ? 'attached — ' + (st.bridgeEngine || 'dolfinx') + ' · CG + GAMG'
+      : 'core not reachable on ' + BRIDGE_URL + ' — falls back to the in-browser core. '
+        + 'Start it with: docker compose up (in backend/)';
+    const mesherOpts = [['voxel', 'VOXEL HEX8'], ['gmsh', 'GMSH TET']].map(mm => {
+      const on = st.mesher === mm[0], s = sel(on);
+      return { label: mm[1], bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
+        click: () => this.setState({ mesher: mm[0] }) };
+    });
+    const mesherNote = st.mesher === 'gmsh'
+      ? 'exact filleted B-Rep, P2 tets — resolves the concentration. Requires the DOLFINx core.'
+      : 'structured grid, identical in both engines. Staircases the fillet.';
+
+    const palRaw = this.palList();
+    const palIdx = Math.min(st.palIdx, Math.max(0, palRaw.length - 1));
+    const palItems = palRaw.map((c, i) => ({ label: c.label, group: c.group, dot: c.dot,
+      bg: i === palIdx ? '#191f26' : 'transparent', fg: '#d3dae1', run: () => this.runPalette(i) }));
+
+    const ticks = [];
+    for (let i = 5; i >= 0; i--) ticks.push({ v: sig(F.max * i / 5) });
+
+    const cutMM = this.cutBound() * cl[1];
+    const sf = R && R.vm && R.max.vm > 0 ? mat.sy / (R.max.vm * Math.abs(lf) || 1) : null;
+    const modeInfo = st.modes && st.modes[st.mode - 1];
+
+    return {
+      savedLabel: st.solving ? '· solving' : stale ? '· results stale' : st.savedAgo,
+      winTitle: 'bracket_L — Archimedes Workbench',
+      dpiLabel: grp(M.nn * 3) + ' DOF · hex8 · Jacobi-PCG',
+      win: { isMax: st.maxed, isRestored: !st.maxed, maxTitle: st.maxed ? 'Restore Down' : 'Maximize',
+        toggleMax: () => this.setState({ maxed: !st.maxed }) },
+      menus: this.menuDefs().map(m => ({
+        pre: m.label.slice(0, m.ai), acc: m.label[m.ai], post: m.label.slice(m.ai + 1),
+        open: st.menu === m.label,
+        bg: st.menu === m.label ? '#1a212a' : 'transparent',
+        fg: st.menu === m.label ? '#e2e8ee' : '#a9b4bf',
+        click: () => this.setState({ menu: st.menu === m.label ? null : m.label }),
+        hover: () => { if (st.menu && st.menu !== m.label) this.setState({ menu: m.label }); },
+        items: m.items.map(it => it === '-'
+          ? { isSep: true, isItem: false, label: '', accel: '', check: '', fg: 'transparent', run: () => {} }
+          : { isSep: false, isItem: true, label: it[0], accel: it[1] || '', check: it[3] ? '✓' : '',
+              fg: it[2] ? '#d3dae1' : '#8b96a2',
+              run: () => { this.setState({ menu: null }); it[2] && it[2](); } })
+      })),
+      stages, treeCount: tree.length + ' / ' + treeDef.length, tree, gestureMap,
+      tabs, tabHint, tabIs: { view: st.tab === 'view', converge: st.tab === 'converge' },
+      conv, chat, node, aiOpen: st.aiOpen, aiClosed: !st.aiOpen,
+      engineOpts, mesherOpts, mesherNote,
+      engineNote, engineNoteFg: st.engine === 'local' ? '#4d5866' : live ? '#6f8f7a' : '#8a7c5c',
+      leftW: st.focus ? 0 : st.leftW, rightW: st.focus ? 0 : st.rightW,
+      viewportRef: this.refViewport, canvasRef: this.refCanvas,
+      vpCursor: st.vpDown ? 'grabbing' : 'grab',
+      dragLeft: e => this.startDrag(e, 'leftW', 1),
+      dragRight: e => this.startDrag(e, 'rightW', -1),
+      viewPresets,
+      vpLine1: 'bracket_L · ' + grp(M.ne) + ' hex8 · ' + grp(M.nn * 3) + ' DOF',
+      vpLine2: st.stage === 4 ? 'HEX8 · size ' + sig(M.dx * cl[1]) + ' ' + cl[0]
+        + ' · ' + M.nx + '×' + M.ny + '×' + M.nz + ' core' : 'units ' + UNITS[st.units].label,
+      vpLine3: st.solving ? 'solving — ' + (this.prog.note || PIPE[(st.solveStep || 1) - 1])
+        : st.modal && modeInfo ? 'mode ' + st.mode + ' · ' + sig(modeInfo.hz) + ' Hz'
+        : showResults ? F.label + ' · warp ×' + st.deform
+        : stale ? 'inputs changed — re-solve for results' : 'drag to orbit · scroll to zoom',
+      vpLine3Fg: st.solving ? A : stale ? '#e6c98a' : showResults ? '#7fd8e6' : '#4a5561',
+      gest: { on: st.gestureOn, bg: st.gestureOn ? 'rgba(94,207,224,.12)' : '#161a1f',
+        bd: st.gestureOn ? 'rgba(94,207,224,.45)' : '#242b33', fg: st.gestureOn ? '#dff3f7' : '#8b96a2',
+        dot: st.gestureOn ? A : '#3b4550',
+        label: { orbit: 'OPEN PALM — ORBIT', pinch: 'PINCH — ZOOM', blade: 'BLADE SWEEP — SECTION',
+          point: 'INDEX POINT — PROBE', fist: 'FIST — CONFIRM', idle: 'TRACKING' }[st.gestAct],
+        hint: 'depth camera · 34 ms latency · 2 hands',
+        mapState: st.gestureOn ? 'live' : 'off', mapFg: st.gestureOn ? A : '#3c4650',
+        srcNote: st.gestureOn
+          ? 'scripted driver · ▶ fires a gesture by hand'
+          : 'source: none — ▶ fires a gesture by hand' },
+      ar: { on: st.arOn, bg: st.arOn ? 'rgba(230,201,138,.12)' : '#161a1f',
+        bd: st.arOn ? 'rgba(230,201,138,.45)' : '#242b33', fg: st.arOn ? '#f0e0b8' : '#8b96a2',
+        dot: st.arOn ? '#e6c98a' : '#3b4550', hint: '1:1 scale · plane locked · pinch to reposition' },
+      openPalette: () => this.setState({ palOpen: true, palQuery: '', palIdx: 0 }),
+      closePalette: () => this.setState({ palOpen: false }),
+      stop: e => e.stopPropagation(),
+      runSolve: () => (st.solving ? this.abortSolve('cancelled by operator') : this.startSolve()),
+      solveBtn: { label: (st.solving ? 'ABORT' : stale || st.solved ? 'RE-SOLVE' : 'SOLVE')
+          + (st.solving ? '' : this.useRemote() ? ' · DOLFINx' : ' · LOCAL'),
+        bg: st.solving ? '#ff6b81' : stale ? '#e6c98a' : A, fg: '#07171a' },
+      showLegend: showResults && !!R && st.legendOn !== false,
+      legendRight: st.aiOpen ? 338 : 12,
+      legend: { title: (st.modal ? 'φ — normalised' : F.short + ' — ' + F.unit),
+        unit: st.modal ? 'mode ' + st.mode : 'peak over step',
+        gradient: cssRamp(stops), ticks,
+        max: st.modal ? '1.00' : sig(F.max) + ' ' + F.unit,
+        maxLoc: st.modal && modeInfo ? sig(modeInfo.hz) + ' Hz' : F.loc },
+      probe: st.probe ? { on: true, ...st.probe } : { on: false, x: 0, y: 0, l1: '', l2: '', l3: '' },
+      panel: panels[S],
+      isMat: S === 2, isLoad: S === 3, isMesh: S === 4, isSolve: S === 5, isRes: S === 6,
+      materials, bcs, meshQuality, outputs, fields,
+      shadeOpts, viewToggles,
+      filters: [['thresh', 'THRESHOLD', 'Hide cells below a value', st.thresh],
+        ['iso', 'BANDS', 'Quantise the contour into discrete bands', st.iso]]
+        .map(f => ({ label: f[1], api: f[2],
+          bg: f[3] ? 'rgba(94,207,224,.10)' : '#13181e', bd: f[3] ? 'rgba(94,207,224,.42)' : '#222a33',
+          fg: f[3] ? '#dff3f7' : '#7f8b98', click: () => this.setState({ [f[0]]: !f[3] }) })),
+      thresh: { on: st.thresh, raw: st.threshLo,
+        label: sig(F.max * st.threshLo / 100) + ' ' + F.unit,
+        kept: (this.faces || []).length ? grp(this.faces.length) + ' faces drawn' : 'nothing kept',
+        onChange: e => this.setState({ threshLo: +e.target.value }) },
+      iso: { on: st.iso, n: st.isoN, onChange: e => this.setState({ isoN: +e.target.value }) },
+      time: st.modal
+        ? { title: 'MODE SHAPE', min: 1, max: Math.max(1, (st.modes || [1]).length), raw: st.mode,
+            label: 'mode ' + st.mode,
+            note: modeInfo ? sig(modeInfo.hz) + ' Hz — lumped mass, coarse level' : 'solve with MODE requested',
+            mLabel: 'ANIMATING', mBg: 'rgba(94,207,224,.12)', mBd: 'rgba(94,207,224,.42)', mFg: '#dff3f7',
+            onChange: e => this.setState({ mode: +e.target.value }),
+            toggleModal: () => this.setState({ modal: false }) }
+        : { title: 'LOAD INCREMENT', min: 0, max: N.sIncr, raw: Math.min(st.timeStep, N.sIncr),
+            label: 'λ ' + lf.toFixed(2),
+            note: 'linear elastic — increment ' + Math.min(st.timeStep, N.sIncr) + ' / ' + N.sIncr,
+            mLabel: 'MODAL', mBg: '#13181e', mBd: '#222a33', mFg: '#6c7784',
+            onChange: e => this.setState({ timeStep: +e.target.value }),
+            toggleModal: () => this.wantModal(true) },
+      deformRaw: st.deform, deformLabel: '×' + st.deform,
+      onDeform: e => this.setState({ deform: +e.target.value }),
+      toggleCut: () => this.setState({ cutOn: !st.cutOn }),
+      cut: { on: st.cutOn, axes: cutAxes, posRaw: st.cutPos, posLabel: sig(cutMM) + ' ' + cl[0],
+        tglLabel: st.cutOn ? 'ACTIVE' : 'OFF', tglBg: st.cutOn ? 'rgba(94,207,224,.12)' : '#13181e',
+        tglBd: st.cutOn ? 'rgba(94,207,224,.42)' : '#222a33', tglFg: st.cutOn ? '#dff3f7' : '#6c7784' },
+      onCutPos: e => this.setState({ cutPos: +e.target.value, cutOn: true }),
+      toggleGesture: () => this.setState({ gestureOn: !st.gestureOn }),
+      toggleAR: () => this.setState({ arOn: !st.arOn }),
+      pipeline,
+      log: {
+        open: st.logOpen,
+        lines: st.log.map(l => ({
+          t: l[0], ch: l[1], msg: l[2],
+          chFg: { geom: '#38bdf8', mesh: '#38bdf8', mat: '#ffa23a', load: '#ff6b81',
+            solve: '#5ecfe0', post: '#a78bfa', modal: '#a78bfa', io: '#8b96a2', core: '#e6c98a' }[l[1]] || '#8b96a2',
+          fg: { ok: '#9fe0a8', warn: '#e6c98a', err: '#ff8d9e' }[l[3]] || '#8b96a2'
+        })),
+        meta: st.log.length + ' lines · in-process solver core',
+        caret: st.logOpen ? '▾' : '▴',
+        caretFg: st.logOpen ? A : '#3f4a56',
+        btnFg: st.logOpen ? '#a9b4bf' : '#5e6b78',
+        ref: this.refLog,
+        toggle: () => this.setState({ logOpen: !st.logOpen }),
+        clear: () => this.setState({ log: [] })
+      },
+      bridge: live
+        ? { label: (st.bridgeEngine || 'dolfinx').replace(/\.post\d+$/, ''), dot: '#7ee787',
+            fg: '#8b96a2', bd: '#1f272f', toggle: () => this.toggleBridge() }
+        : st.bridge === 'connecting'
+        ? { label: 'connecting…', dot: '#e6c98a', fg: '#e6c98a', bd: '#3a3324', toggle: () => this.toggleBridge() }
+        : { label: 'in-browser', dot: '#e6c98a', fg: '#8b96a2', bd: '#3a3324', toggle: () => this.toggleBridge() },
+      solveStatus: st.solving ? (this.prog.note || PIPE[(st.solveStep || 1) - 1].toUpperCase())
+        : stale ? 'STALE — RE-SOLVE'
+        : st.solved && st.wall ? 'CONVERGED · ' + (st.wall / 1000).toFixed(2) + ' s' : 'READY',
+      solveStatusFg: st.solving ? A : stale ? '#e6c98a' : st.solved ? '#7ee787' : '#6c7784',
+      statusLeft: [{ k: 'NODES', v: grp(M.nn) }, { k: 'ELEMS', v: grp(M.ne) },
+        { k: 'DOF', v: grp(M.nn * 3) }, { k: 'SOLVER', v: 'PCG · Jacobi' },
+        { k: 'ITER', v: st.solved && stats ? String(stats.it) : '—' }],
+      unitBtn: { label: UNITS[st.units].label, open: st.unitsOpen,
+        caret: st.unitsOpen ? '▾' : '▴',
+        toggle: () => this.setState({ unitsOpen: !st.unitsOpen }),
+        close: () => this.setState({ unitsOpen: false }),
+        options: UORDER.map(k => ({ label: UNITS[k].label, check: st.units === k ? '●' : '',
+          fg: st.units === k ? '#dff3f7' : '#8b96a2',
+          bg: st.units === k ? 'rgba(94,207,224,.10)' : 'transparent',
+          markFg: st.units === k ? '#5ecfe0' : 'transparent',
+          pick: () => this.setState({ units: k, unitsOpen: false }) })) },
+      statusRight: [{ k: 'SF', v: sf ? sig(sf) : '—' }, { k: 'FPS', v: String(st.fps) },
+        { k: 'CAM', v: (camNow[0] * 57.3).toFixed(0) + '° / ' + (camNow[1] * 57.3).toFixed(0) + '°' }],
+      pal: { open: st.palOpen, query: st.palQuery, items: palItems,
+        inputRef: this.refPal,
+        onQuery: e => this.setState({ palQuery: e.target.value, palIdx: 0 }) }
+    };
+  }
+}
+</script>
+</body>
+</html>

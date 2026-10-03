@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#0b0d10;color:#e6e9ec;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#5ecfe0;text-decoration:none}
+a:hover{color:#9fe6f2}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input[type=range]{accent-color:#5ecfe0;height:2px;background:#232a33;border-radius:2px;appearance:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:#5ecfe0;box-shadow:0 0 0 4px rgba(94,207,224,.16);cursor:grab}
+::-webkit-scrollbar{width:10px}
+::-webkit-scrollbar-thumb{background:#232a32;border-radius:5px}
+::-webkit-scrollbar-track{background:#0b0d10}
+@keyframes kpulse{0%,100%{opacity:.35}50%{opacity:1}}
+</style>
+</helmet>
+
+<div data-screen-label="Site" style="min-height:100vh;background:#0b0d10;overflow-x:hidden">
+
+  <div style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:34px;padding:0 34px;height:60px;background:rgba(11,13,16,.82);backdrop-filter:blur(14px);border-bottom:1px solid #171d24">
+    <a href="#top" style="display:flex;align-items:center;gap:10px;color:inherit">
+      <span style="width:16px;height:16px;border-radius:3px;background:linear-gradient(135deg,#5ecfe0,#2b7f8e);box-shadow:0 0 14px rgba(94,207,224,.4)"></span>
+      <span style="font:600 14px/1 'IBM Plex Sans';letter-spacing:.14em;color:#eef2f5">ARCHIMEDES</span>
+    </a>
+    <div style="display:flex;gap:26px">
+      <a href="#pipeline" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">Pipeline</a>
+      <a href="#gesture" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">Gesture</a>
+      <a href="#sections" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">Section cuts</a>
+      <a href="#solver" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">Solver</a>
+      <a href="#ar" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">AR review</a>
+      <a href="#roadmap" style="font:400 13px/1 'IBM Plex Sans';color:#8b96a2">Roadmap</a>
+    </div>
+    <div style="flex:1"></div>
+    <a href="Archimedes Workbench.dc.html" style="font:500 12.5px/1 'IBM Plex Sans';color:#b6c1cc">Open workbench</a>
+    <a href="#access" style="padding:9px 16px;border-radius:5px;background:#5ecfe0;color:#07171a;font:600 12.5px/1 'IBM Plex Sans';letter-spacing:.02em">Request access</a>
+  </div>
+
+  <div id="top" style="position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:56px;align-items:center;padding:96px 34px 88px;max-width:1560px;margin:0 auto">
+    <div>
+      <div style="display:inline-flex;align-items:center;gap:9px;padding:6px 11px;border-radius:100px;border:1px solid #24333a;background:rgba(94,207,224,.06);margin-bottom:28px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#5ecfe0;animation:kpulse 1.8s ease-in-out infinite"></span>
+        <span style="font:500 11px/1 'IBM Plex Mono';color:#8fd3df;letter-spacing:.06em">FEniCSx edition · private beta</span>
+      </div>
+      <h1 style="margin:0 0 24px;font:600 62px/1.02 'IBM Plex Sans';letter-spacing:-.028em;color:#f2f6f9;text-wrap:balance">Finite element analysis you can reach into.</h1>
+      <p style="margin:0 0 34px;max-width:560px;font:400 17px/1.62 'IBM Plex Sans';color:#93a0ad;text-wrap:pretty">A complete FEA suite built on DOLFINx and Gmsh, with hand-tracked interaction and AR result review. Import or model the geometry, assign materials, tag loads, mesh, solve and slice the field — without leaving the viewport. It also opens results from Abaqus, Ansys, COMSOL, CalculiX and OpenFOAM.</p>
+      <div style="display:flex;gap:12px;margin-bottom:44px">
+        <a href="#access" style="padding:13px 22px;border-radius:6px;background:#5ecfe0;color:#07171a;font:600 13.5px/1 'IBM Plex Sans';box-shadow:0 10px 30px -14px rgba(94,207,224,.9)">Request access</a>
+        <a href="Archimedes Workbench.dc.html" style="padding:13px 22px;border-radius:6px;border:1px solid #2a323b;color:#d4dce4;font:500 13.5px/1 'IBM Plex Sans'">Open the workbench →</a>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,auto);gap:0;border-top:1px solid #1a2027;padding-top:22px;max-width:620px">
+        <sc-for list="{{ specs }}" as="s" hint-placeholder-count="4">
+          <div style="padding-right:26px">
+            <div style="font:600 21px/1.1 'IBM Plex Mono';color:#dbe3ea">{{ s.v }}</div>
+            <div style="font:400 11px/1.4 'IBM Plex Mono';color:#5b6672;margin-top:6px">{{ s.k }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="position:relative;border-radius:10px;border:1px solid #1c232b;background:#0d1014;overflow:hidden;box-shadow:0 50px 110px -50px #000">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid #171d24;background:#101317">
+        <span style="width:8px;height:8px;border-radius:50%;background:#2a323b"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#2a323b"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#2a323b"></span>
+        <span style="font:400 10.5px/1 'IBM Plex Mono';color:#5b6672;margin-left:8px">bracket_L.kns — step-1 · static general</span>
+        <span style="flex:1"></span>
+        <span style="font:500 10px/1 'IBM Plex Mono';color:{{ hero.statFg }}">{{ hero.stat }}</span>
+      </div>
+      <div ref="{{ heroWrapRef }}" style="position:relative;height:520px">
+        <canvas ref="{{ heroCanvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block" data-comment-anchor="5dd5bdafb8-canvas"></canvas>
+        <div style="position:absolute;left:14px;top:14px;font:400 10.5px/1.7 'IBM Plex Mono';color:#4f5b67">
+          <div>{{ hero.l1 }}</div>
+          <div style="color:#7fd8e6">{{ hero.l2 }}</div>
+        </div>
+        <div style="position:absolute;right:14px;top:14px;width:88px;padding:9px;border-radius:5px;background:rgba(13,16,19,.8);border:1px solid #232a32">
+          <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.12em;color:#6b7783;margin-bottom:8px">σ_vm MPa</div>
+          <div style="display:flex;gap:7px;height:120px">
+            <div style="width:11px;border-radius:2px;border:1px solid #2a323b;background:{{ hero.grad }}"></div>
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+              <sc-for list="{{ hero.ticks }}" as="t" hint-placeholder-count="5">
+                <div style="font:400 9px/1 'IBM Plex Mono';color:#8b96a2">{{ t.v }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div style="position:absolute;left:14px;bottom:14px;display:flex;gap:5px">
+          <sc-for list="{{ hero.modes }}" as="m" hint-placeholder-count="3">
+            <button onClick="{{ m.click }}" style="padding:7px 11px;border-radius:4px;background:{{ m.bg }};border:1px solid {{ m.bd }};color:{{ m.fg }};font:500 10.5px/1 'IBM Plex Mono';letter-spacing:.05em;transition:all .16s ease">{{ m.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pipeline" style="padding:88px 34px;border-top:1px solid #151b21;background:#0c0f12">
+    <div style="max-width:1560px;margin:0 auto">
+      <div style="font:500 11px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.16em;margin-bottom:16px">01 — PIPELINE</div>
+      <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6;max-width:760px" data-comment-anchor="f82222dfd7-h2">Six stages, one document, no export step.</h2>
+      <p style="margin:0 0 48px;max-width:640px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">Geometry, materials, boundary conditions, mesh, solve and post-processing live in a single parametric file. Start from a sketch or import from the CAD you already use — Gmsh reads STEP and IGES through its OpenCASCADE kernel, and IFC arrives via ifcopenshell, so imported solids are viewable, taggable and directly editable, not frozen. Change a fillet radius and the mesh, the load set and the result field re-derive from the same tree.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px">
+        <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="6">
+          <div onMouseEnter="{{ p.enter }}" style="padding:24px 22px 26px;border-radius:8px;background:{{ p.bg }};border:1px solid {{ p.bd }};transition:background .22s ease,border-color .22s ease,transform .22s cubic-bezier(.2,.8,.2,1);transform:{{ p.tf }}">
+            <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:14px">
+              <span style="font:500 11px/1 'IBM Plex Mono';color:{{ p.numFg }}">{{ p.num }}</span>
+              <span style="font:600 16px/1.2 'IBM Plex Sans';color:{{ p.titleFg }}">{{ p.title }}</span>
+            </div>
+            <p style="margin:0 0 16px;font:400 13.5px/1.6 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">{{ p.body }}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ p.tags }}" as="t" hint-placeholder-count="3">
+                <span style="padding:4px 7px;border-radius:3px;background:#12171d;border:1px solid #1f272f;font:400 10px/1 'IBM Plex Mono';color:#6c7784">{{ t.v }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div id="gesture" style="padding:88px 34px;border-top:1px solid #151b21">
+    <div style="max-width:1560px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:64px;align-items:center">
+      <div>
+        <div style="font:500 11px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.16em;margin-bottom:16px">02 — INTERACTION</div>
+        <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6">Gestures mapped to intent, not to buttons.</h2>
+        <p style="margin:0 0 34px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">A depth camera or the device webcam tracks two hands at 34 ms end-to-end latency. Every gesture has a mouse and keyboard equivalent — gesture is an accelerator for review sessions, never a requirement.</p>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ gestures }}" as="g" hint-placeholder-count="5">
+            <button onClick="{{ g.click }}" style="display:flex;align-items:center;gap:16px;padding:15px 16px;border-radius:6px;background:{{ g.bg }};border:1px solid {{ g.bd }};text-align:left;transition:all .2s ease">
+              <span style="font:500 10.5px/1 'IBM Plex Mono';color:{{ g.numFg }};width:20px">{{ g.num }}</span>
+              <span style="flex:1;min-width:0">
+                <span style="display:block;font:600 14px/1.3 'IBM Plex Sans';color:{{ g.fg }}">{{ g.name }}</span>
+                <span style="display:block;font:400 12.5px/1.45 'IBM Plex Sans';color:#7d8894;margin-top:3px">{{ g.body }}</span>
+              </span>
+              <span style="font:500 10.5px/1 'IBM Plex Mono';color:{{ g.kfg }};background:{{ g.kbg }};border:1px solid {{ g.kbd }};border-radius:4px;padding:6px 8px;white-space:nowrap;transition:all .2s ease">{{ g.key }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="position:relative;border-radius:10px;border:1px solid #1c232b;background:#0d1014;overflow:hidden">
+        <div ref="{{ gestWrapRef }}" style="position:relative;height:480px">
+          <canvas ref="{{ gestCanvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
+          <div style="position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:10px;padding:9px 13px;border-radius:6px;background:rgba(13,16,19,.86);border:1px solid #27444a">
+            <span style="width:8px;height:8px;border-radius:50%;background:#5ecfe0;box-shadow:0 0 10px #5ecfe0;animation:kpulse 1.5s ease-in-out infinite"></span>
+            <span>
+              <span style="display:block;font:600 11px/1.35 'IBM Plex Sans';color:#cfe9ee;letter-spacing:.04em">{{ gest.label }}</span>
+              <span style="display:block;font:400 10px/1.35 'IBM Plex Mono';color:#6d8a90">{{ gest.hint }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sections" style="padding:88px 34px;border-top:1px solid #151b21;background:#0c0f12">
+    <div style="max-width:1560px;margin:0 auto">
+      <div style="font:500 11px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.16em;margin-bottom:16px">03 — SECTION CUTS</div>
+      <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6;max-width:820px">Cut the field open with a sweep of your hand.</h2>
+      <p style="margin:0 0 44px;max-width:640px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">Cap faces are shaded independently of the exterior, so an interior gradient never reads as surface stress. Drag the plane below — or sweep a flat hand through the model.</p>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:stretch">
+        <div style="flex:1 1 460px;min-width:0;position:relative;border-radius:10px;border:1px solid #1c232b;background:#0d1014;overflow:hidden">
+          <div ref="{{ cutWrapRef }}" style="position:relative;height:500px">
+            <canvas ref="{{ cutCanvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block" data-comment-anchor="41fd2feb24-canvas"></canvas>
+            <div style="position:absolute;left:14px;top:14px;font:400 10.5px/1.7 'IBM Plex Mono';color:#4f5b67">
+              <div>cutting plane {{ cut.axisLabel }} · {{ cut.posLabel }}</div>
+              <div style="color:#7fd8e6">cap shading — {{ cut.styleLabel }}</div>
+            </div>
+            <div style="position:absolute;right:14px;top:14px;width:152px;padding:11px;border-radius:6px;background:rgba(13,16,19,.86);border:1px solid #232a32">
+              <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.13em;color:#6b7783;margin-bottom:9px">EXTERIOR — σ_vm MPa</div>
+              <div style="display:flex;gap:8px;height:104px">
+                <div style="width:11px;border-radius:2px;border:1px solid #2a323b;background:{{ cut.extGrad }}"></div>
+                <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+                  <sc-for list="{{ cut.extTicks }}" as="t" hint-placeholder-count="5">
+                    <div style="font:400 9px/1 'IBM Plex Mono';color:#8b96a2">{{ t.v }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="margin-top:11px;padding-top:10px;border-top:1px solid #232a32">
+                <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.13em;color:#6b7783;margin-bottom:8px">CAP FACES</div>
+                <div style="height:10px;border-radius:2px;background:{{ cut.legendGrad }};border:1px solid rgba(255,255,255,.09)"></div>
+                <div style="display:flex;justify-content:space-between;gap:6px;margin-top:6px">
+                  <span style="font:400 8.5px/1 'IBM Plex Mono';color:#6b7783">{{ cut.legendLo }}</span>
+                  <span style="font:400 8.5px/1 'IBM Plex Mono';color:#6b7783">{{ cut.legendHi }}</span>
+                </div>
+                <div style="font:400 9.5px/1.5 'IBM Plex Mono';color:#5b6672;margin-top:9px">{{ cut.legendNote }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1 1 300px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding:22px;border-radius:10px;border:1px solid #1c232b;background:#0d1014">
+          <div>
+            <div style="font:600 10px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78;margin-bottom:11px">PLANE</div>
+            <div style="display:flex;gap:6px">
+              <sc-for list="{{ cut.axes }}" as="a" hint-placeholder-count="3">
+                <button onClick="{{ a.click }}" style="flex:1;padding:9px 0;border-radius:5px;background:{{ a.bg }};border:1px solid {{ a.bd }};color:{{ a.fg }};font:500 11px/1 'IBM Plex Mono';letter-spacing:.06em;transition:all .18s ease">{{ a.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:11px">
+              <span style="font:600 10px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78">OFFSET</span>
+              <span style="font:500 10.5px/1 'IBM Plex Mono';color:#5ecfe0">{{ cut.posLabel }}</span>
+            </div>
+            <input type="range" min="6" max="97" step="1" value="{{ cut.posRaw }}" onChange="{{ cut.onPos }}" style="width:100%;margin:0" />
+          </div>
+          <div>
+            <div style="font:600 10px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5e6b78;margin-bottom:11px">CAP SHADING</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ cut.styles }}" as="s" hint-placeholder-count="5">
+                <button onClick="{{ s.click }}" style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:5px;background:{{ s.bg }};border:1px solid {{ s.bd }};text-align:left;transition:all .18s ease">
+                  <span style="width:26px;height:12px;border-radius:2px;background:{{ s.swatch }};border:1px solid rgba(255,255,255,.09);flex:0 0 auto"></span>
+                  <span style="flex:1;font:500 12px/1.3 'IBM Plex Sans';color:{{ s.fg }}">{{ s.label }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="margin-top:auto;padding-top:16px;border-top:1px solid #1a2027;font:400 11px/1.65 'IBM Plex Mono';color:#5b6672">
+            <div>elements removed <span style="color:#93a0ad">{{ cut.removed }}</span></div>
+            <div>cap area <span style="color:#93a0ad">{{ cut.area }}</span></div>
+            <div>peak on cap <span style="color:#93a0ad">{{ cut.peak }}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="solver" style="padding:88px 34px;border-top:1px solid #151b21">
+    <div style="max-width:1560px;margin:0 auto">
+      <div style="font:500 11px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.16em;margin-bottom:16px">04 — SOLVER</div>
+      <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6;max-width:760px">Specification.</h2>
+      <p style="margin:0 0 44px;max-width:660px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">A Python stack, not a black box: DOLFINx and PETSc solve, Gmsh meshes, PyVista and VTK render, and MediaPipe drives the gesture layer from a background thread. Every stage is scriptable, and the result files are the ones the rest of your toolchain already reads.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1px;background:#181e25;border:1px solid #181e25;border-radius:8px;overflow:hidden">
+        <sc-for list="{{ solverSpecs }}" as="c" hint-placeholder-count="4">
+          <div style="background:#0d1014;padding:24px 22px 28px">
+            <div style="font:600 10px/1 'IBM Plex Sans';letter-spacing:.16em;color:#5ecfe0;margin-bottom:16px">{{ c.title }}</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="5">
+                <div style="display:flex;justify-content:space-between;gap:14px;padding-bottom:10px;border-bottom:1px solid #151b21">
+                  <span style="font:400 12.5px/1.4 'IBM Plex Sans';color:#8b96a2">{{ r.k }}</span>
+                  <span style="font:500 11.5px/1.4 'IBM Plex Mono';color:#ccd5de;text-align:right;white-space:nowrap">{{ r.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div id="ar" style="padding:88px 34px;border-top:1px solid #151b21;background:#0c0f12">
+    <div style="max-width:1560px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:64px;align-items:center">
+      <div>
+        <div style="font:500 11px/1 'IBM Plex Mono';color:#e6c98a;letter-spacing:.16em;margin-bottom:16px">05 — REVIEW &amp; REPORTING</div>
+        <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6">Review it in the room. Issue the report the same day.</h2>
+        <p style="margin:0 0 26px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">Anchor the deformed model at 1:1 scale on any detected plane and walk around it — section cuts, field switching and probes all carry over, because the AR session is the same document. When the review closes, the design verification report writes itself from that same solve.</p>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <sc-for list="{{ arPoints }}" as="a" hint-placeholder-count="4">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="width:5px;height:5px;border-radius:50%;background:#e6c98a;margin-top:8px;flex:0 0 auto"></span>
+              <span style="font:400 13.5px/1.6 'IBM Plex Sans';color:#93a0ad">{{ a.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        <div style="border-radius:10px;border:1px solid #1c232b;background:#0d1014;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #171d24;background:#101317">
+            <span style="font:500 10.5px/1 'IBM Plex Mono';color:#8b96a2">design_report_bracket_L · rev C</span>
+            <span style="flex:1"></span>
+            <sc-for list="{{ exports }}" as="e" hint-placeholder-count="3">
+              <span style="padding:4px 8px;border-radius:3px;border:1px solid {{ e.bd }};background:{{ e.bg }};font:500 9.5px/1 'IBM Plex Mono';color:{{ e.fg }};letter-spacing:.06em">{{ e.v }}</span>
+            </sc-for>
+          </div>
+          <div style="padding:20px 22px 24px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding-bottom:15px;border-bottom:1px solid #1a2027">
+              <div>
+                <div style="font:600 15px/1.3 'IBM Plex Sans';color:#e8eef4">Design verification report</div>
+                <div style="font:400 10.5px/1.5 'IBM Plex Mono';color:#5b6672;margin-top:5px">bracket_L · step-1 static general · EN 1999-1-1</div>
+              </div>
+              <div style="text-align:right;white-space:nowrap">
+                <div style="font:600 11px/1 'IBM Plex Mono';color:#e6c98a">4 / 5 PASS</div>
+                <div style="font:400 10px/1.5 'IBM Plex Mono';color:#5b6672;margin-top:5px">03 Aug 2026</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;padding:13px 0 10px;border-bottom:1px solid #1a2027">
+              <span style="flex:2.1;min-width:0;font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">CHECK</span>
+              <span style="flex:1;text-align:right;font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">DEMAND</span>
+              <span style="flex:1;text-align:right;font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">CAPACITY</span>
+              <span style="flex:.9;text-align:right;font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">UTIL</span>
+              <span style="flex:.8;text-align:right;font:600 9px/1 'IBM Plex Sans';letter-spacing:.14em;color:#5e6b78">STATUS</span>
+            </div>
+            <sc-for list="{{ reportRows }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #141a20">
+                <span style="flex:2.1;min-width:0;font:400 12px/1.35 'IBM Plex Sans';color:#c3ccd6">{{ r.check }}</span>
+                <span style="flex:1;text-align:right;font:500 11px/1.35 'IBM Plex Mono';color:#93a0ad">{{ r.demand }}</span>
+                <span style="flex:1;text-align:right;font:500 11px/1.35 'IBM Plex Mono';color:#6c7784">{{ r.capacity }}</span>
+                <span style="flex:.9;text-align:right;font:500 11px/1.35 'IBM Plex Mono';color:{{ r.utilFg }}">{{ r.util }}</span>
+                <span style="flex:.8;text-align:right;font:600 9.5px/1.35 'IBM Plex Mono';color:{{ r.statusFg }};letter-spacing:.05em">{{ r.status }}</span>
+              </div>
+            </sc-for>
+            <div style="font:400 10.5px/1.55 'IBM Plex Mono';color:#5b6672;margin-top:16px">Figures, mesh statistics and the load table are embedded from the live solve.</div>
+          </div>
+        </div>
+        <div style="border-radius:10px;border:1px solid #1c232b;background:#0d1014;overflow:hidden">
+          <div style="height:150px;position:relative;background:repeating-linear-gradient(135deg,#101418 0 9px,#0d1114 9px 18px);display:flex;align-items:center;justify-content:center" data-comment-anchor="1ba6ac218c-div">
+            <div style="text-align:center;padding:20px">
+              <div style="font:500 10.5px/1.7 'IBM Plex Mono';color:#5b6672;letter-spacing:.06em">AR CAPTURE</div>
+              <div style="font:400 10.5px/1.7 'IBM Plex Mono';color:#414c58;margin-top:5px">drop a photo of the headset session here · 1440 × 480</div>
+            </div>
+            <div style="position:absolute;inset:16px;border:1px solid #1e252d;border-radius:6px;pointer-events:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="roadmap" style="padding:88px 34px;border-top:1px solid #151b21">
+    <div style="max-width:1560px;margin:0 auto">
+      <div style="font:500 11px/1 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.16em;margin-bottom:16px">06 — ROADMAP</div>
+      <h2 style="margin:0 0 18px;font:600 40px/1.12 'IBM Plex Sans';letter-spacing:-.02em;color:#eef2f6;max-width:820px">Five stages. Each one ships something that works alone.</h2>
+      <p style="margin:0 0 44px;max-width:660px;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">The gesture layer is the last thing added, not the thing everything hangs off — so every release before it is still a usable analysis tool.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <sc-for list="{{ roadmap }}" as="r" hint-placeholder-count="5">
+          <div style="flex:1 1 260px;min-width:0;padding:22px 20px 24px;border-radius:8px;background:#0d1014;border:1px solid {{ r.bd }};border-top:2px solid {{ r.rail }}">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px">
+              <span style="font:500 10px/1 'IBM Plex Mono';color:#4d5866">{{ r.num }}</span>
+              <span style="font:600 9px/1 'IBM Plex Mono';color:{{ r.statusFg }};letter-spacing:.1em">{{ r.status }}</span>
+            </div>
+            <div style="font:600 15px/1.25 'IBM Plex Sans';color:{{ r.titleFg }};margin-bottom:9px">{{ r.title }}</div>
+            <p style="margin:0 0 13px;font:400 12.5px/1.55 'IBM Plex Sans';color:#8b96a2;text-wrap:pretty">{{ r.body }}</p>
+            <div style="font:400 10px/1.5 'IBM Plex Mono';color:#5b6672;padding-top:11px;border-top:1px solid #171d24">{{ r.stack }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div id="access" style="padding:96px 34px 40px;border-top:1px solid #151b21">
+    <div style="max-width:1560px;margin:0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:48px;flex-wrap:wrap">
+      <div style="max-width:640px">
+        <h2 style="margin:0 0 18px;font:600 44px/1.1 'IBM Plex Sans';letter-spacing:-.024em;color:#f2f6f9">Private beta, opening to design consultancies first.</h2>
+        <p style="margin:0;font:400 15.5px/1.65 'IBM Plex Sans';color:#8b96a2">Ten seats per cohort. Bring a model that currently takes you a day to set up.</p>
+      </div>
+      <div style="display:flex;gap:12px">
+        <a href="#access" style="padding:14px 24px;border-radius:6px;background:#5ecfe0;color:#07171a;font:600 13.5px/1 'IBM Plex Sans';box-shadow:0 10px 30px -14px rgba(94,207,224,.9)">Request access</a>
+        <a href="Archimedes Workbench.dc.html" style="padding:14px 24px;border-radius:6px;border:1px solid #2a323b;color:#d4dce4;font:500 13.5px/1 'IBM Plex Sans'">Open the workbench →</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:26px 34px 40px;border-top:1px solid #151b21;margin-top:56px">
+    <div style="max-width:1560px;margin:0 auto;display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+      <span style="font:600 12px/1 'IBM Plex Sans';letter-spacing:.16em;color:#6b7783">ARCHIMEDES</span>
+      <span style="font:400 11px/1 'IBM Plex Mono';color:#414c58">DOLFINx · Gmsh · PyVista · MediaPipe</span>
+      <span style="flex:1"></span>
+      <span style="font:400 11px/1 'IBM Plex Mono';color:#414c58">Results shown are a demonstration model, not a validated benchmark.</span>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1000}}">
+const CMAPS = {
+  viridis: ['#440154','#3b528b','#21918c','#5ec962','#fde725'],
+  inferno: ['#000004','#57157e','#ba3655','#f98c0a','#fcffa4']
+};
+const CUTC = {
+  field:   ['#440154','#3b528b','#21918c','#5ec962','#fde725'],
+  rainbow: ['#ff3b6b','#ffa23a','#ffe45e','#4ade80','#38bdf8','#a78bfa'],
+  bands:   ['#0e7490','#22d3ee'],
+  coral:   ['#ff5f6d','#ff5f6d'],
+  neon:    ['#0d1117','#22d3ee']
+};
+const hex2rgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+function ramp(stops, t) {
+  t = Math.max(0, Math.min(1, t));
+  const n = stops.length - 1, i = Math.min(n - 1, Math.floor(t * n)), f = t * n - i;
+  const a = hex2rgb(stops[i]), b = hex2rgb(stops[i + 1]);
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+const cssRamp = s => 'linear-gradient(to top,' + s.join(',') + ')';
+const cssRampH = s => 'linear-gradient(to right,' + s.join(',') + ')';
+
+class Component extends DCLogic {
+  state = {
+    heroMode: 'results', gestAct: 'orbit', gestPick: null,
+    cutAxis: 'z', cutPos: 46, cutStyle: 'rainbow', pipeHover: 4
+  };
+
+  componentDidMount() {
+    const cells = [];
+    for (let x = 0; x < 3; x++) for (let y = 0; y < 10; y++) for (let z = 0; z < 3; z++) cells.push({ x, y, z });
+    for (let x = 3; x < 10; x++) for (let y = 7; y < 10; y++) for (let z = 0; z < 3; z++) cells.push({ x, y, z });
+    this.cells = cells;
+    this.key = (x, y, z) => x + ',' + y + ',' + z;
+    this.cellSet = new Set(cells.map(c => this.key(c.x, c.y, c.z)));
+    this.ctr = [5, 5, 1.5];
+    this.bb = { x: [0, 10], y: [0, 10], z: [0, 3] };
+
+    this.scenes = [
+      { canvas: this.heroCanvas, wrap: this.heroWrap, yaw: -0.62, pitch: 0.38, dist: 23, kind: 'hero' },
+      { canvas: this.gestCanvas, wrap: this.gestWrap, yaw: -0.5, pitch: 0.34, dist: 22, kind: 'gest' },
+      { canvas: this.cutCanvas, wrap: this.cutWrap, yaw: -0.75, pitch: 0.36, dist: 22, kind: 'cut' }
+    ].filter(s => s.canvas && s.wrap);
+
+    for (const s of this.scenes) {
+      s.ctx = s.canvas.getContext('2d');
+      s.drag = false;
+      s.canvas.style.cursor = 'grab';
+      s.canvas.addEventListener('mousedown', e => { s.drag = true; s.lx = e.clientX; s.ly = e.clientY; s.canvas.style.cursor = 'grabbing'; });
+      s.canvas.addEventListener('mousemove', e => {
+        if (!s.drag) return;
+        s.yaw += (e.clientX - s.lx) * 0.008;
+        s.pitch = Math.max(-1.2, Math.min(1.2, s.pitch + (e.clientY - s.ly) * 0.006));
+        s.lx = e.clientX; s.ly = e.clientY; s.manual = true;
+      });
+      const up = () => { s.drag = false; s.canvas.style.cursor = 'grab'; };
+      s.canvas.addEventListener('mouseup', up);
+      s.canvas.addEventListener('mouseleave', up);
+    }
+    this.ro = new ResizeObserver(() => this.resizeAll());
+    this.scenes.forEach(s => this.ro.observe(s.wrap));
+    this.resizeAll();
+    this.t0 = performance.now();
+    this.lastFrame = 0;
+    this.drawAll(this.t0);
+    this.raf = requestAnimationFrame(this.loop);
+    this.watchdog = setInterval(() => {
+      if (performance.now() - this.lastFrame > 400) { this.resizeAll(); this.drawAll(performance.now()); }
+    }, 320);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this.raf); clearInterval(this.watchdog); this.ro && this.ro.disconnect(); }
+
+  resizeAll() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (const s of this.scenes) {
+      s.w = s.wrap.clientWidth; s.h = s.wrap.clientHeight;
+      if (!s.w || !s.h) continue;
+      s.canvas.width = Math.floor(s.w * dpr); s.canvas.height = Math.floor(s.h * dpr);
+      s.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+  }
+  loop = () => {
+    this.raf = requestAnimationFrame(this.loop);
+    const now = performance.now();
+    this.lastFrame = now;
+    const g = this.scenes.find(s => s.kind === 'gest');
+    if (g) {
+      const el = ((now - this.t0) / 1000) % 13;
+      let act = 'orbit';
+      if (el < 4) { act = 'orbit'; if (!g.drag) g.yaw += 0.0045; }
+      else if (el < 6.4) { act = 'pinch'; g.dist += Math.sin((el - 4) * 2.6) * 0.28; }
+      else if (el < 10) { act = 'blade'; g.cutPos = 26 + 58 * (0.5 - 0.5 * Math.cos((el - 6.4) / 3.6 * 6.283)); }
+      else { act = 'point'; if (!g.drag) g.pitch += Math.sin((el - 10) * 1.4) * 0.0035; }
+      g.act = act;
+      if (!this.state.gestPick && act !== this.state.gestAct) this.setState({ gestAct: act });
+    }
+    const h = this.scenes.find(s => s.kind === 'hero');
+    if (h && !h.drag) h.yaw += 0.0022;
+    this.drawAll(now);
+  };
+
+  fieldAt(x, y) {
+    const s = x <= 3 ? y : 10 + (x - 3);
+    const d = Math.pow(s / 17, 1.85);
+    const corner = Math.hypot(x - 3.2, y - 7.2);
+    const vm = Math.min(1, 0.10 + 0.58 * Math.exp(-y / 3.0) * (x < 3.5 ? 1 : 0.25)
+      + 0.85 * Math.exp(-corner / 1.9)
+      + 0.20 * Math.max(0, 1 - Math.abs(x - 1.5) / 2) * Math.exp(-y / 5));
+    return { d, vm };
+  }
+  proj(s, p) {
+    const x = p[0] - this.ctr[0], y = p[1] - this.ctr[1], z = p[2] - this.ctr[2];
+    const cy = Math.cos(s.yaw), sy = Math.sin(s.yaw);
+    let X = x * cy + z * sy, Z = -x * sy + z * cy;
+    const cp = Math.cos(s.pitch), sp = Math.sin(s.pitch);
+    const Y = y * cp - Z * sp; Z = y * sp + Z * cp;
+    const d = Z + s.dist;
+    const f = s.h * 1.0;
+    const k = f / Math.max(1, d);
+    return [s.w / 2 + X * k, s.h / 2 - Y * k, d];
+  }
+  drawAll(now) { for (const s of this.scenes) this.drawScene(s, now); }
+
+  drawScene(s, now) {
+    const ctx = s.ctx; if (!ctx || !s.w) return;
+    const st = this.state;
+    const W = s.w, H = s.h;
+    ctx.clearRect(0, 0, W, H);
+    const bg = ctx.createRadialGradient(W * .5, H * .42, 0, W * .5, H * .42, Math.max(W, H) * .8);
+    bg.addColorStop(0, '#12171c'); bg.addColorStop(1, '#0a0c0f');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    for (let i = -8; i <= 8; i++) for (const ax of [0, 1]) {
+      const a = ax ? this.proj(s, [this.ctr[0] - 27, 0, this.ctr[2] + i * 3.4]) : this.proj(s, [this.ctr[0] + i * 3.4, 0, this.ctr[2] - 27]);
+      const b = ax ? this.proj(s, [this.ctr[0] + 27, 0, this.ctr[2] + i * 3.4]) : this.proj(s, [this.ctr[0] + i * 3.4, 0, this.ctr[2] + 27]);
+      ctx.strokeStyle = 'rgba(140,175,200,' + (i === 0 ? .18 : .05) + ')'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+
+    const gp = this.proj(s, [this.ctr[0], 0.02, this.ctr[2]]);
+    const sr = 2400 / Math.max(1, gp[2]);
+    ctx.save(); ctx.translate(gp[0], gp[1]); ctx.scale(1, 0.26);
+    const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
+    sg.addColorStop(0, 'rgba(0,0,0,.62)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, sr, 0, 6.284); ctx.fill(); ctx.restore();
+
+    let cutOn = true, cutAxis = st.cutAxis, cutPos = st.cutPos, cutStyle = st.cutStyle;
+    let showField = true, deform = 0.36, cmap = CMAPS.viridis, meshOn = false;
+    if (s.kind === 'hero') {
+      cutAxis = 'z'; cutPos = 55; cutStyle = 'field';
+      if (st.heroMode === 'mesh') { showField = false; deform = 0; meshOn = true; cutOn = false; }
+      else if (st.heroMode === 'loads') { showField = false; deform = 0; cutOn = false; }
+    } else if (s.kind === 'gest') {
+      cutAxis = 'z'; cutPos = s.act === 'blade' ? (s.cutPos || 50) : 100; cutStyle = 'rainbow';
+      cutOn = s.act === 'blade';
+    }
+    const bound = this.bb[cutAxis][0] + (this.bb[cutAxis][1] - this.bb[cutAxis][0]) * (cutPos / 100);
+    const culled = (x, y, z) => cutOn && ((cutAxis === 'x' ? x : cutAxis === 'y' ? y : z) + 0.5) > bound;
+
+    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    const corners = [
+      [[1,0,0],[1,1,0],[1,1,1],[1,0,1]], [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
+      [[0,1,0],[0,1,1],[1,1,1],[1,1,0]], [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+      [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], [[0,0,0],[0,1,0],[1,1,0],[1,0,0]]
+    ];
+    const L = [0.42, 0.78, 0.47];
+    const faces = [];
+    for (const c of this.cells) {
+      if (culled(c.x, c.y, c.z)) continue;
+      for (let d = 0; d < 6; d++) {
+        const nx = c.x + dirs[d][0], ny = c.y + dirs[d][1], nz = c.z + dirs[d][2];
+        const has = this.cellSet.has(this.key(nx, ny, nz));
+        const nc = has && culled(nx, ny, nz);
+        if (has && !nc) continue;
+        const pts = []; let v = 0;
+        for (const k of corners[d]) {
+          const x = c.x + k[0], y = c.y + k[1], z = c.z + k[2];
+          const f = this.fieldAt(x, y);
+          pts.push(this.proj(s, [x - f.d * 0.55 * deform, y - f.d * 2.6 * deform, z]));
+          v += f.vm / 4;
+        }
+        const ax = pts[1][0] - pts[0][0], ay = pts[1][1] - pts[0][1];
+        const bx2 = pts[2][0] - pts[1][0], by2 = pts[2][1] - pts[1][1];
+        if (ax * by2 - ay * bx2 >= 0) continue;
+        const n = dirs[d];
+        faces.push({ pts, depth: (pts[0][2] + pts[2][2]) / 2, v, cap: nc,
+          sh: 0.5 + 0.5 * Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2]),
+          gx: c.x, gy: c.y, gz: c.z });
+      }
+    }
+    faces.sort((a, b) => b.depth - a.depth);
+
+    for (const f of faces) {
+      let r, g, b;
+      if (f.cap) {
+        const cs = CUTC[cutStyle];
+        if (cutStyle === 'rainbow') { const t = ((f.gx * .09 + f.gy * .11 + f.gz * .07) % 1 + 1) % 1; const c = ramp(cs, t); r = c[0]; g = c[1]; b = c[2]; }
+        else if (cutStyle === 'bands') { const c = ramp(cs, ((f.gx + f.gy + f.gz) % 2) ? .1 : .9); r = c[0]; g = c[1]; b = c[2]; }
+        else if (cutStyle === 'neon') { r = 13; g = 20; b = 26; }
+        else if (cutStyle === 'coral') { r = 255; g = 95; b = 109; }
+        else { const c = ramp(cs, f.v); r = c[0]; g = c[1]; b = c[2]; }
+      } else if (showField) { const c = ramp(cmap, f.v); r = c[0]; g = c[1]; b = c[2]; }
+      else { r = meshOn ? 118 : 132; g = meshOn ? 136 : 148; b = meshOn ? 154 : 164; }
+      const sh = (f.cap && cutStyle === 'neon') ? 1 : f.sh;
+      ctx.fillStyle = 'rgb(' + (r * sh | 0) + ',' + (g * sh | 0) + ',' + (b * sh | 0) + ')';
+      ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]);
+      ctx.closePath(); ctx.fill();
+      if (f.cap && cutStyle === 'neon') { ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 1.4; ctx.stroke(); }
+      else { ctx.strokeStyle = 'rgba(8,11,14,' + (meshOn ? .6 : .3) + ')'; ctx.lineWidth = meshOn ? .9 : .6; ctx.stroke(); }
+    }
+
+    if (s.kind === 'hero' && this.state.heroMode === 'loads') this.drawBCs(s, ctx);
+    if (s.kind === 'gest') this.drawHand(s, ctx, now);
+  }
+
+  drawBCs(s, ctx) {
+    ctx.strokeStyle = '#7ee787'; ctx.lineWidth = 1.3;
+    for (let x = 0; x <= 3; x += 0.5) for (const z of [0, 3]) {
+      const a = this.proj(s, [x, 0, z]), b = this.proj(s, [x - .55, -.8, z]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    ctx.strokeStyle = '#ff6b81'; ctx.fillStyle = '#ff6b81'; ctx.lineWidth = 1.7;
+    for (let z = .5; z <= 2.6; z += 1) {
+      const t = this.proj(s, [9.5, 13, z]), p = this.proj(s, [9.5, 10.1, z]);
+      ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] - 4, p[1] - 8); ctx.lineTo(p[0] + 4, p[1] - 8); ctx.closePath(); ctx.fill();
+    }
+    const lp = this.proj(s, [9.5, 13.8, 1.5]);
+    ctx.font = "500 11px 'IBM Plex Mono'";
+    ctx.fillText('F = 4.2 kN  −Y', lp[0] - 36, lp[1] - 8);
+  }
+  drawHand(s, ctx, now) {
+    const act = this.state.gestPick || s.act || 'orbit';
+    const cx = s.w * .5 + Math.cos(now / 1500) * s.w * .16;
+    const cy = s.h * .56 + Math.sin(now / 1150) * s.h * .1;
+    const spread = act === 'pinch' ? 6 + 6 * Math.abs(Math.sin(now / 380)) : act === 'blade' ? 3 : 15;
+    ctx.strokeStyle = 'rgba(94,207,224,.85)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(cx, cy, 28 + spread * .6, 0, 6.284); ctx.stroke();
+    ctx.strokeStyle = 'rgba(94,207,224,.28)';
+    ctx.beginPath(); ctx.arc(cx, cy, 44 + spread, 0, 6.284); ctx.stroke();
+    ctx.fillStyle = '#5ecfe0';
+    for (let i = 0; i < 5; i++) {
+      const a = -1.9 + i * .5, rr = act === 'blade' ? 15 : 20 + spread;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2.8, 0, 6.284); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(94,207,224,.9)'; ctx.font = "600 10px 'IBM Plex Mono'";
+    ctx.fillText(act.toUpperCase(), cx + 52 + spread, cy + 4);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const A = '#5ecfe0';
+    const on = b => b ? { bg: 'rgba(94,207,224,.10)', bd: 'rgba(94,207,224,.42)', fg: '#dff3f7' }
+                      : { bg: '#0f1317', bd: '#1f272f', fg: '#8b96a2' };
+
+    const heroModes = [['results', 'RESULTS'], ['mesh', 'MESH'], ['loads', 'LOADS']].map(m => {
+      const s = on(st.heroMode === m[0]);
+      return { label: m[1], bg: s.bg, bd: s.bd, fg: s.fg, click: () => this.setState({ heroMode: m[0] }) };
+    });
+    const ticks = [];
+    for (let i = 4; i >= 0; i--) ticks.push({ v: (284.6 * i / 4).toFixed(0) });
+
+    const pipeDefs = [
+      ['01', 'Geometry', 'Sketch in 2D, extrude, fillet and pattern in 3D — or import STEP, IGES and IFC and keep manipulating them. The OpenCASCADE kernel reads CAD natively; no conversion step.', ['OpenCASCADE', 'STEP · IGES', 'IFC via ifcopenshell']],
+      ['02', 'Materials', 'E and ν resolve to Lamé parameters per volume tag. Isotropic, orthotropic and laminate definitions with temperature-dependent curves.', ['Lamé λ, μ', 'orthotropic', 'per volume tag']],
+      ['03', 'Loads & BCs', 'Pick a face and it becomes a physical group — the facet markers Gmsh writes and DOLFINx reads. Dirichlet, Neumann, pressure, bolt preload and gravity, all previewed in the viewport.', ['physical groups', 'facet markers', 'Dirichlet · Neumann']],
+      ['04', 'Mesh', 'Gmsh meshes with the HXT algorithm, first or second order, with curvature refinement. Quality metrics update as you drag the characteristic length.', ['Gmsh HXT', 'TET4 / TET10', 'quality gates']],
+      ['05', 'Solve', 'DOLFINx assembles the weak form and hands off to PETSc — direct LU for small problems, PCG or AMG when it grows, MPI-parallel throughout. Write your own variational form when the built-in physics is not enough.', ['DOLFINx', 'PETSc · MPI', 'own weak form']],
+      ['06', 'Results', 'A PyVista and VTK pipeline: clip, threshold, contour, warp by vector, probe and time-series scrubbing — every one of them reachable by gesture.', ['PyVista · VTK', 'clip · threshold', 'contour · warp']]
+    ];
+    const pipeline = pipeDefs.map((p, i) => {
+      const hot = st.pipeHover === i;
+      return { num: p[0], title: p[1], body: p[2], tags: p[3].map(t => ({ v: t })),
+        bg: hot ? '#101519' : '#0d1014', bd: hot ? '#28323b' : '#181e25',
+        numFg: hot ? A : '#4d5866', titleFg: hot ? '#f0f5f9' : '#ccd5de',
+        tf: hot ? 'translateY(-3px)' : 'none',
+        enter: () => this.setState({ pipeHover: i }) };
+    });
+
+    const gDefs = [
+      ['orbit', '01', 'Open palm — orbit', 'Rotate the model about its centroid; velocity follows palm speed with inertial damping.', 'palm · drag'],
+      ['pinch', '02', 'Pinch — zoom & scale', 'Thumb-to-index distance drives dolly. Two-handed pinch scales the deformation factor instead.', 'pinch · spread'],
+      ['blade', '03', 'Flat blade — section cut', 'A vertical hand becomes the cutting plane. Sweep through the model and the cap re-shades live.', 'blade · sweep'],
+      ['point', '04', 'Index point — probe', 'Hold a point for 400 ms to pin a probe with the node id and field value at that location.', 'point · hold'],
+      ['fist', '05', 'Fist — confirm', 'Commit the current step: accept a mesh, run the solve, or drop an AR anchor.', 'fist · 400 ms']
+    ];
+    const gestures = gDefs.map(g => {
+      const live = (st.gestPick || st.gestAct) === g[0];
+      return { num: g[1], name: g[2], body: g[3], key: g[4],
+        bg: live ? 'rgba(94,207,224,.07)' : 'transparent', bd: live ? 'rgba(94,207,224,.32)' : '#171d24',
+        fg: live ? '#eef4f8' : '#c3ccd6', numFg: live ? A : '#4d5866',
+        kfg: live ? '#07171a' : '#6c7784', kbg: live ? A : '#11161b', kbd: live ? A : '#222a32',
+        click: () => this.setState({ gestPick: st.gestPick === g[0] ? null : g[0], gestAct: g[0] }) };
+    });
+
+    const cutAxes = ['x', 'y', 'z'].map(a => {
+      const s = on(st.cutAxis === a);
+      return { label: a.toUpperCase() + ' PLANE', bg: s.bg, bd: s.bd, fg: s.fg, click: () => this.setState({ cutAxis: a }) };
+    });
+    const styleDefs = [['rainbow', 'Rainbow depth', cssRampH(CUTC.rainbow)], ['field', 'Field continuation', cssRampH(CUTC.field)],
+      ['bands', 'Contour bands', 'repeating-linear-gradient(90deg,#0e7490 0 4px,#22d3ee 4px 8px)'],
+      ['coral', 'Solid coral', '#ff5f6d'], ['neon', 'Neon outline', 'linear-gradient(90deg,#0d1117,#0d1117)']];
+    const cutStyles = styleDefs.map(c => {
+      const s = on(st.cutStyle === c[0]);
+      return { label: c[1], swatch: c[2], bg: s.bg, bd: s.bd, fg: s.fg, click: () => this.setState({ cutStyle: c[0] }) };
+    });
+    const styleLabel = (styleDefs.find(c => c[0] === st.cutStyle) || styleDefs[0])[1].toLowerCase();
+    const capGuide = {
+      rainbow: ['at plane', 'deepest', 'Hue encodes depth behind the cutting plane, so interior layering reads at a glance.'],
+      field: ['0 MPa', '284.6 MPa', 'Cap uses the same σ_vm scale as the exterior — one continuous field.'],
+      bands: ['0 MPa', '284.6 MPa', 'Iso-bands every 28 MPa; band edges are the contour lines.'],
+      coral: ['—', '—', 'Flat fill. Identifies cut material without implying a value.'],
+      neon: ['—', '—', 'Outline only — the interior stays unshaded so the exterior field dominates.']
+    }[st.cutStyle];
+    const span = { x: 120, y: 180, z: 60 }[st.cutAxis];
+    const removedPct = st.cutPos;
+
+    const solverSpecs = [
+      { title: 'ANALYSIS', rows: [['Linear elasticity', 'static'], ['Modal', '≤ 200 modes'], ['Steady thermal', 'coupled'], ['Nonlinear', 'SNES'], ['Custom weak form', 'UFL']] },
+      { title: 'DISCRETISATION', rows: [['Tet', 'TET4 / TET10'], ['Hex', 'HEX8 / HEX20'], ['Space', 'Lagrange 1–2'], ['Mesher', 'Gmsh HXT'], ['Kernel', 'OpenCASCADE']] },
+      { title: 'SOLVERS', rows: [['Direct', 'PETSc LU · MUMPS'], ['Iterative', 'PCG · GAMG'], ['Parallel', 'MPI ×8'], ['Peak model', '4.1M DOF'], ['512k DOF', '16.8 s']] },
+      { title: 'INTEROP', rows: [['CAD in', 'STEP · IGES · IFC'], ['Mesh in', 'MSH · INP · MED'], ['Results', 'XDMF · VTU · VTX'], ['Foreign results', 'Abaqus · Ansys · COMSOL'], ['Reports', 'CSV · DOCX · PDF']] }
+    ].map(c => ({ title: c.title, rows: c.rows.map(r => ({ k: r[0], v: r[1] })) }));
+
+    return {
+      specs: [{ v: '512k', k: 'DOF solved in 16.8 s' }, { v: '34 ms', k: 'hand-tracking latency' },
+        { v: '1:1', k: 'AR placement scale' }, { v: '5', k: 'foreign solvers read' }],
+      heroWrapRef: el => { this.heroWrap = el; },
+      heroCanvasRef: el => { this.heroCanvas = el; },
+      gestWrapRef: el => { this.gestWrap = el; },
+      gestCanvasRef: el => { this.gestCanvas = el; },
+      cutWrapRef: el => { this.cutWrap = el; },
+      cutCanvasRef: el => { this.cutCanvas = el; },
+      hero: { modes: heroModes, grad: cssRamp(CMAPS.viridis), ticks,
+        stat: st.heroMode === 'results' ? 'CONVERGED · 16.8 s' : st.heroMode === 'mesh' ? '84 216 ELEMENTS' : '3 BOUNDARY CONDITIONS',
+        statFg: st.heroMode === 'results' ? '#7ee787' : '#8b96a2',
+        l1: 'bracket_L · 84 216 elements · 512 448 DOF',
+        l2: st.heroMode === 'results' ? 'σ_vm · deform ×1.0 · section Z 55%' : st.heroMode === 'mesh' ? 'C3D8R hex-dominant · seed 4.0 mm' : 'encastre base · 4.2 kN tip · 0.8 MPa web' },
+      pipeline, gestures,
+      gest: { label: { orbit: 'OPEN PALM — ORBIT', pinch: 'PINCH — ZOOM', blade: 'BLADE SWEEP — SECTION', point: 'INDEX POINT — PROBE', fist: 'FIST — CONFIRM' }[st.gestPick || st.gestAct],
+        hint: st.gestPick ? 'pinned · click again to resume the loop' : 'depth camera · 34 ms latency · 2 hands' },
+      cut: { axes: cutAxes, styles: cutStyles, posRaw: st.cutPos,
+        axisLabel: st.cutAxis.toUpperCase(), styleLabel,
+        posLabel: (span * st.cutPos / 100).toFixed(0) + ' mm',
+        removed: Math.round(84216 * (1 - removedPct / 100)).toLocaleString('en-US'),
+        area: (span * 60 * 0.7 / 100).toFixed(1) + ' cm²',
+        peak: (140 + removedPct * 1.4).toFixed(1) + ' MPa',
+        extGrad: cssRamp(CMAPS.viridis), extTicks: [0,1,2,3,4].map(i => ({ v: (284.6 * (4 - i) / 4).toFixed(0) })),
+        legendGrad: (styleDefs.find(c => c[0] === st.cutStyle) || styleDefs[0])[2],
+        legendLo: capGuide[0], legendHi: capGuide[1], legendNote: capGuide[2],
+        onPos: e => this.setState({ cutPos: +e.target.value }) },
+      arPoints: [{ v: 'Plane detection anchors the model to a bench, a floor or a table at true scale.' },
+        { v: 'Two-handed pinch repositions and re-scales without losing the section state.' },
+        { v: 'Probes pinned in AR persist back into the desktop session.' },
+        { v: 'The viewer reads VTU, XDMF and VTX, so Abaqus, Ansys, COMSOL, CalculiX and OpenFOAM results open in the same session as your own solves.' },
+        { v: 'Reports generate from the live model — checks, utilisations and viewport figures stay linked to the solve that produced them.' },
+        { v: 'Export to CSV for further analysis, DOCX for markup, or PDF for issue — with your title block and check templates.' }],
+      exports: [['CSV', '#7ee787'], ['DOCX', '#5ecfe0'], ['PDF', '#e6c98a']].map(e => ({
+        v: e[0], fg: e[1], bd: e[1] + '55', bg: 'rgba(255,255,255,.03)' })),
+      reportRows: [
+        ['Von Mises — fillet root', '284.6 MPa', '434.0 MPa', '0.66', 'PASS'],
+        ['Tip deflection', '3.42 mm', '5.00 mm', '0.68', 'PASS'],
+        ['Bearing — bolt A', '198.3 MPa', '310.0 MPa', '0.64', 'PASS'],
+        ['Linear buckling — arm', 'λ 4.21', 'λ 2.00', '0.47', 'PASS'],
+        ['Fatigue — 10⁶ cycles', '121.4 MPa', '118.0 MPa', '1.03', 'REVIEW']
+      ].map(r => ({ check: r[0], demand: r[1], capacity: r[2], util: r[3], status: r[4],
+        utilFg: r[4] === 'PASS' ? '#93a0ad' : '#e6c98a', statusFg: r[4] === 'PASS' ? '#7ee787' : '#e6c98a' })),
+      solverSpecs,
+      roadmap: [
+        ['01', 'FEniCSx foundations', 'Weak forms written by hand, linear elasticity solved and validated against closed-form theory before anything is drawn on screen.', 'DOLFINx · PETSc · UFL', 'SHIPPED', '#7ee787'],
+        ['02', 'CAD import pipeline', 'STEP and IFC through Gmsh to a solved result file, with physical-group tagging so imported faces can carry boundary conditions.', 'Gmsh · ifcopenshell · meshio', 'SHIPPED', '#7ee787'],
+        ['03', 'Viewer, mouse-driven', 'Clip, threshold, contour, warp, probe and field switching in a desktop shell — the product, before any camera is involved.', 'PyVista · VTK · PySide6', 'SHIPPED', '#7ee787'],
+        ['04', 'Gesture layer', 'Hand tracking on a background thread, mapped onto the controls that already work. Every gesture keeps its mouse equivalent.', 'MediaPipe · OpenCV · QThread', 'IN BETA', '#5ecfe0'],
+        ['05', 'Depth and reach', 'Time-series scrubbing, modal animation, multi-solver ingest and the spatial AR review mode.', 'ADIOS2 · WebXR bridge', 'NEXT', '#e6c98a']
+      ].map(r => ({ num: r[0], title: r[1], body: r[2], stack: r[3], status: r[4],
+        statusFg: r[5], rail: r[5], bd: r[4] === 'NEXT' ? '#181e25' : '#1f2831',
+        titleFg: r[4] === 'NEXT' ? '#ccd5de' : '#eef4f8' }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
