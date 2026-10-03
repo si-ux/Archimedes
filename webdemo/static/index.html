@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archimedes Gestures</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <main id="viewport">
+    <div id="three"></div>
+
+    <!-- HUD: what the system currently sees and is doing -->
+    <div id="hud">
+      <div id="mode-badge" class="badge idle">
+        <svg viewBox="0 0 44 44" class="ring"><circle cx="22" cy="22" r="19" class="ring-bg"/><circle cx="22" cy="22" r="19" id="ring-fg" class="ring-fg"/></svg>
+        <span id="mode-icon">·</span>
+      </div>
+      <div>
+        <div id="mode-text">Waiting for camera</div>
+        <div id="pose-text" class="muted">pose: — </div>
+      </div>
+    </div>
+    <div id="hint" class="hidden"></div>
+    <div id="tip"></div>
+    <div id="toast" class="hidden"></div>
+    <div id="demo-caption" class="hidden"></div>
+    <div id="probe-tip" class="hidden"></div>
+    <div id="pins"></div>
+
+    <div id="legend">
+      <div id="legend-title">von Mises stress</div>
+      <div id="legend-bar"></div>
+      <div id="legend-range"><span id="legend-min">0</span><span id="legend-max">1</span></div>
+    </div>
+
+    <!-- first-run overlay -->
+    <div id="start" class="overlay">
+      <div class="card">
+        <h1>Archimedes · gesture result viewer</h1>
+        <p>Explore FE results with your hands. Your webcam stays in this browser: only hand-point
+          coordinates are sent to the Python engine.</p>
+        <div class="row">
+          <button id="btn-camera" class="primary">Enable camera</button>
+          <button id="btn-demo-start">Watch demo (no camera)</button>
+        </div>
+        <p class="muted small">First time? Press <b>Calibrate</b> after the camera starts. It takes 30 seconds and
+          makes recognition work for your hand, your room and your camera.</p>
+        <p id="start-error" class="error hidden"></p>
+      </div>
+    </div>
+
+    <!-- calibration overlay -->
+    <div id="calib" class="overlay hidden">
+      <div class="card">
+        <div class="muted small" id="calib-step">Step 1 of 8</div>
+        <h2 id="calib-text">Raise your right hand</h2>
+        <div class="bar"><div id="calib-bar"></div></div>
+        <p id="calib-warn" class="warn small"></p>
+        <button id="btn-calib-cancel">Cancel (Esc)</button>
+      </div>
+    </div>
+  </main>
+
+  <aside id="side">
+    <div id="cam-wrap">
+      <video id="video" playsinline muted></video>
+      <canvas id="cam"></canvas>
+      <div id="cam-label" class="small">camera off</div>
+    </div>
+    <div id="chips" class="small">
+      <span class="chip" id="chip-model">model: rules</span>
+      <span class="chip" id="chip-fps">— fps</span>
+      <span class="chip" id="chip-lat">— ms</span>
+      <span class="chip" id="chip-personal">0 personal samples</span>
+    </div>
+
+    <section>
+      <h3>Gestures</h3>
+      <ul id="cheat"></ul>
+      <p class="muted small">Hold a pose briefly to start. Relax your hand to stop. Mouse and keys always work too.</p>
+    </section>
+
+    <section class="row wrap">
+      <button id="btn-calib" class="primary">Calibrate (C)</button>
+      <button id="btn-demo">Demo (D)</button>
+      <button id="btn-undo">Undo (U)</button>
+      <button id="btn-reset">Reset (R)</button>
+      <button id="btn-section-off">Remove cut (X)</button>
+      <label class="small">Main hand
+        <select id="sel-hand"><option>Right</option><option>Left</option></select>
+      </label>
+    </section>
+
+    <details>
+      <summary>Collect training data</summary>
+      <p class="muted small">Record 3-second clips per gesture. Use a different subject ID per person so evaluation
+        can test on people the model never saw. Clips land in <code>data/clips/</code>.</p>
+      <div class="row wrap">
+        <input id="rec-subject" placeholder="subject id, e.g. p01" size="10">
+        <select id="rec-label"></select>
+        <button id="btn-rec">Record 3 s</button>
+      </div>
+      <div id="rec-status" class="small muted"></div>
+    </details>
+
+    <details>
+      <summary>Keyboard and mouse</summary>
+      <ul class="small keys">
+        <li><b>Drag</b> rotate · <b>Wheel</b> zoom · <b>Hover</b> probe · <b>Click</b> pin value</li>
+        <li><b>1-4</b> result field · <b>X</b> remove cut · <b>S</b> snapshot</li>
+        <li><b>U</b> undo · <b>R</b> reset · <b>C</b> calibrate · <b>D</b> demo · <b>Esc</b> cancel</li>
+      </ul>
+    </details>
+  </aside>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
