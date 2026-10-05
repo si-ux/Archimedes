@@ -126,6 +126,8 @@ class ModelSession:
             prompts = [P("m", "Material", "", 1, choices={1: "concrete C30", 2: "steel S355"})]
         else:
             raise ValueError(op)
+        if op in ("new_rect", "new_circle"):
+            self.phase = "model"  # sketching geometry; becomes "loads" once the member exists
         self.action = Action(op, data, prompts)
 
     def set_direction(self, axis: str, sign: int) -> None:

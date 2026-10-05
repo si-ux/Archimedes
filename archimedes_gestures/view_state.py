@@ -25,8 +25,8 @@ class Command:
 
 @dataclass
 class ViewState:
-    azimuth: float = 30.0  # degrees
-    elevation: float = 20.0
+    azimuth: float = -60.0  # degrees; camera in front (−y) and to the right, looking at a beam along x
+    elevation: float = 22.0
     distance: float = 1.0  # multiplier on the default camera distance
     focal_point: list = field(default_factory=lambda: [0.0, 0.0, 0.0])
     section_on: bool = False
@@ -37,11 +37,12 @@ class ViewState:
     probe_cursor: list | None = None  # [x, y] in 0..1 viewport coords
     probe_pins: list = field(default_factory=list)
     snapshots: int = 0
+    fields: list = field(default_factory=lambda: list(FIELDS))  # set from the solver's result fields
     _history: list = field(default_factory=list, repr=False)
 
     @property
     def field_name(self) -> str:
-        return FIELDS[self.field_index % len(FIELDS)]
+        return self.fields[self.field_index % len(self.fields)]
 
     def camera_basis(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """(right, up, back) unit vectors of the camera in world coords (z-up world)."""
@@ -94,7 +95,17 @@ class ViewState:
             del self.probe_pins[:-5]
         elif k == "field":
             self._push()
-            self.field_index = (self.field_index + d["step"]) % len(FIELDS)
+            self.field_index = (self.field_index + d["step"]) % len(self.fields)
+        elif k == "set_field" and d.get("name") in self.fields:
+            self._push()
+            self.field_index = self.fields.index(d["name"])
+        elif k == "fit":  # frame the whole member again
+            self._push()
+            self.distance, self.focal_point = 1.0, [0.0, 0.0, 0.0]
+        elif k == "set_view":  # view cube / preset buttons
+            self._push()
+            self.azimuth = float(d["azimuth"]) % 360
+            self.elevation = float(np.clip(d["elevation"], -89, 89))
         elif k == "snapshot":
             self.snapshots += 1
         elif k == "begin":  # start of a continuous gesture: one undo step per gesture
@@ -102,8 +113,10 @@ class ViewState:
         elif k == "reset":
             self._push()
             hist = self._history
+            keep = self.fields
             self.__dict__.update(asdict(ViewState()))
             self._history = hist
+            self.fields = keep
         elif k == "undo" and self._history:
             snap = self._history.pop()
             hist = self._history
@@ -111,6 +124,6 @@ class ViewState:
             self._history = hist
 
     def to_dict(self) -> dict:
-        d = {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith("_") and k != "fields"}
         d["field_name"] = self.field_name
         return d

@@ -71,7 +71,7 @@ def to_glb(res: Results, field: str = "von_mises", deform: float | None = None) 
         scale = deform if deform is not None else 0.08 * span / umax
         disp = res.u * scale
     lo, hi = float(val.min()), float(val.max())
-    col = colormap((val - lo) / ((hi - lo) or 1.0))
+    col = colormap((val - lo) / ((hi - lo) or 1.0)) ** 2.2  # glTF vertex colours are linear, the scale is sRGB
     pos = m.nodes + disp
 
     quads = surface_quads(res)
@@ -95,7 +95,7 @@ def to_glb(res: Results, field: str = "von_mises", deform: float | None = None) 
             c[down] = lo_b[down] - 0.25 * size[down]
             sz[down] = 0.3 * size[down]
         bv, bq = _box(c, sz)
-        shade = {"fixed": 0.25, "pinned": 0.45, "roller": 0.6}[s.kind]
+        shade = {"fixed": 0.25, "pinned": 0.45, "roller": 0.6}[s.kind] ** 2.2
         meshes.append((bv[bq].reshape(-1, 3), np.full((len(bq) * 4, 3), shade), len(bq)))
 
     # assemble one primitive

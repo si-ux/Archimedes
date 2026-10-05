@@ -23,6 +23,25 @@ First time with the camera? Press **Calibrate (C)**. In 30 seconds it:
 - sets an interaction box that fits your comfortable reach,
 - records ~30 frames of each pose so recognition adapts to your hand (`data/personal_samples.npz`).
 
+## Build, load and solve a member by gesture
+
+The browser demo is now a small gesture FE workbench, with three phases shown as tabs:
+
+1. **Model**: pinch with both hands and pull apart to extrude a rectangular beam (horizontal pull) or column
+   (vertical pull), or draw a circle with your index finger for a round member. Enter the dimensions by holding up
+   fingers: one digit at a time, both palms = OK.
+2. **Loads & supports**: hold a fist (fixed), pinch (pinned) or V (roller) still on the member. Point and flick for
+   a point load, sweep a flat palm for a uniform load, hold both palms for a trapezoidal load, all in ±X/±Y/±Z.
+   Thumbs-up solves.
+3. **Results**: von Mises, Tresca, principal stresses, S11…S23, U1…U3, strains E11…E23, strain energy and
+   six animated mode shapes. The left panel shows the legend, the mesh details (elements, nodes, DOF, cell size,
+   solver timings), the model with column slenderness checks, and the reactions. A view cube at the top right sets
+   views by mouse.
+
+Demos: continuous beam, cantilever, long column and short column. The solver (`archimedes_fe`) is an
+incompatible-mode brick solver checked against beam theory. **VR/AR**: `/xr` (WebXR) and `/api/scene.glb`.
+Details are in [`docs/MODELING.md`](docs/MODELING.md).
+
 ## Archimedes Workbench with live gestures
 
 The Workbench (`Archimedes/`, FE pre/post-processor with a DOLFINx backend) is
@@ -80,10 +99,12 @@ pipeline works before you have data. Don't report those numbers.
 ## Layout
 
 ```
-archimedes_gestures/   landmarks, features, classifier, intent engine, filters, quality, calibration,
-                       view_state, recorder, tracker (MediaPipe), pyvista_bridge, synthetic hand model
-webdemo/               FastAPI + WebSocket server, static page (MediaPipe WASM + three.js)
+archimedes_gestures/   landmarks, features, classifier, intent engine, modelling engine, finger-count numbers,
+                       filters, quality, calibration, view_state, recorder, tracker (MediaPipe), pyvista_bridge,
+                       synthetic hand model
+archimedes_fe/         member model, brick FE solver (static + modal), demos, model session, GLB export
+webdemo/               FastAPI + WebSocket server, workbench page (MediaPipe WASM + three.js), /xr WebXR viewer
 apps/desktop_demo.py   OpenCV/MediaPipe desktop app, optional PyVista window
 scripts/               train_static.py, extract_hagrid.py, evaluate_filter.py
-tests/                 26 tests, no camera or GPU needed:  make test
+tests/                 52 tests, no camera or GPU needed:  make test
 ```

@@ -1,7 +1,9 @@
 # Design: a gesture layer people can actually use
 
-This is the computer-vision side of Archimedes: hands control how **results** are viewed. Geometry still
-comes from CAD/BIM and the solver is still FEniCSx. This document explains how the earlier plan was changed
+This is the computer-vision side of Archimedes. Hands control how **results** are viewed and, in the browser
+workbench, also build simple members: geometry, supports and loads (see [`MODELING.md`](MODELING.md)). Real
+projects still bring geometry from CAD/BIM and solve in FEniCSx. The gesture modeller covers single prismatic
+members, for teaching and quick checks. This document explains how the earlier plan was changed
 to make it easier to use, and why each change makes sense from a computer-vision point of view.
 
 ## 1. What changed from the first plan
