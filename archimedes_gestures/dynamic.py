@@ -86,3 +86,28 @@ class DTWTemplateMatcher:
         if best_d > self.threshold:
             return None, best_d
         return best, best_d
+
+
+def detect_circle(points: np.ndarray, min_radius: float, min_turn: float = 1.75 * np.pi,
+                  max_spread: float = 0.28) -> tuple[bool, float]:
+    """Is the (n, 2) path a drawn circle? Returns (found, fraction of a full turn covered).
+
+    The path counts as a circle when its points stay at a fairly even distance
+    from their centroid (spread/radius below ``max_spread``), the radius is a
+    real hand movement and not jitter, and the path winds at least ``min_turn``
+    radians around the centre. The caller tries several start points, so idle
+    pointing before the circle doesn't spoil the fit.
+    """
+    p = np.asarray(points, float)
+    if len(p) < 12:
+        return False, 0.0
+    c = p.mean(axis=0)
+    d = p - c
+    r = np.linalg.norm(d, axis=1)
+    rm = r.mean()
+    if rm < min_radius:
+        return False, 0.0
+    ang = np.unwrap(np.arctan2(d[:, 1], d[:, 0]))
+    turn = abs(ang[-1] - ang[0])
+    cover = min(1.0, turn / (2 * np.pi))
+    return bool(turn >= min_turn and r.std() / rm < max_spread), cover

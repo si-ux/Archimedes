@@ -111,6 +111,26 @@ def canonical_hand(pose: str, rng: np.random.Generator | None = None) -> np.ndar
     return lm
 
 
+
+# finger-counting hands: which fingers are up for 0..5 (thumb last, as most people count)
+COUNT_FINGERS = {0: "", 1: "i", 2: "im", 3: "imr", 4: "imrp", 5: "timrp"}
+
+
+def canonical_fingers(ext: str, rng: np.random.Generator | None = None) -> np.ndarray:
+    """Canonical hand with exactly the fingers in ``ext`` extended (t, i, m, r, p)."""
+    rng = rng or np.random.default_rng()
+    jitter = lambda c: tuple(np.clip(np.array(c) + rng.normal(0, 5, 3), 0, 120))  # noqa: E731
+    curls = {n: jitter(STRAIGHT if n[0] in ext else CURLED) for n in _MCP}
+    fingers = {n: _finger_chain(n, curls[n]) for n in _MCP}
+    lm = np.zeros((21, 3))
+    lm[1:5] = _thumb_chain(out="t" in ext)
+    lm[5:9] = fingers["index"]
+    lm[9:13] = fingers["middle"]
+    lm[13:17] = fingers["ring"]
+    lm[17:21] = fingers["pinky"]
+    return lm
+
+
 def _rot(yaw, pitch, roll) -> np.ndarray:
     cy, sy = np.cos(yaw), np.sin(yaw)
     cp, sp = np.cos(pitch), np.sin(pitch)

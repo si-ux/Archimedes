@@ -11,9 +11,13 @@ import time
 from pathlib import Path
 
 from .calibration import Calibrator, Profile
+from .counting import NumberEntry
 from .classifier import PersonalAdapter, PoseClassifier, PoseSmoother, RulePoseClassifier, SklearnPoseClassifier
-from .intent import EngineConfig, IntentEngine
+from .intent import EngineConfig, IntentEngine, _HandTrack
 from .landmarks import FrameInput, HandFrame
+from .modeling import CHEAT as MODELING_CHEAT
+from .modeling import ModelingEngine
+from .quality import check_frame
 from .recorder import ClipRecorder
 from .view_state import Command, ViewState
 from .vocab import PROFILES, cheat_sheet
@@ -43,6 +47,11 @@ class GesturePipeline:
             self.classifier.load(self.personal_path)
         self.engine = IntentEngine(self._engine_cfg(), modes=self.modes)
         self.view = ViewState()
+        # building the model (phases "model" / "loads") and typing numbers by finger count
+        self.phase = "results"
+        self.modeling = ModelingEngine(self._engine_cfg())
+        self.numbers = NumberEntry()
+        self.prompt: dict | None = None
         self.smoothers: dict[str, PoseSmoother] = {}
         self.calibrator: Calibrator | None = None
         self.recorder = ClipRecorder(clips_root)
@@ -91,7 +100,12 @@ class GesturePipeline:
             if f.hand(k) is None:
                 self.smoothers[k].reset()
 
-        cmds, hud = self.engine.update(f, poses)
+        if self.prompt is not None:
+            cmds, hud = self._number_step(f, poses)
+        elif self.phase in ("model", "loads"):
+            cmds, hud = self.modeling.update(f, poses)
+        else:
+            cmds, hud = self.engine.update(f, poses)
         for c in cmds:
             self.view.apply(c)
         self.last_latency_ms = (time.perf_counter() - t0) * 1000
@@ -99,6 +113,59 @@ class GesturePipeline:
         hud["classifier"] = self.classifier_name
         hud["personal_samples"] = len(self.classifier.y)
         return {"hud": hud, "view": self.view.to_dict(), "commands": [c.__dict__ for c in cmds]}
+
+    # ---- phases and number prompts --------------------------------------
+    def set_phase(self, phase: str) -> None:
+        self.phase = phase
+        self.modeling.set_phase(phase)
+        if phase == "results":
+            self.engine.reset()
+
+    def set_prompt(self, prompt: dict | None) -> None:
+        """Show a number prompt (from the model session); finger counts then type digits."""
+        def ident(p):
+            return None if p is None else (p.get("action"), p.get("key"), p.get("step"))
+        if ident(prompt) != ident(self.prompt):
+            self.numbers.reset()
+        self.prompt = prompt
+
+    def _number_step(self, f: FrameInput, poses: dict) -> tuple[list[Command], dict]:
+        ctrl = f.hand(self.profile.dominant) or (f.hands[0] if f.hands else None)
+        speed = 0.0
+        if ctrl is not None:
+            # keep a track for speed (digits are only taken from a still hand)
+            tr = self.modeling.tracks.setdefault(ctrl.handedness, _HandTrack())
+            tr.update(ctrl, f.timestamp)
+            speed = tr.speed
+        events, status = self.numbers.update(f.timestamp, f.hands, speed, ctrl)
+        cmds, toast = [], None
+        for ev in events:
+            if ev[0] == "digit":
+                cmds.append(Command("number_digit", {"digit": ev[1], "digits": self.numbers.digits}))
+            elif ev[0] == "backspace":
+                cmds.append(Command("number_backspace", {"digits": self.numbers.digits}))
+            elif ev[0] == "enter":
+                cmds.append(Command("number_enter", {"value": ev[1]}))
+                toast = "OK"
+                self.numbers.reset()
+            elif ev[0] == "cancel":
+                cmds.append(Command("number_cancel"))
+                toast = "Cancelled"
+                self.numbers.reset()
+        label = {"confirm": "Confirm", "cancel": "Cancel"}.get(status["kind"])
+        if label is None and status["live"] is not None and status["kind"] == "digit":
+            label = f"Digit {status['live']}"
+        hud = {
+            "state": "number" if f.hands else "no_hand", "phase": self.phase, "mode": None, "mode_label": None,
+            "pose": poses.get(ctrl.handedness, ("none", 0.0))[0] if ctrl else "none", "confidence": 1.0,
+            "progress_label": label, "progress": status["progress"],
+            "hints": [h.text for h in check_frame(f, self.engine.qcfg)],
+            "tip": "Hold up fingers for each digit · change the count to repeat a digit · 🙌 both palms = OK · "
+                   "swipe left = delete · two fists = cancel",
+            "toast": toast, "number": status, "prompt": self.prompt,
+            "hands": [{"handedness": k, "pose": v[0], "confidence": round(float(v[1]), 3)} for k, v in poses.items()],
+        }
+        return cmds, hud
 
     def command(self, kind: str, **data) -> None:
         """Mouse/keyboard fallback and UI buttons go through the same path as gestures."""
@@ -137,6 +204,7 @@ class GesturePipeline:
     def info(self) -> dict:
         return {
             "cheat_sheet": cheat_sheet(self.modes),
+            "cheat_sheets": {"results": cheat_sheet(self.modes), **MODELING_CHEAT},
             "profile": self.profile.__dict__,
             "classifier": self.classifier_name,
             "personal_samples": self.classifier.counts(),

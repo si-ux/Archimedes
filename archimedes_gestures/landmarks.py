@@ -83,8 +83,12 @@ class HandFrame:
 
     @property
     def palm_size(self) -> float:
-        """Wrist to middle-finger MCP distance in image units (2D)."""
-        d = self.landmarks[MIDDLE[0], :2] - self.landmarks[WRIST, :2]
+        """Wrist to middle-finger MCP distance in image units.
+
+        Measured in 3D (MediaPipe's z is on the same scale as x), so a palm tilted
+        towards the floor, as in a load sweep, doesn't read as "far away".
+        """
+        d = self.landmarks[MIDDLE[0]] - self.landmarks[WRIST]
         return float(np.linalg.norm(d)) + 1e-9
 
     @property
