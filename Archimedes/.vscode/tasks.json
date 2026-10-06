@@ -1,0 +1,62 @@
+{
+  // Open Archimedes_Desktop as the folder in VS Code for ${workspaceFolder}
+  // to resolve correctly. Run these with  Ctrl+Shift+P > "Tasks: Run Task".
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Solver: start bridge (ws://127.0.0.1:8791)",
+      "detail": "Builds if needed, then serves DOLFINx to the workbench UI",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Solver: stop bridge",
+      "type": "shell",
+      "command": "docker compose down",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Solve: default study",
+      "type": "shell",
+      "command": "docker compose run --rm archimedes solve",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Solve: gmsh tets, P2",
+      "detail": "Exact filleted geometry — the mesh that resolves the concentration",
+      "type": "shell",
+      "command": "docker compose run --rm archimedes solve --mesher gmsh --set mesh.order=2",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Study: mesh convergence sweep",
+      "type": "shell",
+      "command": "docker compose run --rm archimedes sweep -p mesh.h -v 12,8,6,4,3",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Study: natural frequencies",
+      "type": "shell",
+      "command": "docker compose run --rm archimedes modal -n 3",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Study: show resolved parameters",
+      "detail": "Runs on host Python (numpy only) — no container needed",
+      "type": "shell",
+      "command": "python -m archimedes study show",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    }
+  ]
+}

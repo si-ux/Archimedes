@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archimedes Gestures</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- LEFT: legend, discretisation, model, loads -->
+  <aside id="left">
+    <section>
+      <h3>Demos</h3>
+      <div class="grid2">
+        <button data-demo="continuous">Continuous beam</button>
+        <button data-demo="cantilever">Cantilever</button>
+        <button data-demo="long_column">Long column</button>
+        <button data-demo="short_column">Short column</button>
+      </div>
+    </section>
+
+    <section id="legend-sec">
+      <h3>Result</h3>
+      <select id="sel-field"></select>
+      <div id="legend">
+        <div id="legend-bar"></div>
+        <div id="legend-ticks"></div>
+      </div>
+      <div id="legend-meta" class="small muted"></div>
+      <label class="small row">Warp
+        <input id="rng-warp" type="range" min="0" max="3" step="0.05" value="1"> <span id="warp-val">×1</span>
+      </label>
+      <label class="small row"><input id="chk-mesh" type="checkbox" checked> Show mesh</label>
+      <label class="small row"><input id="chk-undeformed" type="checkbox" checked> Undeformed outline</label>
+    </section>
+
+    <section>
+      <h3>Discretisation</h3>
+      <table id="tbl-mesh" class="kv"></table>
+    </section>
+
+    <section>
+      <h3>Model</h3>
+      <table id="tbl-model" class="kv"></table>
+    </section>
+
+    <section>
+      <h3>Supports &amp; loads</h3>
+      <ul id="lst-bc" class="small"></ul>
+      <ul id="lst-issues" class="small warn-list"></ul>
+      <div class="row wrap">
+        <button id="btn-clear-loads" class="small-btn">Clear loads</button>
+        <button id="btn-clear-sup" class="small-btn">Clear supports</button>
+        <button id="btn-undo-model" class="small-btn">Undo edit</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>Results summary</h3>
+      <table id="tbl-res" class="kv"></table>
+    </section>
+  </aside>
+
+  <!-- CENTRE: viewport -->
+  <main id="viewport">
+    <div id="three"></div>
+    <canvas id="overlay"></canvas>
+
+    <div id="tabs">
+      <button data-phase="model">① Model</button>
+      <button data-phase="loads">② Loads &amp; supports</button>
+      <button data-phase="results">③ Results</button>
+    </div>
+    <div id="toolbar"></div>
+
+    <div id="hud">
+      <div id="mode-badge" class="badge idle">
+        <svg viewBox="0 0 44 44" class="ring"><circle cx="22" cy="22" r="19" class="ring-bg"/><circle cx="22" cy="22" r="19" id="ring-fg" class="ring-fg"/></svg>
+        <span id="mode-icon">·</span>
+      </div>
+      <div>
+        <div id="mode-text">Waiting for camera</div>
+        <div id="pose-text" class="muted small">pose: —</div>
+      </div>
+    </div>
+
+    <div id="gizmo-wrap">
+      <div id="gizmo"></div>
+      <div class="row gz-btns">
+        <button data-view="iso">ISO</button><button data-view="fit">FIT</button>
+      </div>
+    </div>
+
+    <div id="hint" class="hidden"></div>
+    <div id="tip"></div>
+    <div id="toast" class="hidden"></div>
+    <div id="busy" class="hidden">Solving…</div>
+    <div id="demo-caption" class="hidden"></div>
+    <div id="probe-tip" class="hidden"></div>
+    <div id="labels"></div>
+    <div id="cursor-mark" class="hidden"></div>
+
+    <!-- number prompt: answered by finger counts or the keyboard -->
+    <div id="prompt" class="hidden">
+      <div class="small muted" id="prompt-step"></div>
+      <div id="prompt-label"></div>
+      <div class="prompt-row">
+        <div id="prompt-live" title="fingers the camera sees">–</div>
+        <div>
+          <input id="prompt-input" inputmode="numeric" autocomplete="off" placeholder="type or show fingers">
+          <div id="prompt-unit" class="muted"></div>
+        </div>
+      </div>
+      <div class="bar"><div id="prompt-bar"></div></div>
+      <div id="prompt-choices" class="small"></div>
+      <div id="prompt-axes" class="row wrap"></div>
+      <div class="small muted" id="prompt-help">Hold up fingers for each digit · 🙌 both palms or Enter = OK · swipe left = delete · two fists or Esc = cancel</div>
+      <div class="row"><button id="prompt-ok" class="primary">OK</button><button id="prompt-cancel">Cancel</button></div>
+    </div>
+
+    <div id="start" class="overlay">
+      <div class="card">
+        <h1>Archimedes · gesture FE workbench</h1>
+        <p>Build a beam or column with your hands, add supports and loads, solve, and explore the results.
+          Your webcam stays in this browser: only hand-point coordinates go to the Python engine.</p>
+        <div class="row">
+          <button id="btn-camera" class="primary">Enable camera</button>
+          <button id="btn-skip">Use mouse only</button>
+        </div>
+        <p class="muted small">First time? Press <b>Calibrate</b> once the camera is on (30 s).
+          A solved cantilever is loaded; try the demos on the left.</p>
+        <p id="start-error" class="error hidden"></p>
+      </div>
+    </div>
+
+    <div id="calib" class="overlay hidden">
+      <div class="card">
+        <div class="muted small" id="calib-step">Step 1 of 8</div>
+        <h2 id="calib-text">Raise your right hand</h2>
+        <div class="bar"><div id="calib-bar"></div></div>
+        <p id="calib-warn" class="warn small"></p>
+        <button id="btn-calib-cancel">Cancel (Esc)</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: camera, gestures, tools -->
+  <aside id="side">
+    <div id="cam-wrap">
+      <video id="video" playsinline muted></video>
+      <canvas id="cam"></canvas>
+      <div id="cam-label" class="small">camera off</div>
+    </div>
+    <div id="chips" class="small">
+      <span class="chip" id="chip-model">model: rules</span>
+      <span class="chip" id="chip-fps">— fps</span>
+      <span class="chip" id="chip-lat">— ms</span>
+      <span class="chip" id="chip-personal">0 personal samples</span>
+    </div>
+
+    <section>
+      <h3 id="cheat-title">Gestures</h3>
+      <ul id="cheat"></ul>
+    </section>
+
+    <section class="row wrap">
+      <button id="btn-calib" class="primary">Calibrate (C)</button>
+      <button id="btn-tour">Gesture tour (D)</button>
+      <button id="btn-undo">Undo view (U)</button>
+      <button id="btn-reset">Reset view (R)</button>
+      <button id="btn-section-off">Remove cut (X)</button>
+      <a id="btn-xr" class="btn" href="/xr" target="_blank" rel="noopener">Open in VR / AR</a>
+      <label class="small">Main hand
+        <select id="sel-hand"><option>Right</option><option>Left</option></select>
+      </label>
+    </section>
+
+    <details>
+      <summary>Collect training data</summary>
+      <p class="muted small">Record 3-second clips per gesture, one subject ID per person. Clips land in <code>data/clips/</code>.</p>
+      <div class="row wrap">
+        <input id="rec-subject" placeholder="subject id, e.g. p01" size="10">
+        <select id="rec-label"></select>
+        <button id="btn-rec">Record 3 s</button>
+      </div>
+      <div id="rec-status" class="small muted"></div>
+    </details>
+
+    <details>
+      <summary>Keyboard and mouse</summary>
+      <ul class="small keys">
+        <li><b>Drag</b> rotate · <b>Wheel</b> zoom · <b>Hover</b> probe · <b>Click</b> pin / place tool</li>
+        <li><b>M</b> model · <b>L</b> loads · <b>V</b> results · <b>Ctrl+Enter</b> solve</li>
+        <li><b>X</b> remove cut · <b>S</b> snapshot · <b>U</b> undo view · <b>R</b> reset · <b>C</b> calibrate</li>
+        <li>View cube (top right): click a face for that view</li>
+      </ul>
+    </details>
+  </aside>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

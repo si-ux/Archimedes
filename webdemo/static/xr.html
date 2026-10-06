@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archimedes XR</title>
+  <style>
+    :root { --bg: #0f1216; --panel: #161a20; --line: #2a313b; --text: #e6e9ee; --muted: #8b95a3; --accent: #4da3ff; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, sans-serif; overflow: hidden; }
+    #bar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      background: rgba(22,26,32,.9); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; z-index: 2; }
+    select, button, a { background: #222832; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font: inherit; text-decoration: none; }
+    .muted { color: var(--muted); }
+    #help { position: absolute; bottom: 10px; left: 10px; right: 10px; text-align: center; color: var(--muted); z-index: 2; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+<div id="bar">
+  <b>Archimedes XR</b>
+  <span id="name" class="muted">loading…</span>
+  <select id="field"></select>
+  <a href="/" class="muted">← workbench</a>
+  <a id="dl" download>Download .glb</a>
+  <span id="xr-buttons"></span>
+</div>
+<div id="help">Desktop: drag to orbit · VR: trigger / pinch = next field, grip = rotate · AR: tap a surface to place the model</div>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { VRButton } from "three/addons/webxr/VRButton.js";
+import { ARButton } from "three/addons/webxr/ARButton.js";
+
+const $ = (id) => document.getElementById(id);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const bg = new THREE.Color(0x0f1216);
+scene.background = bg;
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
+camera.position.set(0, 1.4, 1.2);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(2, 4, 3); scene.add(sun);
+const floor = new THREE.GridHelper(6, 24, 0x2a313b, 0x1b2027); scene.add(floor);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.0, -0.6); controls.update();
+
+// the model lives in a holder we can move, scale and turn
+const holder = new THREE.Group(); holder.position.set(0, 1.0, -0.6); scene.add(holder);
+let model = null, info = null, version = -1, fieldKeys = [], fieldIdx = 0, mode = "desktop";
+
+// floating label with the field and its range
+const panelCanvas = document.createElement("canvas"); panelCanvas.width = 512; panelCanvas.height = 160;
+const panelTex = new THREE.CanvasTexture(panelCanvas);
+const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.156), new THREE.MeshBasicMaterial({ map: panelTex, transparent: true }));
+scene.add(panel);
+function drawPanel() {
+  const x = panelCanvas.getContext("2d"), f = fieldKeys[fieldIdx], F = info && info.fields[f];
+  x.clearRect(0, 0, 512, 160); x.fillStyle = "rgba(22,26,32,.92)"; x.fillRect(0, 0, 512, 160);
+  x.fillStyle = "#e6e9ee"; x.font = "bold 30px system-ui"; x.fillText(info ? info.model.name : "", 18, 42);
+  x.font = "26px system-ui"; x.fillStyle = "#4da3ff"; x.fillText(f || "", 18, 82);
+  const g = x.createLinearGradient(18, 0, 494, 0);
+  [[0.13, 0.25, 0.85], [0.0, 0.75, 0.95], [0.2, 0.8, 0.3], [0.98, 0.85, 0.1], [0.9, 0.15, 0.1]].forEach((c, i) => g.addColorStop(i / 4, `rgb(${c.map((v) => v * 255)})`));
+  x.fillStyle = g; x.fillRect(18, 96, 476, 18);
+  if (F) { x.fillStyle = "#8b95a3"; x.font = "22px system-ui"; x.fillText((+F.min.toPrecision(3)).toString(), 18, 144);
+    const t = F.freq ? `${F.freq.toFixed(2)} Hz` : (+F.max.toPrecision(3)).toString(); x.fillText(t, 494 - x.measureText(t).width, 144); }
+  panelTex.needsUpdate = true;
+}
+
+const loader = new GLTFLoader();
+function load() {
+  const f = fieldKeys[fieldIdx] || "von_mises", url = `/api/scene.glb?field=${encodeURIComponent(f)}&v=${version}`;
+  $("dl").href = url;
+  loader.load(url, (g) => {
+    if (model) holder.remove(model);
+    model = g.scene;
+    model.traverse((o) => { if (o.isMesh) o.material.vertexColors = true; });
+    const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    model.position.sub(c);                                  // centre on the holder
+    const target = mode === "ar" ? 0.6 : 1.4;               // tabletop size in AR, room size in VR / desktop
+    holder.scale.setScalar(target / Math.max(size.x, size.y, size.z));
+    holder.add(model);
+    panel.position.copy(holder.position).add(new THREE.Vector3(0, size.y * holder.scale.y / 2 + 0.18, 0));
+    drawPanel();
+  });
+}
+async function poll() {
+  try {
+    const r = await (await fetch("/api/scene.json", { cache: "no-store" })).json();
+    if (r.ready && r.version !== version) {
+      version = r.version; info = r; fieldKeys = Object.keys(r.fields);
+      fieldKeys.sort((a, b) => (a === "von_mises" ? -1 : b === "von_mises" ? 1 : 0));
+      $("name").textContent = `${r.model.name} · ${r.stats.elements} elements`;
+      const sel = $("field"); sel.innerHTML = ""; fieldKeys.forEach((k) => sel.add(new Option(k, k)));
+      fieldIdx = Math.min(fieldIdx, fieldKeys.length - 1); sel.value = fieldKeys[fieldIdx];
+      load();
+    } else if (!r.ready) $("name").textContent = "Nothing solved yet - solve a model in the workbench first";
+  } catch (e) { $("name").textContent = "Server not reachable"; }
+}
+$("field").onchange = (e) => { fieldIdx = fieldKeys.indexOf(e.target.value); load(); };
+const nextField = () => { if (!fieldKeys.length) return; fieldIdx = (fieldIdx + 1) % fieldKeys.length; $("field").value = fieldKeys[fieldIdx]; load(); };
+
+// ---- XR entry buttons -----------------------------------------------------
+const vrBtn = VRButton.createButton(renderer), arBtn = ARButton.createButton(renderer, { requiredFeatures: ["hit-test"], optionalFeatures: ["dom-overlay"], domOverlay: { root: document.body } });
+for (const b of [vrBtn, arBtn]) { b.style.position = "static"; b.style.margin = "0 4px"; b.style.width = "auto"; b.style.padding = "5px 10px"; $("xr-buttons").appendChild(b); }
+
+renderer.xr.addEventListener("sessionstart", () => {
+  const s = renderer.xr.getSession();
+  mode = s.environmentBlendMode && s.environmentBlendMode !== "opaque" ? "ar" : "vr";
+  scene.background = mode === "ar" ? null : bg;
+  floor.visible = mode === "vr";
+  holder.position.set(0, mode === "ar" ? 0.9 : 1.1, -1.2);
+  load();
+  if (mode === "ar") setupHitTest(s);
+});
+renderer.xr.addEventListener("sessionend", () => { mode = "desktop"; scene.background = bg; floor.visible = true; holder.position.set(0, 1.0, -0.6); load(); });
+
+// controllers and hands: select (trigger or pinch) = next field / place; squeeze = rotate
+const grabs = new Map();
+for (let i = 0; i < 2; i++) {
+  const c = renderer.xr.getController(i);
+  c.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x4da3ff })));
+  c.addEventListener("select", () => { if (mode === "ar" && reticle.visible) placeAt(reticle.matrix); else nextField(); });
+  c.addEventListener("squeezestart", () => grabs.set(c, c.rotation.y - holder.rotation.y));
+  c.addEventListener("squeezeend", () => grabs.delete(c));
+  scene.add(c);
+}
+
+// AR: hit-test reticle, tap to place
+const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x3ecf8e }));
+reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
+let hitSource = null;
+async function setupHitTest(session) {
+  const viewer = await session.requestReferenceSpace("viewer");
+  hitSource = await session.requestHitTestSource({ space: viewer });
+  session.addEventListener("end", () => { hitSource = null; reticle.visible = false; });
+}
+function placeAt(m) {
+  const p = new THREE.Vector3().setFromMatrixPosition(m);
+  const size = new THREE.Box3().setFromObject(holder).getSize(new THREE.Vector3());
+  holder.position.set(p.x, p.y + size.y / 2 + 0.02, p.z);
+  panel.position.copy(holder.position).add(new THREE.Vector3(0, size.y / 2 + 0.12, 0));
+}
+
+renderer.setAnimationLoop((t, frame) => {
+  if (frame && hitSource) {
+    const hits = frame.getHitTestResults(hitSource), ref = renderer.xr.getReferenceSpace();
+    reticle.visible = hits.length > 0;
+    if (hits.length) reticle.matrix.fromArray(hits[0].getPose(ref).transform.matrix);
+  }
+  for (const [c, off] of grabs) holder.rotation.y = c.rotation.y - off;
+  if (renderer.xr.isPresenting) { const cam = renderer.xr.getCamera(); panel.lookAt(cam.position); }
+  else { panel.lookAt(camera.position); controls.update(); }
+  renderer.render(scene, camera);
+});
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+poll(); setInterval(poll, 3000);
+</script>
+</body>
+</html>

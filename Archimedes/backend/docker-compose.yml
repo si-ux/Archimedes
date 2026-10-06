@@ -1,0 +1,26 @@
+services:
+  archimedes:
+    build: .
+    image: archimedes/solver:1.0.0
+    container_name: archimedes-solver
+    # bound to loopback: the solver accepts arbitrary study specs and runs
+    # them, so it must not be reachable from outside this machine.
+    ports:
+      - "127.0.0.1:8791:8791"
+    volumes:
+      - ./studies:/opt/archimedes/studies
+      - ./out:/opt/archimedes/out
+    working_dir: /opt/archimedes
+    stdin_open: true
+    tty: true
+    # some PETSc/DOLFINx failures call MPI_Abort, which kills the process
+    # rather than raising — restart so one bad study does not leave the
+    # workbench without a solver
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket,sys; s=socket.create_connection(('127.0.0.1',8791),3); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

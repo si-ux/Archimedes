@@ -1,0 +1,28 @@
+{
+  // "Dev Containers: Reopen in Container" puts VS Code *inside* the DOLFINx
+  // image, so `import dolfinx` resolves, IntelliSense works and you can set
+  // breakpoints in the solver. Without this the editor cannot see dolfinx,
+  // petsc4py or slepc4py at all — there is no Windows build of any of them.
+  "name": "Archimedes solver (DOLFINx)",
+  "image": "dolfinx/dolfinx:stable",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "forwardPorts": [8791],
+  "portsAttributes": {
+    "8791": { "label": "Archimedes solver bridge", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "pip install --no-cache-dir 'gmsh>=4.11' && pip install -e /workspace/backend",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/dolfinx-env/bin/python",
+        "python.terminal.activateEnvironment": false
+      }
+    }
+  }
+}

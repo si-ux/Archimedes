@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archimedes-solver"
+version = "1.0.0"
+description = "FEniCSx/DOLFINx solver core for the Archimedes Workbench"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+# dolfinx, petsc4py, slepc4py, mpi4py and gmsh come from the container image;
+# they are not installable from PyPI in any reliable cross-platform way, which
+# is exactly why the solver is containerised.
+
+[project.scripts]
+archimedes = "archimedes.cli:main"
+
+[tool.setuptools]
+packages = ["archimedes"]
