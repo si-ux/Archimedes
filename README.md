@@ -58,6 +58,11 @@ make demo        # then open port 8000 at /workbench/ and press G
 
 `/workbench/?tour` runs a camera-free gesture tour. The vocabulary and the
 reasons for it are in [`Archimedes/docs/gestures.md`](Archimedes/docs/gestures.md).
+
+Modelling in the Workbench feels like SolidWorks or CATIA: a feature tree (Sketch1, Boss-Extrude1, Fillet1) with a
+PropertyManager (✓ / ✕), face pre-highlight and selection, Instant3D drag arrows, on-model dimensions with a Modify
+box, a right-click menu, standard views (Space), pan and zoom at the cursor in either mouse style, and undo / redo.
+See [`Archimedes/docs/cad-workflow.md`](Archimedes/docs/cad-workflow.md).
 In the Workbench, thumbs-up held still for 1.2 s runs the solve instead of
 taking a snapshot.
 

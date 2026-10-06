@@ -123,7 +123,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
       </div>
       <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:3px 0 10px">
         <sc-for list="{{ tree }}" as="n" hint-placeholder-count="16">
-          <div onClick="{{ n.click }}" style="display:flex;align-items:center;gap:5px;height:19px;padding-right:8px;padding-left:{{ n.pad }}px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;border-left:2px solid {{ n.rail }};transition:background .12s ease,color .12s ease" style-hover="background:#151a20">
+          <div onClick="{{ n.click }}" onDoubleClick="{{ n.dbl }}" onContextMenu="{{ n.ctx }}" title="{{ n.tip }}" style="user-select:none;display:flex;align-items:center;gap:5px;height:19px;padding-right:8px;padding-left:{{ n.pad }}px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;border-left:2px solid {{ n.rail }};transition:background .12s ease,color .12s ease" style-hover="background:#151a20">
             <span onClick="{{ n.toggle }}" style="width:9px;flex:0 0 auto;text-align:center;font:400 7px/1 'IBM Plex Mono';color:{{ n.caretFg }};transition:color .12s ease" style-hover="color:#9fdbe6">{{ n.caret }}</span>
             <span style="width:5px;height:5px;border-radius:{{ n.dotR }};background:{{ n.dot }};flex:0 0 auto"></span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.label }}</span>
@@ -167,7 +167,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
     </div>
 
     <div ref="{{ viewportRef }}" style="flex:1;position:relative;min-width:0;overflow:hidden">
-      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;cursor:{{ vpCursor }}"></canvas>
+      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
 
       <div style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:9px">
         <div style="display:flex;gap:5px">
@@ -198,6 +198,79 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
             <div style="color:#c8d2dc">max {{ legend.max }}</div>
             <div>{{ legend.maxLoc }}</div>
           </div>
+        </div>
+      </sc-if>
+
+      <!-- heads-up view toolbar (SolidWorks style) -->
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:3px;border-radius:7px;background:rgba(16,19,23,.84);backdrop-filter:blur(8px);border:1px solid #232b34;z-index:20">
+        <sc-for list="{{ hud }}" as="b" hint-placeholder-count="9">
+          <button onClick="{{ b.run }}" title="{{ b.title }}" style="height:24px;padding:0 8px;border-radius:5px;color:{{ b.fg }};background:{{ b.bg }};font:500 10.5px/1 'IBM Plex Mono';white-space:nowrap;transition:all .12s ease" style-hover="background:#1d252e;color:#e6eef4">{{ b.label }}</button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ vo.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:31;padding:10px;border-radius:8px;background:#161b21;border:1px solid #2b333c;box-shadow:0 18px 44px -12px rgba(0,0,0,.8);animation:kfade .09s ease">
+          <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:8px">VIEW ORIENTATION · SPACE</div>
+          <div style="display:grid;grid-template-columns:repeat(4,92px);gap:4px">
+            <sc-for list="{{ vo.items }}" as="v" hint-placeholder-count="8">
+              <button onClick="{{ v.run }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:7px 8px;border-radius:5px;background:#12171d;border:1px solid #232b34;color:#c9d2da;font:500 11px/1 'IBM Plex Sans';text-align:left;transition:all .12s ease" style-hover="border-color:#5ecfe0;background:#16222a">
+                <span>{{ v.label }}</span><span style="font:400 9px/1 'IBM Plex Mono';color:#5e6b78">{{ v.accel }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ ctx.on }}" hint-placeholder-val="{{ false }}">
+        <div onContextMenu="{{ ctx.stop }}" style="position:absolute;left:{{ ctx.x }}px;top:{{ ctx.y }}px;z-index:32;min-width:236px;padding:4px;background:#191d22;border:1px solid #2b333c;border-radius:7px;box-shadow:0 18px 44px -12px rgba(0,0,0,.8),0 2px 8px rgba(0,0,0,.5);animation:kfade .09s ease">
+          <sc-for list="{{ ctx.items }}" as="it" hint-placeholder-count="8">
+            <sc-if value="{{ it.isTitle }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:6px 8px 5px;font:600 9.5px/1.3 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.04em">{{ it.label }}</div>
+            </sc-if>
+            <sc-if value="{{ it.isSep }}" hint-placeholder-val="{{ false }}">
+              <div style="height:1px;margin:4px 8px;background:#2b333c"></div>
+            </sc-if>
+            <sc-if value="{{ it.isItem }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ it.run }}" style="display:flex;align-items:center;gap:10px;width:100%;height:26px;padding:0 10px 0 6px;border-radius:4px;color:{{ it.fg }};font:400 12px/1 'Segoe UI','Segoe UI Variable Text',system-ui;transition:background .1s ease" style-hover="background:#262d36">
+                <span style="width:14px;flex:0 0 auto;text-align:center;font:400 11px/1 'Segoe UI',system-ui;color:#5ecfe0">{{ it.check }}</span>
+                <span style="text-align:left;white-space:nowrap">{{ it.label }}</span>
+                <span style="flex:1"></span>
+                <span style="font:400 11px/1 'Segoe UI',system-ui;color:#69747f;white-space:nowrap">{{ it.accel }}</span>
+              </button>
+            </sc-if>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ bar.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:{{ bar.x }}px;top:{{ bar.y }}px;z-index:29;display:flex;gap:2px;padding:3px;border-radius:7px;background:rgba(22,27,33,.94);border:1px solid #2b333c;box-shadow:0 10px 26px -12px #000;animation:kpop .14s ease both">
+          <sc-for list="{{ bar.items }}" as="b" hint-placeholder-count="3">
+            <button onClick="{{ b.run }}" title="{{ b.title }}" style="height:24px;padding:0 9px;border-radius:5px;color:#c9d2da;font:500 10.5px/1 'IBM Plex Mono';white-space:nowrap;transition:all .12s ease" style-hover="background:#24303b;color:#eaf7fa">{{ b.label }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ dimBox.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:{{ dimBox.x }}px;top:{{ dimBox.y }}px;z-index:33;width:226px;padding:8px 9px 9px;border-radius:7px;background:#161b21;border:1px solid #5ecfe0;box-shadow:0 18px 40px -14px #000,0 0 0 3px rgba(94,207,224,.12);animation:kpop .12s ease both">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
+            <span style="flex:1;font:600 9.5px/1.2 'IBM Plex Mono';color:#7fd8e6;letter-spacing:.04em">MODIFY · {{ dimBox.name }}</span>
+            <button onClick="{{ dimBox.ok }}" title="OK (Enter)" style="width:22px;height:20px;border-radius:4px;background:#173326;color:#7ee787;font:600 12px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✓</button>
+            <button onClick="{{ dimBox.cancel }}" title="Cancel (Esc)" style="width:22px;height:20px;border-radius:4px;background:#331a20;color:#ff8d9e;font:600 12px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✕</button>
+          </div>
+          <div style="display:flex;align-items:center;background:#0f1418;border:1px solid #2d5f68;border-radius:4px;overflow:hidden">
+            <button onClick="{{ dimBox.dec }}" style="width:22px;height:28px;color:#7fd8e6;font:400 14px/1 'IBM Plex Mono'" style-hover="background:#182029">−</button>
+            <input ref="{{ dimBox.ref }}" value="{{ dimBox.text }}" onChange="{{ dimBox.onInput }}" onKeyDown="{{ dimBox.onKey }}" aria-label="Dimension value" style="flex:1;min-width:0;text-align:right;background:none;border:0;padding:0 4px;font:600 14px/1 'IBM Plex Mono';color:#eaf7fa" />
+            <span style="font:400 10px/1 'IBM Plex Mono';color:#5e8790;padding:0 6px 0 2px">{{ dimBox.unit }}</span>
+            <button onClick="{{ dimBox.inc }}" style="width:22px;height:28px;color:#7fd8e6;font:400 14px/1 'IBM Plex Mono';border-left:1px solid #1e2a30" style-hover="background:#182029">+</button>
+          </div>
+          <div style="margin-top:6px;font:400 9px/1.4 'IBM Plex Mono';color:#55636f">{{ dimBox.ref2 }} · wheel / ↑↓ spin (Shift = 1 mm) · Enter ✓ · Esc ✕</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ pm.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:10px;right:{{ pm.right }}px;z-index:28;display:flex;gap:4px;padding:4px;border-radius:7px;background:rgba(16,19,23,.86);border:1px solid #2b333c;animation:kpop .14s ease both" title="Confirmation corner">
+          <button onClick="{{ pm.ok }}" title="OK (Enter)" style="width:34px;height:30px;border-radius:5px;background:#173326;color:#7ee787;font:600 16px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✓</button>
+          <button onClick="{{ pm.cancel }}" title="Cancel (Esc)" style="width:34px;height:30px;border-radius:5px;background:#331a20;color:#ff8d9e;font:600 16px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✕</button>
         </div>
       </sc-if>
 
@@ -300,6 +373,12 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
       <div style="padding:10px 13px;border-bottom:1px solid #171d24">
         <div style="font:600 11.5px/1.3 'IBM Plex Sans';color:#dfe6ed;letter-spacing:.02em">{{ panel.title }}</div>
         <div style="font:400 10px/1.4 'IBM Plex Mono';color:#5b6672;margin-top:3px">{{ panel.sub }}</div>
+        <sc-if value="{{ pm.on }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <button onClick="{{ pm.ok }}" style="flex:1;height:26px;border-radius:5px;background:#173326;border:1px solid #2f6b47;color:#9fe0a8;font:600 11px/1 'IBM Plex Sans'" style-hover="filter:brightness(1.2)">✓ OK</button>
+            <button onClick="{{ pm.cancel }}" style="flex:1;height:26px;border-radius:5px;background:#26161a;border:1px solid #6b2f3a;color:#ff9fae;font:600 11px/1 'IBM Plex Sans'" style-hover="filter:brightness(1.2)">✕ Cancel</button>
+          </div>
+        </sc-if>
       </div>
 
       <div style="flex:1;overflow-y:auto;padding:4px 0 24px">
@@ -735,6 +814,49 @@ function maxPrincipal(sx, sy, sz, txy, tyz, tzx) {
 // geometry: L-bracket — vertical leg of thickness t, top arm of thickness t,
 // filleted at the re-entrant corner with radius r. Extruded through depth D.
 // ---------------------------------------------------------------------------
+// CAD faces of the bracket, the way a feature-based modeller names them: which
+// feature owns the face, which dimension drives it, and the direction its
+// Instant3D handle drags. `shift` keeps the face under the cursor when the
+// dimension grows the solid from the other side.
+const CAD_FACES = {
+  end:            { name: 'Flange end face',  feat: 'sketch',  k: 'gWidth',  ax: [1, 0, 0] },
+  top:            { name: 'Top face',         feat: 'sketch',  k: 'gHeight', ax: [0, 1, 0] },
+  'web-in':       { name: 'Web inner face',   feat: 'sketch',  k: 'gThk',    ax: [1, 0, 0] },
+  'flange-under': { name: 'Flange underside', feat: 'sketch',  k: 'gThk',    ax: [0, -1, 0] },
+  'web-out':      { name: 'Web outer face',   feat: 'sketch',  k: null,      ax: [-1, 0, 0] },
+  base:           { name: 'Base face (fixed)', feat: 'sketch', k: null,      ax: [0, -1, 0] },
+  front:          { name: 'Front face',       feat: 'extrude', k: 'gDepth',  ax: [0, 0, 1] },
+  back:           { name: 'Back face',        feat: 'extrude', k: 'gDepth',  ax: [0, 0, -1], shift: [0, 0, 1] },
+  fillet:         { name: 'Fillet face',      feat: 'fillet',  k: 'gFillet', ax: [0.7071, -0.7071, 0] },
+  cut:            { name: 'Section face',     feat: null,      k: null,      ax: null }
+};
+const CAD_FEATS = {
+  sketch:  { name: 'Sketch1 — L-profile', row: 'geo-s', keys: ['gWidth', 'gHeight', 'gThk'], faces: ['end', 'top', 'web-in', 'flange-under', 'web-out', 'base'] },
+  extrude: { name: 'Boss-Extrude1', row: 'geo-e', keys: ['gDepth'], faces: ['front', 'back'] },
+  fillet:  { name: 'Fillet1', row: 'geo-f', keys: ['gFillet'], faces: ['fillet'] }
+};
+// dimension names as SolidWorks shows them, drag steps (Shift = 1 mm), limits
+const CAD_DIMS = {
+  gWidth:  { name: 'Width',  ref: 'D1@Sketch1', step: 5, min: 20, max: 600 },
+  gHeight: { name: 'Height', ref: 'D2@Sketch1', step: 5, min: 20, max: 800 },
+  gThk:    { name: 'Wall',   ref: 'D3@Sketch1', step: 1, min: 2, max: 200 },
+  gDepth:  { name: 'Depth',  ref: 'D1@Boss-Extrude1', step: 5, min: 10, max: 400 },
+  gFillet: { name: 'Radius', ref: 'D1@Fillet1', step: 1, min: 0, max: 120 }
+};
+// standard views: yaw / pitch with the camera looking at the face whose normal is listed
+const STD_VIEWS = [
+  ['Front', 'Ctrl+1', 0, 0], ['Back', 'Ctrl+2', Math.PI, 0], ['Left', 'Ctrl+3', Math.PI / 2, 0],
+  ['Right', 'Ctrl+4', -Math.PI / 2, 0], ['Top', 'Ctrl+5', 0, Math.PI / 2], ['Bottom', 'Ctrl+6', 0, -Math.PI / 2],
+  ['Isometric', 'Ctrl+7', -0.62, 0.42]
+];
+const pointInPoly = (x, y, X, Y, m) => {
+  let inside = false;
+  for (let i = 0, j = m - 1; i < m; j = i++) {
+    if ((Y[i] > y) !== (Y[j] > y) && x < (X[j] - X[i]) * (y - Y[i]) / (Y[j] - Y[i]) + X[i]) inside = !inside;
+  }
+  return inside;
+};
+
 function inSolid(x, y, g) {
   if (x <= g.t) return true;
   if (y >= g.H - g.t) return true;
@@ -1173,6 +1295,9 @@ class Component extends DCLogic {
     tab: 'view', focus: null, history: [], chat: [], chatInput: '',
     probe: null, fps: 60, gestAct: 'idle', edit: null, editText: '',
     stats: null, quality: null, times: null, wall: 0, modes: null,
+    // CAD interaction: face selection, Modify box, PropertyManager, menus
+    selCad: null, dimEdit: null, featEdit: null, ctxMenu: null, viewMenu: false, ctxBar: null,
+    mouseMode: 'solidworks', suppressed: {}, undoN: 0, redoN: 0,
     nums: {
       gWidth: 120, gDepth: 60, gHeight: 180, gFillet: 10, gThk: 30,
       mTemp: 22, mScale: 1,
@@ -1186,6 +1311,8 @@ class Component extends DCLogic {
   cam = { yaw: -0.62, pitch: 0.42, dist: 24 };
   tgt = { yaw: -0.62, pitch: 0.42, dist: 24 };
   mouse = { x: -1e4, y: -1e4, down: false, lx: 0, ly: 0 };
+  pan = [0, 0]; tgtPan = [0, 0];                       // screen-space pan, eased like the orbit
+  undoStack = []; redoStack = []; viewStack = [];
   prog = { step: 0, pct: 0 };
   faces = [];
   res = null;
@@ -1222,28 +1349,69 @@ class Component extends DCLogic {
     this.ro.observe(vp);
     this.resize();
 
+    // Mouse, SolidWorks style by default: left or middle drag rotates, Ctrl+middle
+    // or right drag pans, Shift+middle zooms, the wheel zooms at the cursor, a
+    // click selects, a right click opens the context menu, double-middle fits.
+    // CATIA style (menu): middle pans, middle+left/right rotates, Ctrl+middle zooms.
     this.onDown = e => {
       const r = c.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
-      if (this.gizmoClick(mx, my)) return;               // view cube swallows the press
-      if (this.state.shade === 'nodes') {
+      if (e.button === 1) e.preventDefault();            // no autoscroll
+      if (this.state.ctxMenu || this.state.viewMenu) this.setState({ ctxMenu: null, viewMenu: false });
+      if (e.button === 0 && this.gizmoClick(mx, my)) return;   // view cube swallows the press
+      if (e.button === 0 && this.state.stage === 1 && this.handleAt(mx, my)) { this.beginHandleDrag(mx, my); this.setCursor(); return; }
+      if (e.button === 0 && this.overDim) { this.openDimEdit(this.overDim, mx, my); return; }
+      if (e.button === 0 && this.state.shade === 'nodes') {
         const n = this.pickNode(mx, my);
         if (n >= 0) { this.setState({ pick: n }); return; }
       }
-      this.mouse.down = true; this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
+      if (e.button === 1) {                              // double-middle-click = zoom to fit
+        const now = performance.now();
+        if (now - (this.lastMid || 0) < 350) { this.zoomFit(); this.lastMid = 0; return; }
+        this.lastMid = now;
+      }
+      Object.assign(this.mouse, { down: true, lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: false,
+        btn: e.button, nav: null, saved: false });
       this.setState({ vpDown: true });
     };
-    this.onUp = () => { if (this.mouse.down) { this.mouse.down = false; this.setState({ vpDown: false }); } };
+    this.onUp = e => {
+      if (this.cadDrag) { this.endHandleDrag(); this.setCursor(); return; }
+      const m = this.mouse;
+      if (!m.down) return;
+      m.down = false;
+      this.setState({ vpDown: false });
+      if (m.moved || !e) return;
+      const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      if (m.btn === 0) this.clickSelect(mx, my, e.ctrlKey || e.shiftKey);
+      else if (m.btn === 2) this.openCtxMenu(mx, my);
+    };
     this.onMove = e => {
       const r = c.getBoundingClientRect();
       this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
-      if (this.mouse.down) {
-        this.tgt.yaw += (e.clientX - this.mouse.lx) * 0.008;
-        this.tgt.pitch = Math.max(-1.3, Math.min(1.3, this.tgt.pitch + (e.clientY - this.mouse.ly) * 0.006));
-        this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
-      }
+      if (this.cadDrag) { this.moveHandleDrag(this.mouse.x, this.mouse.y, e.shiftKey); return; }
+      const m = this.mouse;
+      if (!m.down) return;
+      if (!m.moved && Math.abs(e.clientX - m.sx) + Math.abs(e.clientY - m.sy) < 4) return;   // still a click
+      if (!m.moved) { m.moved = true; this.saveView(); if (this.state.ctxBar) this.setState({ ctxBar: null }); }
+      const nav = m.nav = this.navFor(e) || 'rotate', dx = e.clientX - m.lx, dy = e.clientY - m.ly;
+      if (nav === 'rotate') {
+        this.tgt.yaw += dx * 0.008;
+        this.tgt.pitch = Math.max(-1.5708, Math.min(1.5708, this.tgt.pitch + dy * 0.006));
+      } else if (nav === 'pan') {
+        this.tgtPan[0] += dx; this.tgtPan[1] += dy; this.pan[0] += dx; this.pan[1] += dy;   // panning follows the hand 1:1
+      } else if (nav === 'zoom') this.zoomAt(m.sx - r.left, m.sy - r.top, 1 + dy * 0.006);
+      m.lx = e.clientX; m.ly = e.clientY;
+      this.setCursor();
     };
-    this.onWheel = e => { e.preventDefault(); this.tgt.dist = Math.max(11, Math.min(80, this.tgt.dist * (1 + e.deltaY * 0.0012))); };
+    this.onWheel = e => { e.preventDefault(); const r = c.getBoundingClientRect(); this.zoomAt(e.clientX - r.left, e.clientY - r.top, 1 + e.deltaY * 0.0012); };
+    this.onCtx = e => e.preventDefault();               // our own menu replaces the browser's
+    this.onDbl = e => {
+      const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      const f = this.pickFace(mx, my), F = f && CAD_FACES[f.cad];
+      if (F && F.k) { this.setState({ selCad: f.cad }); this.openDimEdit(F.k, mx, my); }
+    };
+    c.addEventListener('contextmenu', this.onCtx);
+    c.addEventListener('dblclick', this.onDbl);
     this.onLeave = () => { this.mouse.x = -1e4; this.mouse.y = -1e4; };
     c.addEventListener('mousedown', this.onDown);
     window.addEventListener('mouseup', this.onUp);
@@ -1261,7 +1429,14 @@ class Component extends DCLogic {
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
       const typing = e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
       if (mod && k === 'k') { e.preventDefault(); this.setState({ palOpen: !this.state.palOpen, palQuery: '', palIdx: 0, menu: null }); return; }
-      if (e.key === 'Escape') { this.setState({ palOpen: false, menu: null, edit: null }); if (e.shiftKey) this.abortSolve('cancelled by operator'); return; }
+      if (e.key === 'Escape') {
+        if (this.state.dimEdit) this.dimCancel();
+        else if (this.state.featEdit) this.featureCancel();
+        else if (!this.state.palOpen && !this.state.menu && !this.state.ctxMenu && !this.state.viewMenu) this.setState({ selCad: null, ctxBar: null });
+        this.setState({ palOpen: false, menu: null, edit: null, ctxMenu: null, viewMenu: false });
+        if (e.shiftKey) this.abortSolve('cancelled by operator');
+        return;
+      }
       if (this.state.palOpen) {
         const n = this.palList().length;
         if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ palIdx: n ? (this.state.palIdx + 1) % n : 0 }); }
@@ -1270,9 +1445,28 @@ class Component extends DCLogic {
         return;
       }
       if (typing && !mod) return;                       // never steal keys from a field
+      if (typing && mod && (k === 'z' || k === 'y')) return;   // the field's own undo
+      // CAD keys: undo / redo, standard views (Ctrl+1..8), Space = view orientation,
+      // F = fit, arrows rotate 15° (Shift: 90°), Ctrl+arrows pan, Enter = ✓ in a feature
+      if (mod && k === 'z' && e.shiftKey) { e.preventDefault(); this.prevView(); return; }
+      if (mod && k === 'z') { e.preventDefault(); this.undo(); return; }
+      if (mod && k === 'y') { e.preventDefault(); this.redo(); return; }
+      if (mod && e.key >= '1' && e.key <= '7') { e.preventDefault(); this.stdView(+e.key - 1); return; }
+      if (mod && e.key === '8') { e.preventDefault(); this.normalTo(); return; }
+      if (e.key === ' ' && !mod) { e.preventDefault(); this.setState({ viewMenu: !this.state.viewMenu, ctxMenu: null }); return; }
+      if (k === 'f' && !mod) { this.zoomFit(); return; }
+      if (e.key === 'Enter' && this.state.featEdit) { this.featureOk(); return; }
+      if (e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const a = e.shiftKey ? Math.PI / 2 : Math.PI / 12, d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+        if (mod) { this.tgtPan[0] += d[0] * 40; this.tgtPan[1] += d[1] * 40; }
+        else { this.saveView(); this.tgt.yaw += d[0] * a; this.tgt.pitch = Math.max(-1.5708, Math.min(1.5708, this.tgt.pitch - d[1] * a)); }
+        return;
+      }
       if (mod && k === 'l') { e.preventDefault(); this.setState({ logOpen: !this.state.logOpen }); }
       else if (mod && k === 'g') { e.preventDefault(); this.setState({ gestureOn: !this.state.gestureOn }); }
       else if (mod && k === 's') { e.preventDefault(); this.setState({ savedAgo: '· saved just now' }); }
+      else if (e.key === 'Home') { this.zoomFit(); this.setView(-0.62, 0.42, true); }
       else if (e.key === 'F5') { e.preventDefault(); if (!this.state.solving) this.startSolve(); }
       else if (e.key === 'F4' && !e.altKey) { e.preventDefault(); this.setState({ stage: 4 }); }
       else if (e.key === 'F9') { e.preventDefault(); this.setState({ arOn: !this.state.arOn }); }
@@ -1310,6 +1504,7 @@ class Component extends DCLogic {
     window.removeEventListener('mouseup', this.onUp);
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('mousedown', this.onDocDown, true);
+    if (this.canvas) { this.canvas.removeEventListener('contextmenu', this.onCtx); this.canvas.removeEventListener('dblclick', this.onDbl); }
   }
   componentDidUpdate() {
     // the runtime hands componentDidUpdate prevProps only, so track prev state here
@@ -1329,7 +1524,7 @@ class Component extends DCLogic {
     const n = this.state.nums;
     const W = n.gWidth, H = n.gHeight, D = n.gDepth;
     const t = Math.max(1, Math.min(n.gThk, Math.min(W, H) * 0.7));
-    const r = Math.max(0, Math.min(n.gFillet, Math.min(W - t, H - t) * 0.85));
+    const r = this.state.suppressed.fillet ? 0 : Math.max(0, Math.min(n.gFillet, Math.min(W - t, H - t) * 0.85));
     return { W, H, D, t, r };
   }
   sizes(g) {
@@ -1357,13 +1552,16 @@ class Component extends DCLogic {
     const ms = this.modelSig();
     if (ms !== this.msig) {
       this.msig = ms;
-      const fine = this.sizes(this.geom());
+      const fine = this.sizes(this.geom()), t0 = performance.now();
       this.mesh = buildLevel(this.geom(), fine.hx, fine.hz);
+      this.rebuildMs = performance.now() - t0;
       // downstream drawing, cuts and BC placement all work on the geometry the
       // mesh actually realises, not the requested box
       const g = this.g = this.mesh.geff;
-      this.ctr = [g.W / 2, g.H / 2, g.D / 2];
-      this.vs = 10 / Math.max(g.W, g.H);
+      // the view centre eases to the new body (see loop), so a resize never jumps
+      this.ctrTgt = [g.W / 2, g.H / 2, g.D / 2];
+      this.vsTgt = 10 / Math.max(g.W, g.H);
+      if (!this.ctr) { this.ctr = this.ctrTgt.slice(); this.vs = this.vsTgt; }
       this.sx = new Float32Array(this.mesh.nn);
       this.sy = new Float32Array(this.mesh.nn);
       this.sz = new Float32Array(this.mesh.nn);
@@ -1719,6 +1917,26 @@ class Component extends DCLogic {
       faces.push({ n: polyNodes(pts), poly: mkPoly(pts), d: -1, nrm: P.n, cap: true, iface: false, ci, gx: i, gy: j, gz: k });
     }
     for (const f of faces) if (f.poly) { f.X = new Float32Array(f.poly.a.length); f.Y = new Float32Array(f.poly.a.length); }
+    // CAD face of every element face, and each CAD face's centre (where its handle sits)
+    const info = {};
+    for (const f of faces) {
+      const id = f.cad = this.cadFaceOf(f);
+      if (!id) continue;
+      const I = info[id] || (info[id] = { c: [0, 0, 0], n: 0 });
+      for (const q of f.n) { I.c[0] += L.px[q]; I.c[1] += L.py[q]; I.c[2] += L.pz[q]; I.n++; }
+    }
+    for (const id in info) info[id].c = info[id].c.map(v => v / info[id].n);
+    // the handle sits on the face itself: an L-shaped face's centroid can lie in the void
+    const best = {};
+    for (const f of faces) {
+      const I = f.cad && info[f.cad]; if (!I) continue;
+      let x = 0, y = 0, z = 0;
+      for (const q of f.n) { x += L.px[q]; y += L.py[q]; z += L.pz[q]; }
+      const m = f.n.length, d = (x / m - I.c[0]) ** 2 + (y / m - I.c[1]) ** 2 + (z / m - I.c[2]) ** 2;
+      if (!best[f.cad] || d < best[f.cad].d) best[f.cad] = { d, c: [x / m, y / m, z / m] };
+    }
+    for (const id in best) info[id].c = best[id].c;
+    this.cadInfo = info;
     this.faces = faces;
     this.order = new Int32Array(faces.length);
     this.fcx = new Float32Array(faces.length);
@@ -1764,6 +1982,11 @@ class Component extends DCLogic {
     this.tickGesture(now);
     const c = this.cam, t = this.tgt, k = 0.14;
     c.yaw += (t.yaw - c.yaw) * k; c.pitch += (t.pitch - c.pitch) * k; c.dist += (t.dist - c.dist) * k;
+    this.pan[0] += (this.tgtPan[0] - this.pan[0]) * k; this.pan[1] += (this.tgtPan[1] - this.pan[1]) * k;
+    if (!this.cadDrag && this.ctrTgt) {                 // frozen while a handle is dragged
+      for (let i = 0; i < 3; i++) this.ctr[i] += (this.ctrTgt[i] - this.ctr[i]) * k;
+      this.vs += (this.vsTgt - this.vs) * k;
+    }
     this.draw(now);
     this.syncPops(now);
   };
@@ -1819,7 +2042,7 @@ class Component extends DCLogic {
     const Y = y * cp - Z * sp; Z = y * sp + Z * cp;
     const d = Z + c.dist;
     const s = this.h * 1.02 / Math.max(1, d);
-    return [this.w / 2 + X * s, this.h / 2 - Y * s, d];
+    return [this.w / 2 + this.pan[0] + X * s, this.h / 2 + this.pan[1] - Y * s, d];
   }
   projectNodes() {
     const L = this.mesh, R = this.res, st = this.state, c = this.cam;
@@ -1830,7 +2053,7 @@ class Component extends DCLogic {
     else if (showResult && R) { src = R.u; sc = st.deform * this.lf(); }
     const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
     const vs = this.vs, cx = this.ctr[0], cyy = this.ctr[1], cz = this.ctr[2];
-    const f = this.h * 1.02, hw = this.w / 2, hh = this.h / 2;
+    const f = this.h * 1.02, hw = this.w / 2 + this.pan[0], hh = this.h / 2 + this.pan[1];
     const sx = this.sx, sy2 = this.sy, sz2 = this.sz;
     for (let n = 0; n < L.nn; n++) {
       let x = L.px[n], y = L.py[n], z = L.pz[n];
@@ -1906,6 +2129,8 @@ class Component extends DCLogic {
     const showEdges = wire || st.stage === 4 || nf < 1400;
     const edge = st.stage === 4 ? 0.55 : showResult ? 0.24 : 0.5;
     const matCol = { al7075: [150,162,175], steel: [128,136,146], ti64: [136,146,160], cfrp: [42,46,52] }[st.material] || [150,162,175];
+    const cadOn = st.stage <= 4 && !st.modal, selC = st.selCad, hovC = this.mouse.down ? null : this.hoverCad;
+    const hlSet = new Set(cadOn ? this.featureFaces() : []);
     for (const i of ord) {
       const f = faces[i], n = f.n, P = f.poly;
       let v;
@@ -1924,6 +2149,11 @@ class Component extends DCLogic {
       } else if (st.stage === 2) { r = matCol[0]; g = matCol[1]; b = matCol[2]; }
       else if (st.stage === 4) { r = 118; g = 136; b = 154; }
       else { r = 132; g = 148; b = 164; }
+      if (cadOn && f.cad) {                              // CAD selection: blue, pre-highlight: light
+        const mix = (k, R, G, B) => { r = r * (1 - k) + R * k; g = g * (1 - k) + G * k; b = b * (1 - k) + B * k; };
+        if (f.cad === selC || hlSet.has(f.cad)) mix(0.62, 64, 150, 255);
+        else if (f.cad === hovC) mix(0.32, 190, 230, 255);
+      }
 
       const nr = f.nrm || dirs[f.d];
       const sh = 0.5 + 0.5 * Math.max(0, nr[0] * L[0] + nr[1] * L[1] + nr[2] * L[2]);
@@ -2000,7 +2230,9 @@ class Component extends DCLogic {
   // overlays that sit on top of whichever model representation was drawn
   afterModel(ctx, W, H, now) {
     const st = this.state;
-    if (st.stage === 1) this.drawDims(ctx);
+    this.dimHits = [];
+    if (st.stage === 1) { this.drawDims(ctx); this.drawHandles(ctx); }
+    this.updateHover();
     if (st.stage === 3) this.drawBCs(ctx);
     if (st.arOn) this.drawReticle(ctx, W, H, now);
     if (st.gestureOn) this.drawHand(ctx, W, H, now);
@@ -2148,20 +2380,37 @@ class Component extends DCLogic {
     }
     return best;
   }
+  // Smart dimensions on the model: click one to edit it (the Modify box), as in
+  // SolidWorks. The label shows the design value; hits are kept for picking.
   drawDims(ctx) {
-    const g = this.g, c = this.cv('len'), off = Math.max(g.W, g.H) * 0.1;
-    const line = (p, q, txt) => {
-      const a = this.proj(p), b = this.proj(q);
-      ctx.strokeStyle = 'rgba(94,207,224,.45)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#7fd8e6'; ctx.font = "500 10px 'IBM Plex Mono'";
-      ctx.fillText(txt, (a[0] + b[0]) / 2 + 6, (a[1] + b[1]) / 2 - 4);
-    };
+    const g = this.g, n = this.state.nums, c = this.cv('len'), off = Math.max(g.W, g.H) * 0.1;
     const u = v => sig(v * c[1]) + ' ' + c[0];
-    line([0, -off, 0], [g.W, -off, 0], u(g.W));
-    line([g.W + off, 0, 0], [g.W + off, g.H, 0], u(g.H));
-    line([0, -off, g.D], [0, -off, 0], u(g.D));
-    line([0, g.H + off * 0.4, 0], [g.t, g.H + off * 0.4, 0], u(g.t) + ' wall');
+    const feat = this.state.featEdit ? CAD_FEATS[this.state.featEdit.id].keys : null;
+    const dim = (k, p, q, txt) => {
+      if (feat && !feat.includes(k)) return;
+      const a = this.proj(p), b = this.proj(q);
+      const over = this.overDim === k || (this.state.dimEdit && this.state.dimEdit.k === k);
+      ctx.strokeStyle = over ? 'rgba(126,216,230,.9)' : 'rgba(94,207,224,.45)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
+      for (const e of [a, b]) { ctx.beginPath(); ctx.arc(e[0], e[1], 2, 0, 6.284); ctx.fillStyle = 'rgba(94,207,224,.7)'; ctx.fill(); }
+      ctx.font = "500 10px 'IBM Plex Mono'";
+      const w = ctx.measureText(txt).width + 10, h = 16;
+      const x = (a[0] + b[0]) / 2 - w / 2, y = (a[1] + b[1]) / 2 - h / 2;
+      ctx.fillStyle = over ? 'rgba(94,207,224,.22)' : 'rgba(11,14,17,.82)';
+      ctx.strokeStyle = over ? '#5ecfe0' : 'rgba(94,207,224,.35)';
+      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = over ? '#eaf7fa' : '#7fd8e6';
+      ctx.fillText(txt, x + 5, y + 11.5);
+      this.dimHits.push({ k, x, y, w, h });
+    };
+    dim('gWidth', [0, -off, 0], [g.W, -off, 0], u(n.gWidth));
+    dim('gHeight', [g.W + off, 0, 0], [g.W + off, g.H, 0], u(n.gHeight));
+    dim('gDepth', [0, -off, g.D], [0, -off, 0], u(n.gDepth));
+    dim('gThk', [0, g.H + off * 0.4, 0], [g.t, g.H + off * 0.4, 0], u(n.gThk) + ' wall');
+    if (g.r > 0) {
+      const cx = g.t + g.r, cy = g.H - g.t - g.r, a = Math.PI * 0.75;
+      dim('gFillet', [cx, cy, g.D], [cx + Math.cos(a) * g.r, cy + Math.sin(a) * g.r, g.D], 'R' + sig(n.gFillet * c[1]));
+    }
   }
   drawBCs(ctx) {
     const g = this.g, st = this.state, n = st.nums;
@@ -2287,10 +2536,342 @@ class Component extends DCLogic {
 
   // ---------- parameter plumbing ----------
   cv(kind) { return UNITS[this.state.units][kind]; }
+  // =====================================================================
+  // CAD interaction, SolidWorks / CATIA style: pre-highlight and select
+  // faces, Instant3D drag handles, the Modify box on smart dimensions, the
+  // PropertyManager (✓ / ✗) for features, undo / redo, standard views,
+  // pan / zoom-at-cursor and right-click menus.
+  // =====================================================================
+  cadFaceOf(f) {
+    if (f.cap) return 'cut';
+    const L = this.mesh, g = this.g, e = 0.5 * Math.min(L.dx, L.dy);
+    const xc = (f.gx + 0.5) * L.dx, yc = (f.gy + 0.5) * L.dy;
+    const inFillet = g.r > 0 && xc > g.t && xc < g.t + g.r + e && yc < g.H - g.t && yc > g.H - g.t - g.r - e;
+    switch (f.d) {
+      case 4: return 'front';
+      case 5: return 'back';
+      case 0: return (f.gx + 1) * L.dx > g.W - e ? 'end' : inFillet ? 'fillet' : 'web-in';
+      case 1: return 'web-out';
+      case 2: return 'top';
+      case 3: return f.gy * L.dy < e ? 'base' : inFillet ? 'fillet' : 'flange-under';
+    }
+    return null;
+  }
+  // faces lit because their feature is selected in the tree (or being edited)
+  featureFaces() {
+    const st = this.state;
+    if (st.selCad && !st.featEdit) return [];             // a picked face shows on its own
+    const id = st.featEdit ? st.featEdit.id
+      : Object.keys(CAD_FEATS).find(k => CAD_FEATS[k].row === st.sel && st.stage === 1);
+    return id ? CAD_FEATS[id].faces : [];
+  }
+  pickFace(x, y) {
+    const ord = this.visOrder || [], F = this.faces, sx = this.sx, sy = this.sy;
+    const X = new Float32Array(4), Y = new Float32Array(4);
+    for (let o = ord.length - 1; o >= 0; o--) {          // nearest first
+      const f = F[ord[o]];
+      if (f.poly) { if (pointInPoly(x, y, f.X, f.Y, f.poly.a.length)) return f; continue; }
+      for (let q = 0; q < 4; q++) { X[q] = sx[f.n[q]]; Y[q] = sy[f.n[q]]; }
+      if (pointInPoly(x, y, X, Y, 4)) return f;
+    }
+    return null;
+  }
+  updateHover() {
+    const mx = this.mouse.x, my = this.mouse.y;
+    this.overDim = null; this.overHandle = false;
+    if (mx < -100 || this.mouse.down || this.state.shade === 'nodes') { this.hoverCad = null; this.setCursor(); return; }
+    for (const h of this.dimHits) if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) this.overDim = h.k;
+    this.overHandle = !this.overDim && this.handleAt(mx, my);
+    const f = this.overDim || this.overHandle ? null : this.pickFace(mx, my);
+    this.hoverCad = f ? f.cad : null;
+    this.setCursor();
+  }
+  setCursor() {
+    const c = this.canvas; if (!c) return;
+    const m = this.mouse;
+    const cur = this.cadDrag ? 'grabbing' : m.down ? (m.nav === 'pan' ? 'move' : m.nav === 'zoom' ? 'ns-resize' : 'grabbing')
+      : this.overDim || this.overHandle ? 'pointer' : this.hoverCad && this.state.stage <= 4 ? 'pointer' : 'default';
+    if (c.style.cursor !== cur) c.style.cursor = cur;
+  }
+
+  // ---- Instant3D handle --------------------------------------------------
+  drawHandles(ctx) {
+    this.handleHit = null;
+    const st = this.state, id = st.selCad, F = CAD_FACES[id];
+    if (!F || !F.k || !this.cadInfo || !this.cadInfo[id]) return;
+    const g = this.g, Lh = 0.16 * Math.max(g.W, g.H), a = this.cadInfo[id].c, ax = F.ax;
+    const p0 = this.proj(a), p1 = this.proj([a[0] + ax[0] * Lh, a[1] + ax[1] * Lh, a[2] + ax[2] * Lh]);
+    const hot = this.cadDrag || this.overHandle;
+    ctx.strokeStyle = hot ? '#ffd166' : '#5ecfe0'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = hot ? 2.4 : 1.8;
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+    const an = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+    ctx.beginPath(); ctx.moveTo(p1[0] + Math.cos(an) * 9, p1[1] + Math.sin(an) * 9);
+    ctx.lineTo(p1[0] + Math.cos(an + 2.5) * 8, p1[1] + Math.sin(an + 2.5) * 8);
+    ctx.lineTo(p1[0] + Math.cos(an - 2.5) * 8, p1[1] + Math.sin(an - 2.5) * 8);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(p0[0], p0[1], 3, 0, 6.284); ctx.fill();
+    const D = CAD_DIMS[F.k], c = this.cv('len');
+    const txt = D.name + ' ' + sig(st.nums[F.k] * c[1]) + ' ' + c[0] + (this.cadDrag ? '' : '  ⇢ drag');
+    ctx.font = "600 10.5px 'IBM Plex Mono'";
+    const w = ctx.measureText(txt).width + 12, lx = p1[0] + Math.cos(an) * 16 + (Math.cos(an) < 0 ? -w : 0), ly = p1[1] + Math.sin(an) * 16;
+    ctx.fillStyle = 'rgba(11,14,17,.9)'; ctx.fillRect(lx, ly - 10, w, 19);
+    ctx.strokeStyle = hot ? '#ffd166' : 'rgba(94,207,224,.5)'; ctx.lineWidth = 1; ctx.strokeRect(lx, ly - 10, w, 19);
+    ctx.fillStyle = hot ? '#ffe3a3' : '#cfeff5'; ctx.fillText(txt, lx + 6, ly + 3.5);
+    if (this.cadDrag) {                                   // ruler ticks along the drag axis
+      const step = this.cadDrag.step, n0 = this.cadDrag.v0;
+      ctx.strokeStyle = 'rgba(255,209,102,.45)'; ctx.lineWidth = 1;
+      for (let i = -6; i <= 6; i++) {
+        const v = n0 + i * step * 2, q = (v - st.nums[F.k]) / Lh;
+        const pp = this.proj([a[0] + ax[0] * Lh * q, a[1] + ax[1] * Lh * q, a[2] + ax[2] * Lh * q]);
+        const nx = -Math.sin(an) * 4, ny = Math.cos(an) * 4;
+        ctx.beginPath(); ctx.moveTo(pp[0] - nx, pp[1] - ny); ctx.lineTo(pp[0] + nx, pp[1] + ny); ctx.stroke();
+      }
+    }
+    this.handleHit = { p0, p1, Lh, id, k: F.k };
+  }
+  handleAt(x, y) {
+    const h = this.handleHit; if (!h) return false;
+    const vx = h.p1[0] - h.p0[0], vy = h.p1[1] - h.p0[1], l2 = vx * vx + vy * vy || 1;
+    const t = Math.max(0, Math.min(1.15, ((x - h.p0[0]) * vx + (y - h.p0[1]) * vy) / l2));
+    const dx = h.p0[0] + vx * t - x, dy = h.p0[1] + vy * t - y;
+    return t > 0.2 && dx * dx + dy * dy < 100;
+  }
+  beginHandleDrag(x, y) {
+    const h = this.handleHit, k = h.k, D = CAD_DIMS[k];
+    this.cadDrag = { k, id: h.id, mx: x, my: y, p0: h.p0, p1: h.p1, Lh: h.Lh, v0: this.state.nums[k], last: this.state.nums[k],
+      step: D.step, snap: this.snapshot() };
+    this.inSession = true;
+  }
+  moveHandleDrag(x, y, fine) {
+    const d = this.cadDrag, D = CAD_DIMS[d.k];
+    const vx = d.p1[0] - d.p0[0], vy = d.p1[1] - d.p0[1], l2 = vx * vx + vy * vy || 1;
+    const t = ((x - d.mx) * vx + (y - d.my) * vy) / l2;
+    const step = fine ? 1 : D.step;
+    d.step = step;
+    let v = Math.round((d.v0 + t * d.Lh) / step) * step;
+    v = Math.max(D.min, Math.min(D.max, v));
+    if (v === d.last) return;
+    const sh = CAD_FACES[d.id].shift;
+    if (sh) for (let i = 0; i < 3; i++) this.ctr[i] += sh[i] * (v - d.last);
+    d.last = v;
+    this.setState({ nums: { ...this.state.nums, [d.k]: v } });
+  }
+  endHandleDrag() {
+    const d = this.cadDrag; this.cadDrag = null; this.inSession = false;
+    if (d.last !== d.v0) {
+      this.pushUndo(d.snap);
+      const c = this.cv('len');
+      this.pushLog('geom', CAD_DIMS[d.k].name + ' ' + sig(d.v0 * c[1]) + ' → ' + sig(d.last * c[1]) + ' ' + c[0]
+        + ' (' + CAD_DIMS[d.k].ref + ', drag) · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms', 'ok');
+    }
+  }
+
+  // ---- Modify box (smart dimension edit) --------------------------------
+  openDimEdit(k, x, y) {
+    const c = this.cv('len'), v = this.state.nums[k];
+    const W = this.w || 800, H = this.h || 600;
+    this.setState({ stage: 1, ctxMenu: null, ctxBar: null,
+      dimEdit: { k, x: Math.max(8, Math.min(W - 236, x + 10)), y: Math.max(8, Math.min(H - 120, y - 40)),
+        text: sig(v * c[1]), v0: v, snap: this.snapshot() } });
+    this.inSession = true;
+  }
+  dimSet(v, text) {
+    const e = this.state.dimEdit; if (!e) return;
+    const D = CAD_DIMS[e.k], c = this.cv('len');
+    v = Math.max(D.min, Math.min(D.max, v));
+    this.setState({ nums: { ...this.state.nums, [e.k]: v }, dimEdit: { ...e, text: text !== undefined ? text : sig(v * c[1]) } });
+  }
+  dimSpin(dir, fine) {
+    const e = this.state.dimEdit; if (!e) return;
+    const step = fine ? 1 : CAD_DIMS[e.k].step;
+    this.dimSet(Math.round((this.state.nums[e.k] + dir * step) / step) * step);
+  }
+  dimType(text) {
+    const e = this.state.dimEdit; if (!e) return;
+    const v = parseFloat(String(text).replace(/[^0-9eE+\-.]/g, ''));
+    if (isFinite(v) && v > 0) this.dimSet(v / this.cv('len')[1], text);   // live preview while typing
+    else this.setState({ dimEdit: { ...e, text } });
+  }
+  dimOk() {
+    const e = this.state.dimEdit; if (!e) return;
+    this.inSession = false;
+    const v = this.state.nums[e.k];
+    if (v !== e.v0) {
+      this.pushUndo(e.snap);
+      const c = this.cv('len');
+      this.pushLog('geom', CAD_DIMS[e.k].ref + ' = ' + sig(v * c[1]) + ' ' + c[0] + ' · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms', 'ok');
+    }
+    this.setState({ dimEdit: null });
+  }
+  dimCancel() {
+    const e = this.state.dimEdit; if (!e) return;
+    this.inSession = false;
+    this.setState({ dimEdit: null, nums: { ...this.state.nums, [e.k]: e.v0 } });
+  }
+  refDim = el => {
+    if (!el || el === this.dimEl) return;
+    this.dimEl = el;
+    el.addEventListener('wheel', ev => { ev.preventDefault(); this.dimSpin(ev.deltaY < 0 ? 1 : -1, ev.shiftKey); }, { passive: false });
+    setTimeout(() => { try { el.focus(); el.select(); } catch (err) { /* gone */ } }, 20);
+  };
+
+  // ---- PropertyManager: edit a feature with ✓ / ✗ -------------------------
+  editFeature(id) {
+    if (!CAD_FEATS[id]) return;
+    if (this.state.featEdit) this.featureOk();
+    this.inSession = true;
+    this.setState({ featEdit: { id, snap: this.snapshot() }, stage: 1, sel: CAD_FEATS[id].row, ctxMenu: null, ctxBar: null });
+  }
+  featureOk() {
+    const e = this.state.featEdit; if (!e) return;
+    this.inSession = false;
+    if (JSON.stringify(e.snap.nums) !== JSON.stringify(this.state.nums)) {
+      this.pushUndo(e.snap);
+      this.pushLog('geom', CAD_FEATS[e.id].name + ' edited · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms', 'ok');
+    }
+    this.setState({ featEdit: null });
+  }
+  featureCancel() {
+    const e = this.state.featEdit; if (!e) return;
+    this.inSession = false;
+    this.setState({ featEdit: null, nums: e.snap.nums });
+  }
+  toggleSuppress(id) {
+    this.pushUndo();
+    const sup = { ...this.state.suppressed, [id]: !this.state.suppressed[id] };
+    this.pushLog('geom', CAD_FEATS[id].name + (sup[id] ? ' suppressed' : ' unsuppressed'), 'ok');
+    this.setState({ suppressed: sup, ctxMenu: null, selCad: null });
+  }
+
+  // ---- undo / redo: model inputs, not the view ----------------------------
+  snapshot() {
+    const s = this.state;
+    return { nums: { ...s.nums }, material: s.material, bcOn: { ...s.bcOn }, suppressed: { ...s.suppressed } };
+  }
+  pushUndo(snap) {
+    this.undoStack.push(snap || this.snapshot());
+    if (this.undoStack.length > 80) this.undoStack.shift();
+    this.redoStack = [];
+    this.setState({ undoN: this.undoStack.length, redoN: 0 });
+  }
+  undo() {
+    if (this.state.dimEdit) return this.dimCancel();
+    if (this.state.featEdit) return this.featureCancel();
+    const s = this.undoStack.pop(); if (!s) return;
+    this.redoStack.push(this.snapshot());
+    this.pushLog('geom', 'undo', 'ok');
+    this.setState({ ...s, undoN: this.undoStack.length, redoN: this.redoStack.length });
+  }
+  redo() {
+    const s = this.redoStack.pop(); if (!s) return;
+    this.undoStack.push(this.snapshot());
+    this.pushLog('geom', 'redo', 'ok');
+    this.setState({ ...s, undoN: this.undoStack.length, redoN: this.redoStack.length });
+  }
+
+  // ---- views ----------------------------------------------------------------
+  saveView() {
+    const t = this.tgt;
+    this.viewStack.push({ yaw: t.yaw, pitch: t.pitch, dist: t.dist, pan: this.tgtPan.slice() });
+    if (this.viewStack.length > 30) this.viewStack.shift();
+  }
+  setView(yaw, pitch, keep) {
+    if (!keep) this.saveView();
+    const t = this.tgt;
+    // take the equivalent yaw nearest the current one, so the camera turns the short way
+    t.yaw = yaw + Math.round((t.yaw - yaw) / (2 * Math.PI)) * 2 * Math.PI;
+    t.pitch = pitch;
+    this.setState({ viewMenu: false, ctxMenu: null });
+  }
+  stdView(i) { const v = STD_VIEWS[i]; this.setView(v[2], v[3]); }
+  zoomFit() {
+    this.saveView();
+    this.tgt.dist = 24; this.tgtPan = [0, 0];
+    this.setState({ viewMenu: false, ctxMenu: null });
+  }
+  prevView() {
+    const v = this.viewStack.pop(); if (!v) return;
+    this.tgt.yaw = v.yaw; this.tgt.pitch = v.pitch; this.tgt.dist = v.dist; this.tgtPan = v.pan;
+    this.setState({ ctxMenu: null });
+  }
+  // look straight at the selected face (camera along its normal)
+  normalTo(id) {
+    const F = CAD_FACES[id || this.state.selCad];
+    if (!F || !F.ax) return;
+    const n = F.ax;
+    this.setView(Math.atan2(-n[0], n[2]), Math.asin(Math.max(-1, Math.min(1, n[1]))));
+  }
+  // which navigation a held mouse does: SolidWorks or CATIA conventions
+  navFor(e) {
+    const b = e.buttons, catia = this.state.mouseMode === 'catia';
+    if (b & 4) {
+      if (catia) return (b & 3) ? 'rotate' : e.ctrlKey ? 'zoom' : 'pan';
+      return e.ctrlKey ? 'pan' : e.shiftKey ? 'zoom' : 'rotate';
+    }
+    if (b & 2) return 'pan';
+    if (b & 1) return e.ctrlKey ? 'pan' : e.shiftKey ? 'zoom' : 'rotate';
+    return null;
+  }
+  zoomAt(x, y, factor) {
+    const t = this.tgt, nd = Math.max(7, Math.min(120, t.dist * factor)), ratio = t.dist / nd;
+    const cx = x - this.w / 2, cy = y - this.h / 2;
+    this.tgtPan = [cx - (cx - this.tgtPan[0]) * ratio, cy - (cy - this.tgtPan[1]) * ratio];
+    t.dist = nd;
+  }
+  // clicked (no drag): select the CAD face under the cursor
+  clickSelect(x, y, additive) {
+    const st = this.state;
+    if (st.stage > 4) { if (st.selCad) this.setState({ selCad: null, ctxBar: null }); return; }   // results: the probe owns clicks
+    const f = this.pickFace(x, y), id = f ? f.cad : null, F = id && CAD_FACES[id];
+    const next = { selCad: id === st.selCad && !additive ? null : id, ctxMenu: null, viewMenu: false,
+      ctxBar: id && id !== st.selCad ? { x: Math.min(this.w - 240, x + 14), y: Math.max(8, y - 44) } : null };
+    if (F && F.feat && st.stage === 1 && !st.featEdit) next.sel = CAD_FEATS[F.feat].row;
+    this.setState(next);
+  }
+  openCtxMenu(x, y) {
+    const st = this.state, f = st.stage <= 4 ? this.pickFace(x, y) : null;
+    const id = f ? f.cad : st.stage <= 4 ? st.selCad : null, F = id && CAD_FACES[id];
+    const row = F && F.feat && st.stage === 1 && !st.featEdit ? { sel: CAD_FEATS[F.feat].row } : {};
+    this.setState({ ctxMenu: { x: Math.max(6, Math.min(this.w - 250, x)), y, cad: id }, selCad: id, ctxBar: null, viewMenu: false, ...row });
+  }
+  ctxItems() {
+    const st = this.state, m = st.ctxMenu; if (!m) return [];
+    const F = m.tree ? null : CAD_FACES[m.cad], feat = m.tree || (F && F.feat), out = [];
+    const it = (label, accel, run, check, title) => out.push({ label, accel: accel || '', run: () => { this.setState({ ctxMenu: null }); run && run(); },
+      fg: run ? '#d3dae1' : '#56616d', check: check ? '✓' : '', isItem: true, isSep: false, isTitle: false });
+    const sep = () => out.push({ isSep: true, isItem: false, isTitle: false });
+    const title = t => out.push({ isTitle: true, isItem: false, isSep: false, label: t });
+    if (F) title(F.name + (F.k ? ' · ' + CAD_DIMS[F.k].ref : ''));
+    if (feat) {
+      if (F && F.k) it('Edit dimension…', 'dbl-click', () => { const a = this.cadInfo[m.cad]; const p = a ? this.proj(a.c) : [m.x, m.y]; this.openDimEdit(F.k, p[0], p[1]); });
+      it('Edit feature — ' + CAD_FEATS[feat].name, '', () => this.editFeature(feat));
+      if (feat === 'fillet') it(st.suppressed.fillet ? 'Unsuppress Fillet1' : 'Suppress Fillet1', '', () => this.toggleSuppress('fillet'));
+      if (F && F.ax) it('Normal to', 'Ctrl+8', () => this.normalTo(m.cad));
+      sep();
+    }
+    it('Zoom to fit', 'F', () => this.zoomFit());
+    it('Previous view', 'Ctrl+Shift+Z', this.viewStack.length ? () => this.prevView() : null);
+    it('View orientation…', 'Space', () => this.setState({ viewMenu: true }));
+    sep();
+    it('Shaded with edges', '', () => this.setState({ shade: 'shaded' }), st.shade === 'shaded');
+    it('Wireframe (hidden lines removed)', '', () => this.setState({ shade: 'wire' }), st.shade === 'wire');
+    it('Nodes', '', () => this.setState({ shade: 'nodes' }), st.shade === 'nodes');
+    it('Section view', '', () => this.setState({ cutOn: !st.cutOn, stage: Math.max(st.stage, 4) }), st.cutOn);
+    it('Reference planes', '', () => this.setState({ planes: !st.planes }), st.planes);
+    sep();
+    it('Undo', 'Ctrl+Z', this.undoStack.length ? () => this.undo() : null);
+    it('Redo', 'Ctrl+Y', this.redoStack.length ? () => this.redo() : null);
+    sep();
+    it('Mouse: SolidWorks', '', () => this.setState({ mouseMode: 'solidworks' }), st.mouseMode !== 'catia');
+    it('Mouse: CATIA', '', () => this.setState({ mouseMode: 'catia' }), st.mouseMode === 'catia');
+    return out;
+  }
+
   setNum(k, v, min, max, dp) {
     const n = { ...this.state.nums };
     n[k] = Math.max(min, Math.min(max, +(+v).toFixed(dp || 0)));
-    if (!isFinite(n[k])) return;
+    if (!isFinite(n[k]) || n[k] === this.state.nums[k]) return;
+    if (!this.inSession) this.pushUndo();               // feature / Modify sessions undo as one step
     this.setState({ nums: n });
   }
   // one editable, unit-aware numeric field
@@ -2389,7 +2970,7 @@ class Component extends DCLogic {
         ['Save Study', 'Ctrl+S', set({ savedAgo: '· saved just now' })], ['Save Study As…', 'Ctrl+Shift+S'], '-',
         ['Export Results (CSV)…', '', () => this.exportCsv()], ['Exit', 'Alt+F4']] },
       { label: 'Edit', ai: 0, items: [
-        ['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Y'], '-',
+        ['Undo', 'Ctrl+Z', this.undoStack.length ? () => this.undo() : null], ['Redo', 'Ctrl+Y', this.redoStack.length ? () => this.redo() : null], '-',
         ['Delete Selected', 'Del'], ['Select All Faces', 'Ctrl+A'], '-', ['Preferences…', 'Ctrl+,']] },
       { label: 'View', ai: 0, items: [
         ['Solver Log', 'Ctrl+L', set({ logOpen: !s.logOpen }), s.logOpen],
@@ -2397,8 +2978,13 @@ class Component extends DCLogic {
         ['AR Mode', 'F9', set({ arOn: !s.arOn }), s.arOn], '-',
         ['Section Cut', '', set({ cutOn: !s.cutOn }), s.cutOn],
         ['Element Edges', '', set({ stage: 4 })],
-        ['Reset Camera', 'Home', () => { this.tgt.dist = 24; this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; }], '-',
-        ['Full Screen', 'F11']] },
+        ['Reset Camera', 'Home', () => { this.zoomFit(); this.setView(-0.62, 0.42, true); }],
+        ['Zoom to Fit', 'F', () => this.zoomFit()], ['Previous View', 'Ctrl+Shift+Z', this.viewStack.length ? () => this.prevView() : null],
+        ['View Orientation…', 'Space', set({ viewMenu: true })], '-'].concat(
+        STD_VIEWS.map((v, i) => [v[0], v[1], () => this.stdView(i)]), ['-',
+        ['Mouse: SolidWorks', '', set({ mouseMode: 'solidworks' }), s.mouseMode !== 'catia'],
+        ['Mouse: CATIA', '', set({ mouseMode: 'catia' }), s.mouseMode === 'catia'], '-',
+        ['Full Screen', 'F11']]) },
       { label: 'Solve', ai: 0, items: [
         ['Generate Mesh', 'F4', set({ stage: 4 })],
         ['Run Solve', 'F5', s.solving ? null : () => this.startSolve()],
@@ -2722,7 +3308,7 @@ class Component extends DCLogic {
     this.setState({ field: list[((i < 0 ? 0 : i) + step + list.length * 4) % list.length] });
   }
   resetView() {
-    this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; this.tgt.dist = 24;
+    this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; this.tgt.dist = 24; this.tgtPan = [0, 0];
     this.setState({ cutOn: false, cutAxis: 'z', cutPlane: null, pick: null });
   }
   liveLabel(h) {
@@ -2911,6 +3497,50 @@ class Component extends DCLogic {
     this.chatDirty = true;
     this.setState({ chat: next, chatInput: '' });
   }
+  cadVals() {
+    const st = this.state, c = this.cv('len'), A = '#5ecfe0';
+    const btn = (label, title, run, on) => ({ label, title, run, fg: on ? '#07171a' : '#a9b4bf', bg: on ? A : 'transparent' });
+    const de = st.dimEdit, sel = st.selCad && CAD_FACES[st.selCad];
+    const vo = STD_VIEWS.map((v, i) => ({ label: v[0], accel: v[1], run: () => this.stdView(i) }))
+      .concat([{ label: 'Normal to', accel: sel && sel.ax ? 'Ctrl+8' : 'select a face', run: () => sel && sel.ax ? this.normalTo() : this.setState({ viewMenu: false }) }]);
+    const barItems = [], ctxItems = this.ctxItems();
+    if (sel && sel.ax) barItems.push({ label: '⟂ Normal to', title: 'Look straight at this face (Ctrl+8)', run: () => { this.normalTo(); this.setState({ ctxBar: null }); } });
+    if (sel && sel.k) barItems.push({ label: '✎ ' + CAD_DIMS[sel.k].name, title: 'Edit the dimension that drives this face',
+      run: () => { const b = st.ctxBar; this.openDimEdit(sel.k, b ? b.x : 200, b ? b.y + 40 : 200); } });
+    if (sel && sel.feat) barItems.push({ label: '⚙ ' + CAD_FEATS[sel.feat].name.split(' ')[0], title: 'Edit feature (PropertyManager)', run: () => this.editFeature(sel.feat) });
+    return {
+      hud: [
+        btn('⤢ Fit', 'Zoom to fit (F, double-middle-click)', () => this.zoomFit()),
+        btn('↶ View', 'Previous view (Ctrl+Shift+Z)', () => this.prevView()),
+        btn('▣ Views', 'View orientation (Space)', () => this.setState({ viewMenu: !st.viewMenu, ctxMenu: null }), st.viewMenu),
+        btn('⟂', 'Normal to the selected face (Ctrl+8)', () => this.normalTo()),
+        btn('◧ Section', 'Section view', () => this.setState({ cutOn: !st.cutOn, stage: Math.max(st.stage, 4) }), st.cutOn),
+        btn(st.shade === 'wire' ? '◫ Wire' : st.shade === 'nodes' ? '⁘ Nodes' : '◼ Shaded', 'Display style (cycles)',
+          () => this.setState({ shade: { shaded: 'wire', wire: 'nodes', nodes: 'shaded' }[st.shade] || 'shaded' })),
+        btn('⊞ Planes', 'Reference planes', () => this.setState({ planes: !st.planes }), st.planes),
+        btn('↶ ' + st.undoN, 'Undo model edit (Ctrl+Z)', () => this.undo()),
+        btn('↷ ' + st.redoN, 'Redo (Ctrl+Y)', () => this.redo())
+      ],
+      vo: { on: !!st.viewMenu, items: vo },
+      ctx: { on: !!st.ctxMenu, x: st.ctxMenu ? st.ctxMenu.x : 0, items: ctxItems,
+        y: st.ctxMenu ? Math.max(6, Math.min(st.ctxMenu.y, (this.h || 800) - 12 - ctxItems.reduce((a, i) => a + (i.isSep ? 9 : i.isTitle ? 22 : 26), 8))) : 0,
+        stop: e => e.preventDefault() },
+      bar: { on: !!(st.ctxBar && barItems.length && !st.dimEdit && !st.ctxMenu), x: st.ctxBar ? st.ctxBar.x : 0, y: st.ctxBar ? st.ctxBar.y : 0, items: barItems },
+      dimBox: { on: !!de, x: de ? de.x : 0, y: de ? de.y : 0, text: de ? de.text : '', unit: c[0],
+        name: de ? CAD_DIMS[de.k].name.toUpperCase() : '', ref2: de ? CAD_DIMS[de.k].ref : '', ref: this.refDim,
+        ok: () => this.dimOk(), cancel: () => this.dimCancel(),
+        inc: () => this.dimSpin(1), dec: () => this.dimSpin(-1),
+        onInput: e => this.dimType(e.target.value),
+        onKey: e => {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); this.dimOk(); }
+          else if (e.key === 'Escape') { e.preventDefault(); this.dimCancel(); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); this.dimSpin(1, e.shiftKey); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); this.dimSpin(-1, e.shiftKey); }
+        } },
+      pm: { on: !!st.featEdit, ok: () => this.featureOk(), cancel: () => this.featureCancel(), right: st.aiOpen ? 460 : 128 }
+    };
+  }
   renderVals() {
     if (!this.mesh) this.syncModel();                    // first paint runs before didMount
     const st = this.state, S = st.stage, N = st.nums, A = '#5ecfe0';
@@ -2938,10 +3568,12 @@ class Component extends DCLogic {
     const q = this.qual;
     const treeDef = [
       ['root', 0, 'bracket_L', '#5ecfe0', '50%', '600 11px/1 IBM Plex Sans', 'L-bracket', 'geo'],
-      ['geo', 1, 'Geometry', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'implicit', 'geo'],
-      ['geo-b', 2, 'Body — extruded profile', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.W * cl[1]) + cl[0], 'geo'],
-      ['geo-w', 2, 'Wall thickness', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.t * cl[1]) + cl[0], 'geo'],
-      ['geo-f', 2, 'Fillet — re-entrant corner', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', 'r' + sig(g.r * cl[1]), 'geo'],
+      ['geo', 1, 'Features', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'history', 'geo'],
+      ['geo-o', 2, 'Origin · Front / Top / Right planes', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', st.planes ? 'shown' : 'hidden', 'geo'],
+      ['geo-s', 2, 'Sketch1 — L-profile', '#5ecfe0', '2px', '400 10.5px/1 IBM Plex Sans', sig(N.gWidth * cl[1]) + '×' + sig(N.gHeight * cl[1]), 'geo'],
+      ['geo-e', 2, 'Boss-Extrude1', '#5ecfe0', '2px', '400 10.5px/1 IBM Plex Sans', 'D ' + sig(N.gDepth * cl[1]), 'geo'],
+      ['geo-f', 2, st.suppressed.fillet ? 'Fillet1 (suppressed)' : 'Fillet1', st.suppressed.fillet ? '#3c4650' : '#5ecfe0', '2px',
+        st.suppressed.fillet ? 'italic 400 10.5px/1 IBM Plex Sans' : '400 10.5px/1 IBM Plex Sans', 'R' + sig(N.gFillet * cl[1]), 'geo'],
       ['mat', 1, 'Materials', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'mat'],
       ['mat-1', 2, mat.name, '#ffa23a', '2px', '400 10.5px/1 IBM Plex Sans', sig(mat.E * this.cv('mod')[1]) + this.cv('mod')[0], 'mat'],
       ['load', 1, 'Interactions', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'load'],
@@ -2958,6 +3590,7 @@ class Component extends DCLogic {
       ['res-rf', 2, 'RF — Reactions', '#a78bfa', '2px', '400 10.5px/1 IBM Plex Sans', R && R.rfMag ? sig(R.rfMag * cf[1]) + cf[0] : '—', 'res']
     ];
     const stageOf = { geo: 1, mat: 2, load: 3, mesh: 4, solve: 5, res: 6 };
+    const featOfRow = { 'geo-s': 'sketch', 'geo-e': 'extrude', 'geo-f': 'fillet' };
     const tree = [];
     let hideBelow = -1;
     treeDef.forEach((t, i) => {
@@ -2977,8 +3610,18 @@ class Component extends DCLogic {
         click: () => {
           const next = { ...st.collapsed };
           if (kids) next[t[0]] = !next[t[0]];
-          this.setState({ sel: t[0], stage: stageOf[t[7]], collapsed: next });
+          const extra = t[0] === 'geo-o' ? { planes: !st.planes } : {};
+          this.setState({ sel: t[0], stage: stageOf[t[7]], collapsed: next, selCad: null, ctxBar: null, ...extra });
         },
+        dbl: () => { if (featOfRow[t[0]]) this.editFeature(featOfRow[t[0]]); },
+        ctx: e => {
+          e.preventDefault();
+          const f = featOfRow[t[0]];
+          if (!f) return;
+          const vr = this.viewport ? this.viewport.getBoundingClientRect() : { left: 0, top: 0 };
+          this.setState({ sel: t[0], stage: 1, ctxMenu: { x: 8, y: Math.max(8, e.clientY - vr.top), tree: f }, viewMenu: false });
+        },
+        tip: featOfRow[t[0]] ? 'Double-click to edit · right-click for options' : '',
         toggle: e => {
           e.stopPropagation();
           if (!kids) return;
@@ -3028,7 +3671,7 @@ class Component extends DCLogic {
       const MOD = this.cv('mod'), DENS = this.cv('dens');
       return { name: m.name, swatch: m.sw, tag: on ? 'ASSIGNED' : '', tagFg: A,
         spec: 'E ' + sig(m.E * MOD[1]) + ' ' + MOD[0] + ' · ν ' + m.nu + ' · ρ ' + sig(m.rho * DENS[1]) + ' ' + DENS[0],
-        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#aeb9c4', click: () => this.setState({ material: m.id }) };
+        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#aeb9c4', click: () => { if (st.material !== m.id) this.pushUndo(); this.setState({ material: m.id }); } };
     });
 
     const bcs = [
@@ -3042,7 +3685,7 @@ class Component extends DCLogic {
         valFg: on ? b[5] : '#4d5866', iconFg: on ? b[5] : '#5b6672', iconBg: on ? b[6] : '#161b21',
         bg: on ? 'rgba(94,207,224,.07)' : '#13181e', bd: on ? 'rgba(94,207,224,.3)' : '#222a33',
         fg: on ? '#c3ccd6' : '#6c7784',
-        click: () => this.setState({ bcOn: { ...st.bcOn, [b[0]]: !on } }) };
+        click: () => { this.pushUndo(); this.setState({ bcOn: { ...st.bcOn, [b[0]]: !on } }); } };
     });
 
     const meshQuality = q ? [
@@ -3249,17 +3892,23 @@ class Component extends DCLogic {
       engineNote, engineNoteFg: st.engine === 'local' ? '#4d5866' : live ? '#6f8f7a' : '#8a7c5c',
       leftW: st.focus ? 0 : st.leftW, rightW: st.focus ? 0 : st.rightW,
       viewportRef: this.refViewport, canvasRef: this.refCanvas,
-      vpCursor: st.vpDown ? 'grabbing' : 'grab',
       dragLeft: e => this.startDrag(e, 'leftW', 1),
       dragRight: e => this.startDrag(e, 'rightW', -1),
       viewPresets,
       vpLine1: 'bracket_L · ' + grp(M.ne) + ' hex8 · ' + grp(M.nn * 3) + ' DOF',
-      vpLine2: st.stage === 4 ? 'HEX8 · size ' + sig(M.dx * cl[1]) + ' ' + cl[0]
-        + ' · ' + M.nx + '×' + M.ny + '×' + M.nz + ' core' : 'units ' + UNITS[st.units].label,
+      vpLine2: st.selCad && CAD_FACES[st.selCad] ? 'selected: ' + CAD_FACES[st.selCad].name
+          + (CAD_FACES[st.selCad].k ? ' → ' + CAD_DIMS[CAD_FACES[st.selCad].k].name + ' ' + sig(N[CAD_FACES[st.selCad].k] * cl[1]) + ' ' + cl[0] : '')
+        : st.stage === 4 ? 'HEX8 · size ' + sig(M.dx * cl[1]) + ' ' + cl[0]
+        + ' · ' + M.nx + '×' + M.ny + '×' + M.nz + ' core'
+        : st.stage === 1 ? 'units ' + UNITS[st.units].label + ' · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms'
+        : 'units ' + UNITS[st.units].label,
       vpLine3: st.solving ? 'solving — ' + (this.prog.note || PIPE[(st.solveStep || 1) - 1])
         : st.modal && modeInfo ? 'mode ' + st.mode + ' · ' + sig(modeInfo.hz) + ' Hz'
         : showResults ? F.label + ' · warp ×' + st.deform
-        : stale ? 'inputs changed — re-solve for results' : 'drag to orbit · scroll to zoom',
+        : stale ? 'inputs changed — re-solve for results'
+        : S === 1 ? 'click a face · drag its arrow · click a dimension to edit · right-click for more'
+        : st.mouseMode === 'catia' ? 'middle: pan · middle+left: rotate · Ctrl+middle: zoom · wheel: zoom at cursor'
+        : 'drag / middle: rotate · right or Ctrl+middle: pan · wheel: zoom at cursor · F fit · Space views',
       vpLine3Fg: st.solving ? A : stale ? '#e6c98a' : showResults ? '#7fd8e6' : '#4a5561',
       gest: { on: st.gestureOn, bg: st.gestureOn ? 'rgba(94,207,224,.12)' : '#161a1f',
         bd: st.gestureOn ? 'rgba(94,207,224,.45)' : '#242b33', fg: st.gestureOn ? '#dff3f7' : '#8b96a2',
@@ -3293,7 +3942,14 @@ class Component extends DCLogic {
         max: st.modal ? '1.00' : sig(F.max) + ' ' + F.unit,
         maxLoc: st.modal && modeInfo ? sig(modeInfo.hz) + ' Hz' : F.loc },
       probe: st.probe ? { on: true, ...st.probe } : { on: false, x: 0, y: 0, l1: '', l2: '', l3: '' },
-      panel: panels[S],
+      panel: st.featEdit && S === 1 ? {
+        title: CAD_FEATS[st.featEdit.id].name,
+        sub: 'PropertyManager · live preview · ✓ Enter · ✕ Esc',
+        sections: [{ title: { sketch: 'PROFILE (L)', extrude: 'DIRECTION 1 · BLIND', fillet: 'FILLET PARAMETERS · CONSTANT RADIUS' }[st.featEdit.id],
+          params: { sketch: [this.p('gWidth', 'Width D1', '@len', 5, 20, 600, 0), this.p('gHeight', 'Height D2', '@len', 5, 20, 800, 0), this.p('gThk', 'Wall D3', '@len', 1, 2, 200, 0)],
+                    extrude: [this.p('gDepth', 'Depth D1', '@len', 5, 10, 400, 0)],
+                    fillet: [this.p('gFillet', 'Radius D1', '@len', 1, 0, 120, 0)] }[st.featEdit.id] }] } : panels[S],
+      ...this.cadVals(),
       isMat: S === 2, isLoad: S === 3, isMesh: S === 4, isSolve: S === 5, isRes: S === 6,
       materials, bcs, meshQuality, outputs, fields,
       shadeOpts, viewToggles,
