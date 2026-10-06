@@ -60,6 +60,12 @@ def workbench_support():
     return FileResponse(WORKBENCH / "support.js", media_type="application/javascript")
 
 
+@app.get("/workbench/cadkernel.js")
+def workbench_cadkernel():
+    """The Workbench's CAD kernel (feature-based solid modelling), next to the page as on disk."""
+    return FileResponse(WORKBENCH / "cadkernel.js", media_type="application/javascript")
+
+
 # ---- VR / AR ---------------------------------------------------------------
 # The most recently solved model, shared with /xr (a headset opens that page
 # separately, so it can't use the editing session's WebSocket).

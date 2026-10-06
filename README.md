@@ -59,9 +59,15 @@ make demo        # then open port 8000 at /workbench/ and press G
 `/workbench/?tour` runs a camera-free gesture tour. The vocabulary and the
 reasons for it are in [`Archimedes/docs/gestures.md`](Archimedes/docs/gestures.md).
 
-Modelling in the Workbench feels like SolidWorks or CATIA: a feature tree (Sketch1, Boss-Extrude1, Fillet1) with a
-PropertyManager (✓ / ✕), face pre-highlight and selection, Instant3D drag arrows, on-model dimensions with a Modify
-box, a right-click menu, standard views (Space), pan and zoom at the cursor in either mouse style, and undo / redo.
+The Workbench models and analyses any part, the way SolidWorks or CATIA do. It has:
+
+- a feature tree: sketches with fillets and holes, extrude and revolve (boss or cut), box, cylinder, sphere, hole,
+  linear and circular patterns, mirror, and imported STL bodies;
+- a PropertyManager (✓ / ✕) for every feature, a sketcher, and Instant3D drag arrows and a Modify box on any face;
+- supports and loads on any picked faces (fixed, roller, force, pressure, gravity, temperature);
+- a material library plus a custom material, templates, open / save, and STL import and export;
+- standard views, pan and zoom at the cursor (SolidWorks or CATIA buttons), and undo / redo.
+
 See [`Archimedes/docs/cad-workflow.md`](Archimedes/docs/cad-workflow.md).
 In the Workbench, thumbs-up held still for 1.2 s runs the solve instead of
 taking a snapshot.
@@ -115,8 +121,9 @@ archimedes_gestures/   landmarks, features, classifier, intent engine, modelling
 archimedes_fe/         member model, brick FE solver (static + modal), demos, model session, GLB export,
                        scripting (Python console commands, journal)
 fe_scripts/            example console scripts and a helper module
+Archimedes/            Workbench page, cadkernel.js (feature-based CAD kernel), DOLFINx backend, docs
 webdemo/               FastAPI + WebSocket server, workbench page (MediaPipe WASM + three.js), /xr WebXR viewer
 apps/desktop_demo.py   OpenCV/MediaPipe desktop app, optional PyVista window
 scripts/               train_static.py, extract_hagrid.py, evaluate_filter.py
-tests/                 67 tests, no camera or GPU needed:  make test
+tests/                 69 tests (+ 8 CAD-kernel tests in Node), no camera or GPU needed:  make test
 ```
