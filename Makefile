@@ -1,7 +1,10 @@
-.PHONY: demo test lint train train-smoke filter-smoke
+.PHONY: demo console test lint train train-smoke filter-smoke
 
 demo:            ## browser demo - open the forwarded port 8000
 	python -m uvicorn webdemo.server:app --host 0.0.0.0 --port 8000
+
+console:         ## Python console without the browser (scripts: python -m archimedes_fe.scripting file.py)
+	python -m archimedes_fe.scripting
 
 test:
 	python -m pytest -q

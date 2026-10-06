@@ -4,6 +4,7 @@
 // positions onto the member.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { createConsole } from "/static/console.js";
 
 const $ = (id) => document.getElementById(id);
 const HAND_EDGES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
@@ -632,8 +633,9 @@ function onMessage(m) {
       S.busy = false; $("busy").classList.add("hidden");
       fe = decodeResults(m); S.solved = true; pinCache.clear();
       renderFieldSelect(); rebuildFE(); renderPanels(); renderLegend(); syncVisibility(); return;
-    case "model": onModel(m); return;
+    case "model": onModel(m); pyConsole.onJournal(m.journal); return;
     case "view": S.view = m.view; onView(); return;
+    case "console_out": pyConsole.onOutput(m); return;
   }
   if (m.type !== "state") return;
   inflight = Math.max(0, inflight - 1);
@@ -868,6 +870,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "s") command("snapshot");
   else if (k === "c") calibrate();
   else if (k === "d") startTour();
+  else if (k === "`") { e.preventDefault(); pyConsole.open(); }
   else if (k === "escape") { S.tool = null; S.toolT0 = null; renderTabs(); send({ type: "calibrate_cancel" }); $("calib").classList.add("hidden"); send({ type: "demo_stop" }); }
 });
 function calibrate() { if (!landmarker) { toast("Enable the camera first", true); return; } send({ type: "calibrate", with_poses: true }); }
@@ -921,6 +924,7 @@ function loop() {
 resize();
 S.view = { azimuth: -60, elevation: 22, distance: 1, focal_point: [0, 0, 0], section_on: false, plane_origin: [0, 0, 0], plane_normal: [1, 0, 0],
   field_name: "von_mises", probe_cursor: null, probe_pins: [], snapshots: 0 };
-window.__archimedes = { S, resolveCommand, screenToT, onView };   // for automated UI tests
+const pyConsole = createConsole(send);
+window.__archimedes = { S, resolveCommand, screenToT, onView, pyConsole };   // for automated UI tests
 connect();
 loop();

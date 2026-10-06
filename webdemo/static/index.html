@@ -126,6 +126,22 @@
       <div class="row"><button id="prompt-ok" class="primary">OK</button><button id="prompt-cancel">Cancel</button></div>
     </div>
 
+    <button id="btn-console" title="Python console ( ` )">🐍 Python</button>
+    <!-- Python console: commands for modelling, loads, supports, solving and scripts -->
+    <div id="console" class="hidden">
+      <div id="con-bar">
+        <b>🐍 Python console</b><span class="muted small">help() · Tab completes · ↑↓ history · Esc closes</span>
+        <span class="grow"></span>
+        <button id="con-import" title="Run a .py file (it can call every console command)">Import script…</button>
+        <input type="file" id="con-file" accept=".py,.txt" multiple hidden>
+        <button id="con-journal" title="Download everything done this session as a runnable script">Save journal</button>
+        <button id="con-clear">Clear</button>
+        <button id="con-close" title="Close (Esc)">×</button>
+      </div>
+      <pre id="con-out"></pre>
+      <div id="con-row"><span id="con-ps">&gt;&gt;&gt;</span><input id="con-in" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Python input"></div>
+    </div>
+
     <div id="start" class="overlay">
       <div class="card">
         <h1>Archimedes · gesture FE workbench</h1>
@@ -200,6 +216,7 @@
         <li><b>Drag</b> rotate · <b>Wheel</b> zoom · <b>Hover</b> probe · <b>Click</b> pin / place tool</li>
         <li><b>M</b> model · <b>L</b> loads · <b>V</b> results · <b>Ctrl+Enter</b> solve</li>
         <li><b>X</b> remove cut · <b>S</b> snapshot · <b>U</b> undo view · <b>R</b> reset · <b>C</b> calibrate</li>
+        <li><b>`</b> Python console (modelling commands, scripts)</li>
         <li>View cube (top right): click a face for that view</li>
       </ul>
     </details>

@@ -22,7 +22,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from archimedes_fe import scripting
 from archimedes_fe.export import to_glb
+from archimedes_fe.scripting import Console
 from archimedes_fe.session import ModelSession
 from archimedes_gestures import synthetic
 from archimedes_gestures.landmarks import FrameInput
@@ -142,15 +144,51 @@ async def send_model(ws: WebSocket, pipe: GesturePipeline, session: ModelSession
 async def run_solve(ws: WebSocket, pipe: GesturePipeline, session: ModelSession) -> None:
     await send(ws, {"type": "solving"})
     res = await asyncio.get_running_loop().run_in_executor(None, session.solve)
+    await publish(ws, pipe, session, res)
+
+
+async def publish(ws: WebSocket, pipe: GesturePipeline, session: ModelSession, res, keep_view: bool = False) -> None:
+    """Send fresh results (from a gesture, the mouse or the console) to the page and /xr."""
     if res is not None:
         payload = res.payload()
         pipe.view.fields = payload["field_order"]
-        pipe.view.field_index = 0
+        if not keep_view:  # a script's show() after its solve() wins
+            pipe.view.field_index = 0
         SCENE["results"] = res
         SCENE["version"] += 1
         await send(ws, {"type": "results", **payload, "model": session.model.to_dict()})
         await send(ws, {"type": "view", "view": pipe.view.to_dict()})  # field list changed: back to the first
     await send_model(ws, pipe, session)
+
+
+def console_for(session: ModelSession, pipe: GesturePipeline) -> Console:
+    con = getattr(session, "console", None)
+    if con is None:
+        con = session.console = Console(session)
+    con.cmd.view = pipe.view  # the page that is connected now
+    return con
+
+
+async def run_console(ws, pipe, session, msg) -> None:
+    """A console line or an imported script; runs off the event loop (solve() can take seconds)."""
+    if not scripting.ENABLED:
+        await send(ws, {"type": "console_out", "output": "The console is off (server started with ARCHIMEDES_CONSOLE=0).\n",
+                        "error": True, "more": False})
+        return
+    con = console_for(session, pipe)
+    loop = asyncio.get_running_loop()
+    if msg["type"] == "console_script":
+        r = await loop.run_in_executor(None, con.run_script, msg.get("name") or "script.py", msg.get("code", ""))
+        r["more"] = False
+    else:
+        r = await loop.run_in_executor(None, con.push, msg.get("line", ""))
+    await send(ws, {"type": "console_out", "output": r["output"], "error": r["error"], "more": r["more"]})
+    if r["solved"]:
+        await publish(ws, pipe, session, session.results, keep_view=r["view"])
+    elif r["changed"]:
+        await send_model(ws, pipe, session)
+    if r["view"]:
+        await send(ws, {"type": "view", "view": pipe.view.to_dict()})
 
 
 async def handle_gesture_commands(ws, pipe, session, cmds) -> None:
@@ -224,6 +262,10 @@ async def ws_endpoint(ws: WebSocket):
             elif kind == "command":  # mouse / keyboard fallback for the view
                 pipe.command(msg["kind"], **msg.get("data", {}))
                 await send(ws, {"type": "view", "view": pipe.view.to_dict()})
+            elif session is not None and kind in ("console", "console_script"):
+                await run_console(ws, pipe, session, msg)
+            elif session is not None and kind == "console_reset":
+                console_for(session, pipe).reset_input()
             elif session is not None and kind in ("model_action", "number", "prompt_cancel", "set_axis", "set_phase",
                                                   "load_demo", "solve", "undo_model", "clear"):
                 if kind == "model_action":

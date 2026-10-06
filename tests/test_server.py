@@ -118,3 +118,30 @@ def test_model_survives_a_trip_to_the_workbench(client):
         assert res["model"]["name"].startswith("Short column")
     with client.websocket_connect("/ws?cid=other") as ws:  # another browser gets its own
         assert recv(ws, "results")["model"]["name"].startswith("Cantilever")
+
+
+def test_console_over_the_websocket(client):
+    with client.websocket_connect("/ws?cid=console-test") as ws:
+        recv(ws, "model")
+        ws.send_text(json.dumps({"type": "console", "line": "beam(b=200, h=400, L=5000); fixed(at=0); point(8)"}))
+        out = recv(ws, "console_out")
+        assert not out["error"] and "Point 8 kN" in out["output"]
+        m = recv(ws, "model")
+        assert m["model"]["member"]["length"] == 5000 and m["journal"][-1]["cmd"] == "point(8, at=1, dir='-z')"
+        ws.send_text(json.dumps({"type": "console", "line": "solve(); show('U3')"}))
+        assert not recv(ws, "console_out")["error"]
+        res = recv(ws, "results")
+        assert res["model"]["member"]["length"] == 5000
+        assert recv(ws, "view")["view"]["field_name"] == "U3"
+        ws.send_text(json.dumps({"type": "console_script", "name": "s.py", "code": "clear('loads')\nprint(len(model.loads))"}))
+        out = recv(ws, "console_out")
+        assert out["output"].strip() == "0"
+
+
+def test_console_can_be_switched_off(client, monkeypatch):
+    monkeypatch.setattr(server.scripting, "ENABLED", False)
+    with client.websocket_connect("/ws?cid=off") as ws:
+        recv(ws, "model")
+        ws.send_text(json.dumps({"type": "console", "line": "import os"}))
+        out = recv(ws, "console_out")
+        assert out["error"] and "ARCHIMEDES_CONSOLE=0" in out["output"]

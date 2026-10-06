@@ -42,6 +42,11 @@ Demos: continuous beam, cantilever, long column and short column. The solver (`a
 incompatible-mode brick solver checked against beam theory. **VR/AR**: `/xr` (WebXR) and `/api/scene.glb`.
 Details are in [`docs/MODELING.md`](docs/MODELING.md).
 
+**Python console** (🐍 Python, or the ` key): Abaqus-style commands for everything above, such as
+`beam(b=300, h=500, L=6000); pinned(at=0); roller(at=1); uniform(10); solve(); peak('U3')`. It also runs your own
+scripts (*Import script…*, `run('file.py')`, `import` from `fe_scripts/`) and journals every gesture and mouse edit as
+a replayable command. See [`docs/SCRIPTING.md`](docs/SCRIPTING.md).
+
 ## Archimedes Workbench with live gestures
 
 The Workbench (`Archimedes/`, FE pre/post-processor with a DOLFINx backend) is
@@ -102,9 +107,11 @@ pipeline works before you have data. Don't report those numbers.
 archimedes_gestures/   landmarks, features, classifier, intent engine, modelling engine, finger-count numbers,
                        filters, quality, calibration, view_state, recorder, tracker (MediaPipe), pyvista_bridge,
                        synthetic hand model
-archimedes_fe/         member model, brick FE solver (static + modal), demos, model session, GLB export
+archimedes_fe/         member model, brick FE solver (static + modal), demos, model session, GLB export,
+                       scripting (Python console commands, journal)
+fe_scripts/            example console scripts and a helper module
 webdemo/               FastAPI + WebSocket server, workbench page (MediaPipe WASM + three.js), /xr WebXR viewer
 apps/desktop_demo.py   OpenCV/MediaPipe desktop app, optional PyVista window
 scripts/               train_static.py, extract_hagrid.py, evaluate_filter.py
-tests/                 52 tests, no camera or GPU needed:  make test
+tests/                 67 tests, no camera or GPU needed:  make test
 ```

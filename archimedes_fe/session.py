@@ -62,6 +62,16 @@ class Action:
         return None
 
 
+def load_command(ld: Load) -> str:
+    """The console command that adds this load."""
+    d = ("+" if ld.sign > 0 else "-") + ld.axis
+    if ld.kind == "point":
+        return f"point({ld.w0:g}, at={ld.t0:g}, dir={d!r})"
+    if ld.kind == "uniform":
+        return f"uniform({ld.w0:g}, start={ld.t0:g}, end={ld.t1:g}, dir={d!r})"
+    return f"trapezoidal({ld.w0:g}, {ld.w1:g}, start={ld.t0:g}, end={ld.t1:g}, dir={d!r})"
+
+
 def snap_t(t: float, ends: float = 0.06) -> float:
     """Snap positions near the ends onto them; supports and tip loads usually belong there."""
     t = min(1.0, max(0.0, float(t)))
@@ -84,6 +94,16 @@ class ModelSession:
         self.version = 0
         self.settings = {k: v[2][v[3]] for k, v in INCREMENTS.items()}
         self.setup_done = False
+        # Every change as the Python command that repeats it, like an Abaqus .rpy
+        # replay file: gestures, mouse and console alike. Saved, it runs as a script.
+        self.journal: list[dict] = []
+        self.source = "gui"  # who is editing: "gui" (gestures, mouse) or "console"
+        self._log(f"demo({demo!r})")
+
+    def _log(self, cmd: str) -> None:
+        self.journal.append({"n": self.journal[-1]["n"] + 1 if self.journal else 1,
+                             "cmd": cmd, "src": self.source})
+        del self.journal[:-500]
 
     # ---- state -----------------------------------------------------------
     @property
@@ -102,7 +122,8 @@ class ModelSession:
     def state(self) -> dict:
         return {"phase": self.phase, "prompt": self.prompt, "model": self.model.to_dict(),
                 "solved": self.results is not None, "error": self.error, "message": self.message,
-                "version": self.version, "settings": self.settings, "setup_done": self.setup_done}
+                "version": self.version, "settings": self.settings, "setup_done": self.setup_done,
+                "journal": self.journal[-200:]}
 
     def snap(self, kind: str | None, v: float) -> float:
         inc = self.settings.get(kind) if kind else None
@@ -190,6 +211,7 @@ class ModelSession:
             self.settings[kind] = INCREMENTS[kind][2][int(v)]
             if all(f"inc_{k}" in a.answers for k in INCREMENTS):
                 self.setup_done = True
+                self._log("increments(" + ", ".join(f"{k}={v:g}" for k, v in self.settings.items()) + ")")
         if a.prompt is None:
             self.action = None
             self._apply(a)
@@ -213,6 +235,7 @@ class ModelSession:
                       m.material)
             self.model = m
             self.phase = "loads"
+            self._log(f"{'column' if vertical else 'beam'}(b={ans['b']:g}, h={ans['h']:g}, L={ans['L']:g})")
             self._changed(f"Created {m.member.section.label()} × {ans['L']:g} mm. Now add supports and loads.")
             return
         if a.op == "new_circle":
@@ -221,10 +244,12 @@ class ModelSession:
                                Member(Section("circle", d=ans["d"]), ans["L"], "vertical" if vertical else "horizontal"),
                                m.material)
             self.phase = "loads"
+            self._log(f"{'round_column' if vertical else 'round_beam'}(d={ans['d']:g}, L={ans['L']:g})")
             self._changed(f"Created Ø{ans['d']:g} × {ans['L']:g} mm. Now add supports and loads.")
             return
         if a.op == "material":
             m.material = CONCRETE if int(ans["m"]) == 1 else STEEL
+            self._log(f"material({'concrete' if int(ans['m']) == 1 else 'steel'!r})")
             self._changed(f"Material: {m.material.name}")
             return
         if a.op.startswith("support_"):
@@ -233,6 +258,7 @@ class ModelSession:
             m.supports = [s for s in m.supports if abs(s.t - t) > 0.02]  # replace a support at the same spot
             m.supports.append(Support(kind, t))
             m.supports.sort(key=lambda s: s.t)
+            self._log(f"{kind}(at={t:g})")
             self._changed(f"{kind.capitalize()} support at t = {t:g}")
             return
         axis, sign = d.get("axis", "z"), int(d.get("sign", -1))
@@ -247,6 +273,7 @@ class ModelSession:
             if t1 < t0:
                 t0, t1, w0, w1 = t1, t0, w1, w0
             m.loads.append(Load("trapezoidal", axis, sign, t0, w0, t1, w1))
+        self._log(load_command(m.loads[-1]))
         self._changed(f"Added {m.loads[-1].label()}")
 
     # ---- other edits -------------------------------------------------------------
@@ -254,6 +281,7 @@ class ModelSession:
         self._push()
         self.model = DEMOS[name]()
         self.action = None
+        self._log(f"demo({name!r})")
         self._changed(f"Loaded demo: {self.model.name}")
 
     def clear(self, what: str) -> None:
@@ -262,15 +290,18 @@ class ModelSession:
             self.model.loads = []
         if what in ("supports", "all"):
             self.model.supports = []
+        self._log(f"clear({what!r})")
         self._changed(f"Cleared {what}")
 
     def undo(self) -> None:
         if self.history:
             self.model = self.history.pop()
             self.action = None
+            self._log("undo()")
             self._changed("Undone")
 
     def solve(self) -> Results | None:
+        self._log("solve()")
         try:
             self.results = solve(self.model)
         except SolveError as exc:

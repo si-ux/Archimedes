@@ -2,6 +2,8 @@
 
 The browser workbench (`make demo` → port 8000) has three phases, shown as tabs at the top of the viewport.
 Gestures mean different things in each phase. Mouse and keyboard always work as well.
+Every action also has a Python command: open the **🐍 Python** console (the ` key) and see
+[SCRIPTING.md](SCRIPTING.md) for the commands, custom scripts and the replay journal.
 
 | Phase | What you do | Gestures |
 |---|---|---|
