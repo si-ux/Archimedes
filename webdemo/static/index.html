@@ -10,6 +10,11 @@
 <div id="app">
   <!-- LEFT: legend, discretisation, model, loads -->
   <aside id="left">
+    <nav id="nav">
+      <a class="btn on" href="/" title="Gesture modeller (this page)">Modeller</a>
+      <a class="btn" href="/workbench/" target="archimedes-workbench" title="Opens in its own tab, so both keep their state">Workbench ↗</a>
+      <a class="btn" href="/xr" target="archimedes-xr">VR/AR ↗</a>
+    </nav>
     <section>
       <h3>Demos</h3>
       <div class="grid2">
@@ -115,7 +120,9 @@
       <div class="bar"><div id="prompt-bar"></div></div>
       <div id="prompt-choices" class="small"></div>
       <div id="prompt-axes" class="row wrap"></div>
-      <div class="small muted" id="prompt-help">Hold up fingers for each digit · 🙌 both palms or Enter = OK · swipe left = delete · two fists or Esc = cancel</div>
+      <div id="prompt-accept">✅ <b>To accept:</b> show <b>🙌 both open palms</b> and hold ~1 s (the bar turns green) — or press <b>Enter</b>.
+        With nothing typed, this accepts the default.</div>
+      <div class="small muted" id="prompt-help">Digits: hold up 0–5 fingers (two hands for 6–9) · <span id="prompt-inc"></span>delete: swipe left · cancel: two fists or Esc</div>
       <div class="row"><button id="prompt-ok" class="primary">OK</button><button id="prompt-cancel">Cancel</button></div>
     </div>
 

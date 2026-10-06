@@ -139,3 +139,10 @@ table.kv tr.em td:last-child { color: var(--arming); font-weight: 600; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; max-width: 520px; }
 .bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 10px 0; }
 #calib-bar, #prompt-bar { height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+#prompt-accept { margin: 8px 0 4px; padding: 6px 8px; border-radius: 8px; background: rgba(62,207,142,.12);
+  border: 1px solid rgba(62,207,142,.4); font-size: 13px; }
+#prompt-choices div { cursor: pointer; border-radius: 6px; padding: 3px 6px; }
+#prompt-choices div:hover { background: rgba(77,163,255,.15); }
+#nav { display: flex; gap: 4px; margin-bottom: 4px; }
+#nav a { flex: 1; text-align: center; font-size: 12px; padding: 5px 4px; white-space: nowrap; }
+#nav a.on { background: var(--accent); border-color: var(--accent); color: #fff; }

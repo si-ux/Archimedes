@@ -62,6 +62,8 @@ def workbench_support():
 # The most recently solved model, shared with /xr (a headset opens that page
 # separately, so it can't use the editing session's WebSocket).
 SCENE: dict = {"results": None, "version": 0}
+# modeller sessions by browser id, so the model survives a trip to the Workbench page
+SESSIONS: dict[str, ModelSession] = {}
 
 
 @app.get("/xr")
@@ -131,6 +133,7 @@ async def send(ws: WebSocket, obj: dict) -> None:
 
 async def send_model(ws: WebSocket, pipe: GesturePipeline, session: ModelSession) -> None:
     pipe.set_prompt(session.prompt)
+    pipe.modeling.m.length_step = session.settings["length"]
     if pipe.phase != session.phase:
         pipe.set_phase(session.phase)
     await send(ws, {"type": "model", **session.state()})
@@ -179,9 +182,23 @@ async def ws_endpoint(ws: WebSocket):
     profile = ws.query_params.get("profile", "viewer")
     pipe = new_pipeline(profile)
     await send(ws, {"type": "info", **pipe.info()})
-    session = ModelSession() if profile != "workbench" else None
-    if session is not None:
-        await run_solve(ws, pipe, session)  # open on a solved demo
+    session = None
+    if profile != "workbench":
+        cid = ws.query_params.get("cid") or "anon"
+        session = SESSIONS.get(cid)
+        if session is None:
+            session = SESSIONS[cid] = ModelSession()
+            if len(SESSIONS) > 64:  # keep memory bounded
+                SESSIONS.pop(next(iter(SESSIONS)))
+            await run_solve(ws, pipe, session)  # a first visit opens on a solved demo
+        elif session.results is not None:  # coming back: show the same model and results, no re-solve
+            payload = session.results.payload()
+            pipe.view.fields = payload["field_order"]
+            await send(ws, {"type": "results", **payload, "model": session.model.to_dict()})
+            await send(ws, {"type": "view", "view": pipe.view.to_dict()})
+            await send_model(ws, pipe, session)
+        else:
+            await send_model(ws, pipe, session)
     tour_stop = asyncio.Event()
     tour_task: asyncio.Task | None = None
     try:

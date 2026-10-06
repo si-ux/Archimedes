@@ -25,10 +25,26 @@ class Prompt:
     default: float | None = None
     choices: dict[int, str] | None = None  # finger count -> option label
     minimum: float = 0.0
+    kind: str | None = None  # "length" | "section" | "load": which increment the value snaps to
 
     def to_dict(self) -> dict:
         return {"key": self.key, "label": self.label, "unit": self.unit, "default": self.default,
-                "choices": self.choices}
+                "choices": self.choices, "kind": self.kind}
+
+
+# Modelling increments, chosen before sketching (finger count -> step). Every value
+# entered for that kind snaps to the step, and a pinch nudges it one step at a time.
+INCREMENTS = {
+    "length": ("Length increment", "mm", {1: 10.0, 2: 50.0, 3: 100.0, 4: 250.0, 5: 500.0}, 3),
+    "section": ("Section increment", "mm", {1: 5.0, 2: 10.0, 3: 25.0, 4: 50.0, 5: 100.0}, 3),
+    "load": ("Load increment", "kN", {1: 0.5, 2: 1.0, 3: 5.0, 4: 10.0, 5: 50.0}, 2),
+}
+
+
+def increment_prompts() -> list["Prompt"]:
+    return [Prompt(f"inc_{k}", label, "", default,
+                   choices={n: f"{v:g} {unit}" for n, v in steps.items()})
+            for k, (label, unit, steps, default) in INCREMENTS.items()]
 
 
 @dataclass
@@ -66,6 +82,8 @@ class ModelSession:
         self.message: str | None = None
         self.history: list[Model] = []
         self.version = 0
+        self.settings = {k: v[2][v[3]] for k, v in INCREMENTS.items()}
+        self.setup_done = False
 
     # ---- state -----------------------------------------------------------
     @property
@@ -77,13 +95,18 @@ class ModelSession:
             d["sign"] = self.action.data.get("sign")
             d["step"] = len(self.action.answers) + 1
             d["steps"] = len(self.action.prompts)
+            d["increment"] = self.settings.get(d["kind"]) if d["kind"] else None
             return d
         return None
 
     def state(self) -> dict:
         return {"phase": self.phase, "prompt": self.prompt, "model": self.model.to_dict(),
                 "solved": self.results is not None, "error": self.error, "message": self.message,
-                "version": self.version}
+                "version": self.version, "settings": self.settings, "setup_done": self.setup_done}
+
+    def snap(self, kind: str | None, v: float) -> float:
+        inc = self.settings.get(kind) if kind else None
+        return round(round(v / inc) * inc, 6) if inc else v
 
     def _changed(self, msg: str | None = None) -> None:
         self.version += 1
@@ -98,36 +121,44 @@ class ModelSession:
     def set_phase(self, phase: str) -> None:
         if phase in PHASES and (phase != "results" or self.results is not None):
             self.phase = phase
+            if phase == "model" and not self.setup_done and self.action is None:
+                self.begin("setup")  # choose increments before sketching by hand
 
     # ---- starting actions ------------------------------------------------------
     def begin(self, op: str, **data) -> None:
         """Start an action. Positions (t) and directions must already be resolved."""
         self.error = None
         P = Prompt
-        if op == "new_rect":
+        if op == "setup":
+            prompts = increment_prompts()
+        elif op == "new_rect":
             est = data.get("length_est")
             vertical = data.get("orientation") == "vertical"
-            prompts = [P("b", "Width b", "mm", 300.0, minimum=20), P("h", "Height h", "mm", 300.0 if vertical else 500.0, minimum=20),
-                       P("L", "Length L" if not vertical else "Height of column L", "mm", est or (3000.0 if vertical else 4000.0),
-                         minimum=200)]
+            prompts = [P("b", "Width b", "mm", 300.0, minimum=20, kind="section"),
+                       P("h", "Height h", "mm", 300.0 if vertical else 500.0, minimum=20, kind="section"),
+                       P("L", "Length L" if not vertical else "Height of column L", "mm",
+                         est or (3000.0 if vertical else 4000.0), minimum=200, kind="length")]
         elif op == "new_circle":
             prompts = [P("orientation", "Column or beam?", "", 1, choices={1: "column (vertical)", 2: "beam (horizontal)"}),
-                       P("d", "Diameter", "mm", 300.0, minimum=20), P("L", "Depth (length)", "mm", 3000.0, minimum=200)]
+                       P("d", "Diameter", "mm", 300.0, minimum=20, kind="section"),
+                       P("L", "Depth (length)", "mm", 3000.0, minimum=200, kind="length")]
         elif op in ("support_fixed", "support_pinned", "support_roller"):
             self._apply(Action(op, data))
             return
         elif op == "point_load":
-            prompts = [P("w0", "Point load", "kN", 10.0)]
+            prompts = [P("w0", "Point load", "kN", 10.0, kind="load")]
         elif op == "uniform_load":
-            prompts = [P("w0", "Uniform load", "kN/m", 10.0)]
+            prompts = [P("w0", "Uniform load", "kN/m", 10.0, kind="load")]
         elif op == "trapezoidal_load":
-            prompts = [P("w0", "Load at start", "kN/m", 0.0), P("w1", "Load at end", "kN/m", 10.0)]
+            prompts = [P("w0", "Load at start", "kN/m", 0.0, kind="load"), P("w1", "Load at end", "kN/m", 10.0, kind="load")]
         elif op == "material":
             prompts = [P("m", "Material", "", 1, choices={1: "concrete C30", 2: "steel S355"})]
         else:
             raise ValueError(op)
         if op in ("new_rect", "new_circle"):
             self.phase = "model"  # sketching geometry; becomes "loads" once the member exists
+            if not self.setup_done:  # increments come first, so the sketch values can snap to them
+                prompts = increment_prompts() + prompts
         self.action = Action(op, data, prompts)
 
     def set_direction(self, axis: str, sign: int) -> None:
@@ -147,11 +178,18 @@ class ModelSession:
         if p.choices is not None and int(v) not in p.choices:
             self.error = f"{p.label}: show {' or '.join(str(k) for k in p.choices)} fingers"
             return
+        if p.choices is None:
+            v = self.snap(p.kind, v)
         if p.choices is None and v < p.minimum:
             self.error = f"{p.label} must be at least {p.minimum:g} {p.unit}"
             return
         a.answers[p.key] = v
         self.error = None
+        if p.key.startswith("inc_"):  # takes effect at once, so the next prompts snap to it
+            kind = p.key[4:]
+            self.settings[kind] = INCREMENTS[kind][2][int(v)]
+            if all(f"inc_{k}" in a.answers for k in INCREMENTS):
+                self.setup_done = True
         if a.prompt is None:
             self.action = None
             self._apply(a)
@@ -163,6 +201,9 @@ class ModelSession:
     # ---- applying ------------------------------------------------------------
     def _apply(self, a: Action) -> None:
         d, ans = a.data, a.answers
+        if a.op == "setup":
+            self.message = "Increments: " + ", ".join(f"{k} {v:g} {INCREMENTS[k][1]}" for k, v in self.settings.items())
+            return
         self._push()
         m = self.model
         if a.op == "new_rect":

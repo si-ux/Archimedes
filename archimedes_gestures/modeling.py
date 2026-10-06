@@ -43,11 +43,22 @@ TOOLS_LOADS = {
     "peace": ("support_roller", "Roller support", "✌️"),
 }
 
+# How every number prompt (dimensions, loads, increments) is answered by hand
+NUMBER_ROWS = [
+    {"icon": "🙌", "label": "Accept the value", "hint": "Both open palms, hold ~1 s — the green bar fills, then the next prompt opens"},
+    {"icon": "🙌", "label": "Accept the default", "hint": "Same gesture before typing anything takes the default shown on the card"},
+    {"icon": "🖐", "label": "Type a digit", "hint": "Hold up 0–5 fingers (two hands for 6–9) still ~1 s; change the count to repeat a digit"},
+    {"icon": "🤏↕", "label": "Nudge by the increment", "hint": "Pinch and move up / down — one increment per step"},
+    {"icon": "👋", "label": "Delete a digit", "hint": "Swipe one open hand to the left"},
+    {"icon": "✊✊", "label": "Cancel", "hint": "Two fists, hold 1 s (or Esc)"},
+]
+
 CHEAT = {
     "model": [
+        {"icon": "⚙️", "label": "Increments first", "hint": "Entering Model asks for length / section / load steps (1–5 fingers); values snap to them"},
         {"icon": "🤏🤏", "label": "Rectangular member", "hint": "Pinch with both hands, pull apart, hold — horizontal = beam, vertical = column"},
         {"icon": "☝️○", "label": "Circular member", "hint": "Draw a circle in the air with your index finger"},
-        {"icon": "🔢", "label": "Numbers", "hint": "Hold up fingers for each digit · both palms = OK · swipe left = delete · two fists = cancel"},
+        *NUMBER_ROWS,
         {"icon": "✊", "label": "Rotate", "hint": "Fist and drag"},
         {"icon": "🤏", "label": "Zoom", "hint": "One-hand pinch, move up/down"},
     ],
@@ -59,6 +70,7 @@ CHEAT = {
         {"icon": "✋", "label": "Uniform load", "hint": "Sweep a flat palm along the span — palm faces the load direction"},
         {"icon": "🙌", "label": "Trapezoidal load", "hint": "Both flat palms at the two ends of the load, hold still"},
         {"icon": "👍", "label": "Solve", "hint": "Thumbs-up held still for 1.2 s"},
+        *NUMBER_ROWS,
     ],
 }
 
@@ -77,6 +89,7 @@ class ModelingConfig:
     extrude_min_gain: float = 1.5  # palm widths of extra separation
     extrude_hold_s: float = 0.6
     mm_per_palm: float = 800.0  # length estimate shown while pulling
+    length_step: float = 100.0  # the length increment; the estimate snaps to it
     solve_hold_s: float = 1.2
     orbit_arm_s: float = 0.25
     circle_window_s: float = 3.0
@@ -265,7 +278,8 @@ class ModelingEngine:
         if self.two_latched:
             return
         gain = sep - self.two["sep0"]
-        est = float(np.clip(round(sep * m.mm_per_palm / 100) * 100, 500, 20000))
+        step = m.length_step or 100.0
+        est = float(np.clip(round(sep * m.mm_per_palm / step) * step, 500, 20000))
         speed = max(self.tracks[a.handedness].speed, self.tracks[b.handedness].speed)
         self.two["still"] = self.two["still"] + dt if (gain > m.extrude_min_gain and speed < self.cfg.still_speed * 1.5) else 0.0
         self.label = f"Extrude {'beam' if orient == 'horizontal' else 'column'} ≈ {est / 1000:.1f} m"

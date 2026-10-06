@@ -11,6 +11,19 @@ Gestures mean different things in each phase. Mouse and keyboard always work as 
 
 ## ① Model
 
+### Increments first
+On entering Model (or with **⚙️ Increments…** in the toolbar) three prompts set the step sizes. Answer each with
+1–5 fingers, by clicking a line on the card, or by typing:
+
+| Fingers | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| length step (mm) | 10 | 50 | **100** | 250 | 500 |
+| section step (mm) | 5 | 10 | **25** | 50 | 100 |
+| load step (kN, kN/m) | 0.5 | **1** | 5 | 10 | 50 |
+
+Bold = default. Every length, section and load you enter afterwards snaps to its step. The two-hand pull pre-fills
+the length to the nearest step. The chosen steps are shown in the left panel under *Model*.
+
 | Gesture | Result |
 |---|---|
 | 🤏🤏 **Both hands pinch** (index + thumb), pull apart, hold still 0.6 s | rectangular member. A horizontal pull gives a **beam**, a vertical pull a **column**. The pull distance pre-fills the length |
@@ -20,15 +33,27 @@ Gestures mean different things in each phase. Mouse and keyboard always work as 
 ### Entering numbers with your fingers
 Every number prompt (the card at the bottom of the viewport) can be answered three ways: with fingers, by typing, or with the OK button.
 
+**To accept a value: show 🙌 both open palms and hold about a second** (the bar on the card turns green), or press
+Enter. With nothing typed, the same gesture accepts the default shown on the card.
+
 | Do | Means |
 |---|---|
 | hold up *n* fingers, still, 0.8 s | digit *n* (0 = fist; use two hands for 6–9: 5 + 3 = 8) |
 | change the count, or lower the hand | needed before the same digit can be entered again (3-0-0 = 3, fist, open, fist) |
-| 🙌 both open palms, 0.8 s | OK. With no digits typed, this accepts the default shown |
+| 🙌 both open palms, 0.8 s | **accept** |
+| 🤏 one-hand pinch, move up / down | nudge the value by one increment per step (about 0.6 palm heights) |
 | swipe one open hand to the left | delete the last digit |
 | ✊✊ two fists, 1 s | cancel |
 
 The big number on the card is what the camera currently counts. The ring shows the hold.
+
+### When fingers are misread
+- The camera panel shows a dot per finger (T I M R P, lit = extended) and the count, so you can see what the
+  tracker sees.
+- Finger states come from MediaPipe's *world* landmarks (metric 3D), so a tilted hand or a hand far from the camera
+  counts the same. Each finger has a hysteresis band: a half-bent finger keeps its last state instead of flickering.
+- Spread the fingers a little, keep the palm facing the camera, and keep the hand inside the frame. **Calibrate** and
+  *Collect training data* (right panel) adapt the classifier to your hands.
 
 ## ② Loads & supports
 
@@ -55,6 +80,17 @@ solved yet ("rollers alone let the beam slide…").
 | fixed | every node of the cross-section, x y z | same |
 | pinned | bottom edge line: x y z (free to rotate) | base: centre line x y z; above the base: x y only (it can still shorten) |
 | roller | bottom edge line: y z (slides along the beam) | centre line: x y (lateral guide) |
+
+## Section cut
+The cut is an exact plane, not whole elements removed. The surface is clipped on the GPU, and the cap is each crossed
+element's own slice (field values interpolated along its edges), so the cut face is flat at any angle. The
+Workbench's 2D renderer does the same in software: crossed elements are clipped polygon by polygon, and their slice
+polygons form the cap. Axis cuts in the Workbench are exact too, wherever the slider puts them.
+
+## Switching between the modeller and the Workbench
+The *Modeller · Workbench ↗ · VR/AR ↗* links (top left) and the Workbench's **← Gesture modeller** button (top centre)
+open each page in its own named tab. Switching brings the other tab forward with its state as you left it. If a tab is
+reloaded, the modeller's model and results come back from the server (they are kept per browser).
 
 ## The solver (`archimedes_fe`)
 

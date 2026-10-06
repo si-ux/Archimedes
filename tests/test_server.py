@@ -22,6 +22,7 @@ def recv(ws, kind):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "ROOT", tmp_path)  # keep profile/clips out of the repo
+    monkeypatch.setattr(server, "SESSIONS", {})  # every test starts with fresh modeller sessions
     return TestClient(server.app)
 
 
@@ -81,7 +82,11 @@ def test_modelling_over_the_websocket_and_xr_endpoints(client):
         assert recv(ws, "model")["phase"] == "results"
         ws.send_text(json.dumps({"type": "model_action", "action": {"op": "new_rect", "orientation": "vertical"}}))
         m = recv(ws, "model")
-        assert m["prompt"]["key"] == "b" and m["phase"] == "model"
+        assert m["prompt"]["key"] == "inc_length" and m["phase"] == "model"
+        for n in (3, 3, 2):  # increments: 100 mm, 25 mm, 1 kN
+            ws.send_text(json.dumps({"type": "number", "value": n}))
+            m = recv(ws, "model")
+        assert m["prompt"]["key"] == "b"
         for v in (300, 300, 3000):
             ws.send_text(json.dumps({"type": "number", "value": v}))
             m = recv(ws, "model")
@@ -100,3 +105,16 @@ def test_modelling_over_the_websocket_and_xr_endpoints(client):
     glb = client.get("/api/scene.glb?field=U3")
     assert glb.status_code == 200 and glb.content[:4] == b"glTF"
     assert client.get("/xr").status_code == 200
+
+
+def test_model_survives_a_trip_to_the_workbench(client):
+    with client.websocket_connect("/ws?cid=abc") as ws:
+        recv(ws, "results")
+        recv(ws, "model")
+        ws.send_text(json.dumps({"type": "load_demo", "name": "short_column"}))
+        recv(ws, "results")
+    with client.websocket_connect("/ws?cid=abc") as ws:  # back from /workbench/
+        res = recv(ws, "results")
+        assert res["model"]["name"].startswith("Short column")
+    with client.websocket_connect("/ws?cid=other") as ws:  # another browser gets its own
+        assert recv(ws, "results")["model"]["name"].startswith("Cantilever")
