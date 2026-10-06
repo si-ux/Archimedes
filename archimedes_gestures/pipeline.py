@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from .calibration import Calibrator, Profile
-from .counting import NumberEntry
+from .counting import FingerTracker, NumberEntry
 from .classifier import PersonalAdapter, PoseClassifier, PoseSmoother, RulePoseClassifier, SklearnPoseClassifier
 from .intent import EngineConfig, IntentEngine, _HandTrack
 from .landmarks import FrameInput, HandFrame
@@ -51,6 +51,8 @@ class GesturePipeline:
         self.phase = "results"
         self.modeling = ModelingEngine(self._engine_cfg())
         self.numbers = NumberEntry()
+        self.fingers = FingerTracker()  # which fingers look up, shown in the camera view
+        self._nudge: dict | None = None
         self.prompt: dict | None = None
         self.smoothers: dict[str, PoseSmoother] = {}
         self.calibrator: Calibrator | None = None
@@ -72,7 +74,7 @@ class GesturePipeline:
         prof = self.calibrator.profile if self.calibrator else self.profile
         hands = [
             HandFrame.from_raw(h["landmarks"], h.get("handedness", "Right"), h.get("score", 1.0), t,
-                               mirrored=mirrored, swap_handedness=prof.swap_handedness)
+                               mirrored=mirrored, swap_handedness=prof.swap_handedness, world=h.get("world"))
             for h in hands_raw
         ]
         # if MediaPipe labels two hands the same, keep only the more confident one
@@ -95,7 +97,7 @@ class GesturePipeline:
         poses = {}
         for h in f.hands:
             sm = self.smoothers.setdefault(h.handedness, PoseSmoother())
-            poses[h.handedness] = sm.update(self.classifier.predict_proba(h.landmarks, h.handedness))
+            poses[h.handedness] = sm.update(self.classifier.predict_proba(h.shape, h.handedness))
         for k in list(self.smoothers):
             if f.hand(k) is None:
                 self.smoothers[k].reset()
@@ -109,6 +111,7 @@ class GesturePipeline:
         for c in cmds:
             self.view.apply(c)
         self.last_latency_ms = (time.perf_counter() - t0) * 1000
+        hud["fingers"] = self.fingers.update(f.hands)
         hud["latency_ms"] = round(self.last_latency_ms, 2)
         hud["classifier"] = self.classifier_name
         hud["personal_samples"] = len(self.classifier.y)
@@ -137,8 +140,26 @@ class GesturePipeline:
             tr = self.modeling.tracks.setdefault(ctrl.handedness, _HandTrack())
             tr.update(ctrl, f.timestamp)
             speed = tr.speed
-        events, status = self.numbers.update(f.timestamp, f.hands, speed, ctrl)
         cmds, toast = [], None
+        pose = poses.get(ctrl.handedness, ("none", 0.0))[0] if ctrl else "none"
+        inc = (self.prompt or {}).get("increment")
+        if inc and pose == "pinch" and len(f.hands) == 1:
+            # pinch and move up/down: one increment per 0.6 palm widths, from the current value
+            y = ctrl.palm_center[1] / ctrl.palm_size
+            if self._nudge is None:
+                base = self.numbers.value if self.numbers.value is not None else (self.prompt.get("default") or 0.0)
+                self._nudge = {"y0": y, "base": float(base), "steps": 0}
+            steps = int(round((self._nudge["y0"] - y) / 0.6))
+            if steps != self._nudge["steps"]:
+                self._nudge["steps"] = steps
+                v = max(0.0, round((self._nudge["base"] + steps * inc) / inc) * inc)
+                self.numbers.set_value(v)
+                cmds.append(Command("number_set", {"digits": self.numbers.digits, "steps": steps}))
+            status = {"digits": self.numbers.digits, "live": None, "progress": 0.0, "kind": "nudge"}
+            events = []
+        else:
+            self._nudge = None
+            events, status = self.numbers.update(f.timestamp, f.hands, speed, ctrl)
         for ev in events:
             if ev[0] == "digit":
                 cmds.append(Command("number_digit", {"digit": ev[1], "digits": self.numbers.digits}))
@@ -152,7 +173,7 @@ class GesturePipeline:
                 cmds.append(Command("number_cancel"))
                 toast = "Cancelled"
                 self.numbers.reset()
-        label = {"confirm": "Confirm", "cancel": "Cancel"}.get(status["kind"])
+        label = {"confirm": "Accepting…", "cancel": "Cancelling…", "nudge": f"Nudge ±{inc:g} per step" if inc else None}.get(status["kind"])
         if label is None and status["live"] is not None and status["kind"] == "digit":
             label = f"Digit {status['live']}"
         hud = {
@@ -160,8 +181,9 @@ class GesturePipeline:
             "pose": poses.get(ctrl.handedness, ("none", 0.0))[0] if ctrl else "none", "confidence": 1.0,
             "progress_label": label, "progress": status["progress"],
             "hints": [h.text for h in check_frame(f, self.engine.qcfg)],
-            "tip": "Hold up fingers for each digit · change the count to repeat a digit · 🙌 both palms = OK · "
-                   "swipe left = delete · two fists = cancel",
+            "tip": "ACCEPT: 🙌 both open palms, hold · digits: hold up fingers · "
+                   + (f"🤏 pinch + move up/down = ±{inc:g} · " if inc else "")
+                   + "delete: swipe left · cancel: two fists",
             "toast": toast, "number": status, "prompt": self.prompt,
             "hands": [{"handedness": k, "pose": v[0], "confidence": round(float(v[1]), 3)} for k, v in poses.items()],
         }

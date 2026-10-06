@@ -9,7 +9,7 @@ changes the mouse, menus and `▶` buttons make.
 | --- | --- | --- | --- |
 | ⟳ | Orbit | ✊ fist, 0.25 s | drag, like grabbing the model |
 | ⇔ | Dolly zoom | 🤏 pinch, 0.25 s | move up to zoom in, down to zoom out |
-| ▬ | Section cut | ✋ flat palm, **still**, 0.8 s | **your palm is the cutting plane**, at any angle; turn it to orient the cut, move along it to slide; close the hand to lock |
+| ▬ | Section cut | ✋ flat palm, **still**, 0.8 s | **your palm is the cutting plane**, at any angle; turn it to orient the cut, move along it to slide; close the hand to lock · the cut is exact: crossed elements are clipped, so the face is flat |
 | ↑ | Probe | ☝️ index point, 0.3 s | the fingertip is the cursor; hold still 0.8 s to pin a node |
 | ◐ | Field | ✌️ V sign, 0.3 s | swipe left / right to change the result field |
 | ▲ | Solve | 👍 thumbs-up, **still**, 1.2 s | runs the solve once |

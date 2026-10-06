@@ -4,6 +4,7 @@
 // positions onto the member.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { createConsole } from "/static/console.js";
 
 const $ = (id) => document.getElementById(id);
 const HAND_EDGES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
@@ -95,26 +96,23 @@ function cutPlane() {
   return { n, o };
 }
 
+// The cut is a real plane: the GPU clips the surface mesh smoothly, and the cap is the
+// exact slice of every element the plane crosses (no voxel staircase).
+renderer.localClippingEnabled = true;
+const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 1e6);   // keeps everything until a cut is set
+const HEX_EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+let capMesh = null, capLines = null, capVals = null;
+
 function rebuildFE() {
   disposeObj(feMesh); disposeObj(feLines); feMesh = feLines = null;
   if (!fe) return;
-  const { elems, cells, ne, occ, grid: [gx, gy, gz], h, origin } = fe;
-  const P = cutPlane(), culled = new Uint8Array(ne);
-  if (P) for (let e = 0; e < ne; e++) {
-    let d = 0;
-    for (let k = 0; k < 3; k++) d += (origin[k] + (cells[3 * e + k] + 0.5) * h[k] - P.o[k]) * P.n[k];
-    culled[e] = d > 0 ? 1 : 0;
-  }
+  const { elems, cells, ne, occ, grid: [gx, gy, gz] } = fe;
   const verts = [], lines = [];
-  for (let e = 0; e < ne; e++) {
-    if (culled[e]) continue;
+  for (let e = 0; e < ne; e++) {                 // exterior faces only; the cap closes the cut
     const ci = cells[3 * e], cj = cells[3 * e + 1], ck = cells[3 * e + 2];
     for (const [d, q] of FACES) {
       const a = ci + d[0], b = cj + d[1], c = ck + d[2];
-      if (a >= 0 && b >= 0 && c >= 0 && a < gx && b < gy && c < gz) {
-        const nb = occ[(a * gy + b) * gz + c];
-        if (nb >= 0 && !culled[nb]) continue;
-      }
+      if (a >= 0 && b >= 0 && c >= 0 && a < gx && b < gy && c < gz && occ[(a * gy + b) * gz + c] >= 0) continue;
       const n = q.map((l) => elems[8 * e + l]);
       verts.push(n[0], n[1], n[2], n[0], n[2], n[3]);
       lines.push(n[0], n[1], n[1], n[2], n[2], n[3], n[3], n[0]);
@@ -125,13 +123,74 @@ function rebuildFE() {
   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vNode.length * 3), 3));
   g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(vNode.length * 3), 3));
   feMesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+    clippingPlanes: [clipPlane], polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
   feMesh.userData.lineNodes = Int32Array.from(lines);
   const lg = new THREE.BufferGeometry();
   lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lines.length * 3), 3));
-  feLines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x0b0d10, transparent: true, opacity: 0.35 }));
+  feLines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x0b0d10, transparent: true, opacity: 0.35,
+    clippingPlanes: [clipPlane] }));
   world.add(feMesh, feLines);
+  updateCut();
   updateColors(); updatePositions(performance.now());
+}
+
+function updateCut() {
+  const P = cutPlane();
+  if (!P) { clipPlane.set(new THREE.Vector3(1, 0, 0), 1e6); disposeObj(capMesh); disposeObj(capLines); capMesh = capLines = null; return; }
+  const n = new THREE.Vector3(...P.n).normalize();
+  clipPlane.set(n.clone().negate(), n.dot(v3(P.o)));       // remove the side the palm faces
+}
+
+function updateCap(vec, s) {
+  disposeObj(capMesh); disposeObj(capLines); capMesh = capLines = null;
+  const P = cutPlane(), F = currentField();
+  if (!P || !fe || !F) return;
+  const n = P.n, o = P.o, N = fe.nodes, E = fe.elems, len = Math.hypot(...n) || 1;
+  const nx = n[0] / len, ny = n[1] / len, nz = n[2] / len;
+  // in-plane axes for ordering each slice polygon
+  const ux = Math.abs(nx) < 0.9 ? [0, -nz, ny] : [-nz, 0, nx], ul = Math.hypot(...ux);
+  const u = ux.map((x) => x / ul), w = [ny * u[2] - nz * u[1], nz * u[0] - nx * u[2], nx * u[1] - ny * u[0]];
+  const pos = [], col = [], vals = [], lin = [], lo = F.min, span = (F.max - F.min) || 1;
+  const P8 = new Float64Array(24), D8 = new Float64Array(8);
+  for (let e = 0; e < fe.ne; e++) {
+    let neg = false, posi = false;
+    for (let k = 0; k < 8; k++) {
+      const m = E[8 * e + k];
+      for (let c = 0; c < 3; c++) P8[3 * k + c] = N[3 * m + c] + s * vec[3 * m + c];
+      const d = (P8[3 * k] - o[0]) * nx + (P8[3 * k + 1] - o[1]) * ny + (P8[3 * k + 2] - o[2]) * nz;
+      D8[k] = d; if (d < 0) neg = true; else posi = true;
+    }
+    if (!neg || !posi) continue;
+    const pts = [];
+    for (const [a, b] of HEX_EDGES) {
+      if ((D8[a] < 0) === (D8[b] < 0)) continue;
+      const t = D8[a] / (D8[a] - D8[b]), fa = F.arr[E[8 * e + a]], fb = F.arr[E[8 * e + b]];
+      pts.push([P8[3 * a] + t * (P8[3 * b] - P8[3 * a]), P8[3 * a + 1] + t * (P8[3 * b + 1] - P8[3 * a + 1]),
+        P8[3 * a + 2] + t * (P8[3 * b + 2] - P8[3 * a + 2]), fa + t * (fb - fa)]);
+    }
+    if (pts.length < 3) continue;
+    const cx = pts.reduce((q, p) => q + p[0], 0) / pts.length, cy = pts.reduce((q, p) => q + p[1], 0) / pts.length,
+      cz = pts.reduce((q, p) => q + p[2], 0) / pts.length;
+    pts.sort((p, q) => Math.atan2((p[0] - cx) * w[0] + (p[1] - cy) * w[1] + (p[2] - cz) * w[2], (p[0] - cx) * u[0] + (p[1] - cy) * u[1] + (p[2] - cz) * u[2])
+      - Math.atan2((q[0] - cx) * w[0] + (q[1] - cy) * w[1] + (q[2] - cz) * w[2], (q[0] - cx) * u[0] + (q[1] - cy) * u[1] + (q[2] - cz) * u[2]));
+    for (let i = 1; i + 1 < pts.length; i++) for (const p of [pts[0], pts[i], pts[i + 1]]) {
+      pos.push(p[0] / 1000, p[1] / 1000, p[2] / 1000); vals.push(p[3]);
+      const c = cmap((p[3] - lo) / span); col.push(c[0], c[1], c[2]);
+    }
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; lin.push(a[0] / 1000, a[1] / 1000, a[2] / 1000, b[0] / 1000, b[1] / 1000, b[2] / 1000); }
+  }
+  if (!pos.length) return;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const nrm = new Float32Array(pos.length); for (let i = 0; i < nrm.length; i += 3) { nrm[i] = nx; nrm[i + 1] = ny; nrm[i + 2] = nz; }
+  g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+  capMesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  capVals = Float32Array.from(vals);
+  const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(lin, 3));
+  capLines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x0b0d10, transparent: true, opacity: 0.3 }));
+  capMesh.visible = showFE(); capLines.visible = showFE() && $("chk-mesh").checked;
+  world.add(capMesh, capLines);
 }
 
 function currentField() { return fe && S.view ? fe.fields[S.view.field_name] || fe.fields.von_mises : null; }
@@ -165,6 +224,7 @@ function updatePositions(now) {
   write(feLines.geometry.attributes.position.array, feMesh.userData.lineNodes);
   feLines.geometry.attributes.position.needsUpdate = true;
   feLines.visible = $("chk-mesh").checked;
+  updateCap(vec, s);
 }
 
 function disposeObj(o) { if (!o) return; o.parent && o.parent.remove(o); o.traverse && o.traverse((c) => { c.geometry && c.geometry.dispose(); }); }
@@ -203,6 +263,8 @@ function syncVisibility() {
   if (outline) outline.visible = r ? $("chk-undeformed").checked : true;
   if (feMesh) feMesh.visible = r;
   if (feLines) feLines.visible = r && $("chk-mesh").checked;
+  if (capMesh) capMesh.visible = r;
+  if (capLines) capLines.visible = r && $("chk-mesh").checked;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,8 +417,16 @@ const ray = new THREE.Raycaster();
 function pick(xy) {
   if (!feMesh || !feMesh.visible) return null;
   ray.setFromCamera(new THREE.Vector2(xy[0] * 2 - 1, -(xy[1] * 2 - 1)), camera);
-  const hit = ray.intersectObject(feMesh)[0];
+  const hits = ray.intersectObject(feMesh).filter((h) => clipPlane.distanceToPoint(h.point) >= -1e-6);
+  if (capMesh) for (const h of ray.intersectObject(capMesh)) { h.cap = true; hits.push(h); }
+  hits.sort((a, b) => a.distance - b.distance);
+  const hit = hits[0];
   if (!hit) return null;
+  if (hit.cap) {                                 // on the cut face: value interpolated across the slice
+    const Fc = currentField(), f = hit.face, vv = [f.a, f.b, f.c].map((i) => capVals[i]);
+    return { point: hit.point.clone(), text: `${Fc.label}: ${fmt((vv[0] + vv[1] + vv[2]) / 3, 4)} ${Fc.unit}`,
+      where: `on the cut · (${fmt(hit.point.x)}, ${fmt(hit.point.y)}, ${fmt(hit.point.z)}) m` };
+  }
   const pos = feMesh.geometry.attributes.position, f = hit.face;
   let best = f.a, bd = Infinity;
   for (const v of [f.a, f.b, f.c]) { const d = new THREE.Vector3().fromBufferAttribute(pos, v).distanceTo(hit.point); if (d < bd) { bd = d; best = v; } }
@@ -408,7 +478,8 @@ function renderPanels() {
     ["Eigen solver", "Lanczos, shift-invert"], ["Time (asm / solve / modes)", `${st.t_assemble_s} / ${st.t_solve_s} / ${st.t_modes_s} s`],
   ] : [["Status", "not solved — the mesh is built at solve time"]]);
   kv("tbl-model", [
-    ["Name", m.name], ["Type", sm.kind], ["Section", sm.section], ["Length", `${fmt(sm.length_mm / 1000)} m`],
+    ["Name", m.name], ["Type", sm.kind],
+    S.settings && ["Increments", `L ${fmt(S.settings.length)} mm · section ${fmt(S.settings.section)} mm · load ${fmt(S.settings.load)} kN`], ["Section", sm.section], ["Length", `${fmt(sm.length_mm / 1000)} m`],
     ["Material", sm.material], ["E / ν", `${fmt(sm.E_MPa)} MPa / ${sm.nu}`], ["Density", `${fmt(sm.rho_t_mm3 * 1e12)} kg/m³`],
     ["Area A", `${fmt(sm.area_mm2)} mm²`], ["I (min)", `${fmt(sm.I_min_mm4)} mm⁴`], ["r (min)", `${fmt(sm.r_mm)} mm`],
     ["Self-weight", `${fmt(sm.self_weight_kN_m)} kN/m (not applied)`],
@@ -434,7 +505,7 @@ function renderPanels() {
 // ---------------------------------------------------------------------------
 // phases, toolbar, mouse tools
 const TOOLBARS = {
-  model: [["New beam (rect)", () => sendAction({ op: "new_rect", orientation: "horizontal" })],
+  model: [["⚙️ Increments…", () => sendAction({ op: "setup" })], ["New beam (rect)", () => sendAction({ op: "new_rect", orientation: "horizontal" })],
     ["New column (rect)", () => sendAction({ op: "new_rect", orientation: "vertical" })],
     ["New circular member", () => sendAction({ op: "new_circle" })], ["Material…", () => sendAction({ op: "material" })]],
   loads: [["✊ Fixed", "support_fixed"], ["🤏 Pinned", "support_pinned"], ["✌️ Roller", "support_roller"],
@@ -478,7 +549,9 @@ function renderPrompt() {
   $("prompt-step").textContent = `Step ${p.step} of ${p.steps}` + (p.default !== null && p.default !== undefined ? ` · default ${fmt(p.default)} ${p.unit}` : "");
   $("prompt-label").textContent = p.label;
   $("prompt-unit").textContent = p.unit || (p.choices ? "choose by fingers" : "");
-  $("prompt-choices").innerHTML = p.choices ? Object.entries(p.choices).map(([k, v]) => `<div><b>${k}</b> finger${k > 1 ? "s" : ""} — ${v}</div>`).join("") : "";
+  $("prompt-choices").innerHTML = p.choices ? Object.entries(p.choices).map(([k, v]) => `<div data-choice="${k}"><b>${k}</b> finger${k > 1 ? "s" : ""} — ${v}${+k === p.default ? " <span class='muted'>(default)</span>" : ""}</div>`).join("") : "";
+  for (const d of $("prompt-choices").children) d.onclick = () => send({ type: "number", value: +d.dataset.choice });
+  $("prompt-inc").textContent = p.increment ? `increment ${fmt(p.increment)} ${p.unit}: values snap to it, 🤏 pinch + move up/down = ±${fmt(p.increment)} · ` : "";
   const ax = $("prompt-axes"); ax.innerHTML = "";
   if (p.axis) for (const a of ["x", "y", "z"]) for (const sg of [1, -1]) {
     const b = document.createElement("button"); b.textContent = `${sg > 0 ? "+" : "−"}${a.toUpperCase()}`;
@@ -533,8 +606,12 @@ function renderGizmo() {        // the cube turns with the main camera
 // ---------------------------------------------------------------------------
 // WebSocket to the Python engine
 let ws;
+// one id per browser: the server keeps this modeller session alive while you visit the Workbench
+// named tab, so the Workbench's "Gesture modeller" link comes back to this one
+if (!window.name) window.name = "archimedes-modeller";
+const CID = (() => { try { let c = localStorage.getItem("archimedes-cid"); if (!c) { c = Math.random().toString(36).slice(2); localStorage.setItem("archimedes-cid", c); } return c; } catch (e) { return "anon"; } })();
 function connect() {
-  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?cid=${CID}`);
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   ws.onclose = () => setTimeout(connect, 1000);
 }
@@ -556,8 +633,9 @@ function onMessage(m) {
       S.busy = false; $("busy").classList.add("hidden");
       fe = decodeResults(m); S.solved = true; pinCache.clear();
       renderFieldSelect(); rebuildFE(); renderPanels(); renderLegend(); syncVisibility(); return;
-    case "model": onModel(m); return;
+    case "model": onModel(m); pyConsole.onJournal(m.journal); return;
     case "view": S.view = m.view; onView(); return;
+    case "console_out": pyConsole.onOutput(m); return;
   }
   if (m.type !== "state") return;
   inflight = Math.max(0, inflight - 1);
@@ -569,7 +647,7 @@ function onMessage(m) {
 }
 function onModel(m) {
   const changed = m.version !== S.version;
-  S.model = m.model; S.phase = m.phase; S.prompt = m.prompt; S.solved = m.solved; S.version = m.version;
+  S.model = m.model; S.phase = m.phase; S.prompt = m.prompt; S.solved = m.solved; S.version = m.version; S.settings = m.settings;
   if (!m.solved) { fe = null; disposeObj(feMesh); disposeObj(feLines); feMesh = feLines = null; }
   if (changed) { rebuildPlain(); rebuildGlyphs(); }
   if (m.error) toast(m.error, true); else if (m.message && changed) toast(m.message);
@@ -578,8 +656,8 @@ function onModel(m) {
 let lastCutKey = "", lastField = "";
 function onView() {
   const v = S.view, cutKey = v.section_on ? v.plane_normal.concat(v.plane_origin).map((x) => x.toFixed(3)).join() : "";
-  if (cutKey !== lastCutKey) { lastCutKey = cutKey; rebuildFE(); syncVisibility(); }
-  if (v.field_name !== lastField) { lastField = v.field_name; $("sel-field").value = v.field_name; updateColors(); renderLegend(); renderTabs(); }
+  if (cutKey !== lastCutKey) { lastCutKey = cutKey; updateCut(); updatePositions(performance.now()); syncVisibility(); }
+  if (v.field_name !== lastField) { lastField = v.field_name; $("sel-field").value = v.field_name; updateColors(); updatePositions(performance.now()); renderLegend(); renderTabs(); }
   if (v.snapshots > (S.snaps || 0)) saveSnapshot();
   S.snaps = v.snapshots;
 }
@@ -714,7 +792,9 @@ function detect() {
   const now = performance.now(), res = landmarker.detectForVideo(video, now);
   if (seq % 10 === 0) measureQuality();
   const handed = res.handednesses || res.handedness || [];
+  const wl = res.worldLandmarks || [];
   const hands = res.landmarks.map((lm, i) => ({ landmarks: lm.map((p) => [p.x, p.y, p.z]),
+    world: wl[i] ? wl[i].map((p) => [p.x, p.y, p.z]) : undefined,   // metric 3D: tilt/distance-proof shape
     handedness: handed[i] && handed[i][0] ? handed[i][0].categoryName : "Right", score: handed[i] && handed[i][0] ? handed[i][0].score : 1 }));
   lastRaw = hands;
   if (inflight < 3) { send({ type: "frame", t: now, seq, hands, mirrored: false, ...frameQuality }); inflight++; }
@@ -737,6 +817,21 @@ function drawCamera() {
     for (const [a, b] of HAND_EDGES) { cctx.beginPath(); cctx.moveTo(lm[a][0] * w, lm[a][1] * h); cctx.lineTo(lm[b][0] * w, lm[b][1] * h); cctx.stroke(); }
     for (const p of lm) { cctx.beginPath(); cctx.arc(p[0] * w, p[1] * h, 3, 0, 7); cctx.fill(); }
   }
+  // what the engine thinks each finger is doing - makes a misread obvious at a glance
+  const fingers = lastHud && lastHud.fingers ? Object.entries(lastHud.fingers) : [];
+  fingers.forEach(([hand, up], i) => {
+    const x0 = 8, y0 = 10 + i * 26;
+    cctx.fillStyle = "rgba(0,0,0,.65)"; cctx.fillRect(x0 - 4, y0 - 4, 196, 22);
+    cctx.font = "bold 12px system-ui"; cctx.fillStyle = "#e6e9ee"; cctx.fillText(hand[0], x0, y0 + 11);
+    "TIMRP".split("").forEach((ch, k) => {
+      const x = x0 + 18 + k * 22; cctx.fillStyle = up[k] ? "#3ecf8e" : "#3a4350";
+      cctx.beginPath(); cctx.arc(x + 6, y0 + 7, 7, 0, 7); cctx.fill();
+      cctx.fillStyle = up[k] ? "#04150d" : "#8b95a3"; cctx.font = "bold 9px system-ui"; cctx.fillText(ch, x + 3, y0 + 10);
+    });
+    const pose = (lastHud.hands || []).find((hh) => hh.handedness === hand);
+    cctx.fillStyle = "#e6e9ee"; cctx.font = "11px system-ui";
+    cctx.fillText(`${up.filter(Boolean).length} · ${pose ? pose.pose.replace("_", " ") : ""}`, x0 + 132, y0 + 11);
+  });
   if (lastHud && lastHud.progress > 0 && !lastHud.mode_label && hands.length) {
     const p = hands[0][0]; cctx.beginPath(); cctx.lineWidth = 5; cctx.strokeStyle = "#f5b83d";
     cctx.arc(p[0] * w, p[1] * h, 26, -Math.PI / 2, -Math.PI / 2 + lastHud.progress * 2 * Math.PI); cctx.stroke();
@@ -775,6 +870,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "s") command("snapshot");
   else if (k === "c") calibrate();
   else if (k === "d") startTour();
+  else if (k === "`") { e.preventDefault(); pyConsole.open(); }
   else if (k === "escape") { S.tool = null; S.toolT0 = null; renderTabs(); send({ type: "calibrate_cancel" }); $("calib").classList.add("hidden"); send({ type: "demo_stop" }); }
 });
 function calibrate() { if (!landmarker) { toast("Enable the camera first", true); return; } send({ type: "calibrate", with_poses: true }); }
@@ -828,6 +924,7 @@ function loop() {
 resize();
 S.view = { azimuth: -60, elevation: 22, distance: 1, focal_point: [0, 0, 0], section_on: false, plane_origin: [0, 0, 0], plane_normal: [1, 0, 0],
   field_name: "von_mises", probe_cursor: null, probe_pins: [], snapshots: 0 };
-window.__archimedes = { S, resolveCommand, screenToT };   // for automated UI tests
+const pyConsole = createConsole(send);
+window.__archimedes = { S, resolveCommand, screenToT, onView, pyConsole };   // for automated UI tests
 connect();
 loop();

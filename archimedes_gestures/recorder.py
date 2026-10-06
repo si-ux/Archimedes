@@ -33,7 +33,7 @@ class ClipRecorder:
             return
         h = f.hand(self.hand) or (f.hands[0] if f.hands else None)
         if h is not None:
-            self._buf.append((h.landmarks, h.handedness, f.timestamp))
+            self._buf.append((h.landmarks, h.handedness, f.timestamp, h.world))
 
     def stop(self) -> Path | None:
         self.active = False
@@ -42,8 +42,12 @@ class ClipRecorder:
         out = self.root / self.subject / self.label
         out.mkdir(parents=True, exist_ok=True)
         path = out / f"{int(time.time() * 1000)}.npz"
+        extra = {}
+        if all(b[3] is not None for b in self._buf):
+            extra["world"] = np.stack([b[3] for b in self._buf])  # metric hand shape
         np.savez_compressed(
             path,
+            **extra,
             landmarks=np.stack([b[0] for b in self._buf]),
             handedness=np.array([b[1] for b in self._buf]),
             t=np.array([b[2] for b in self._buf]),
@@ -65,7 +69,7 @@ def load_clips(root: str | Path, skip_s: float = 0.3):
         d = np.load(p, allow_pickle=False)
         keep = d["t"] - d["t"][0] >= skip_s
         n = int(keep.sum())
-        lms.append(d["landmarks"][keep])
+        lms.append((d["world"] if "world" in d.files else d["landmarks"])[keep])  # shape, as used live
         hands += list(d["handedness"][keep])
         labels += [str(d["label"])] * n
         subjects += [str(d["subject"])] * n

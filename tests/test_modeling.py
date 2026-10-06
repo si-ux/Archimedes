@@ -165,7 +165,11 @@ def test_session_builds_a_beam_from_prompts_and_solves():
 
     s = ModelSession()
     s.begin("new_rect", orientation="horizontal", length_est=3500)
-    assert s.prompt["key"] == "b"
+    assert s.prompt["key"] == "inc_length"  # increments are chosen before the first sketch
+    for n in (3, 3, 2):  # 100 mm, 25 mm, 1 kN
+        s.answer(n)
+    assert s.setup_done and s.settings == {"length": 100.0, "section": 25.0, "load": 1.0}
+    assert s.prompt["key"] == "b" and s.prompt["increment"] == 25.0
     s.answer(200)
     s.answer(400)
     assert s.prompt["default"] == 3500
@@ -188,6 +192,7 @@ def test_session_circle_column_and_bad_answers():
     from archimedes_fe.session import ModelSession
 
     s = ModelSession()
+    s.setup_done = True
     s.begin("new_circle")
     s.answer(3)  # not a choice
     assert s.error and s.prompt["key"] == "orientation"
@@ -202,3 +207,41 @@ def test_session_circle_column_and_bad_answers():
     assert any("supports" in i for i in s.model.issues())
     s.begin("support_pinned", t=1.0)
     assert any("base" in i for i in s.model.issues())
+
+
+def test_values_snap_to_the_chosen_increment():
+    from archimedes_fe.session import ModelSession
+
+    s = ModelSession()
+    s.set_phase("model")  # entering Model asks for increments first
+    assert s.prompt["action"] == "setup"
+    for n in (4, 4, 3):  # 250 mm, 50 mm, 5 kN
+        s.answer(n)
+    assert s.prompt is None and "250" in s.message
+    s.begin("new_rect", orientation="horizontal", length_est=3337)
+    s.answer(212)   # -> 200 (50 mm steps)
+    s.answer(480)   # -> 500
+    s.answer(None)  # 3337 -> 3250 (250 mm steps)
+    sec = s.model.member.section
+    assert (sec.b, sec.h, s.model.member.length) == (200, 500, 3250)
+    s.begin("point_load", t=1.0, axis="z", sign=-1)
+    s.answer(12)    # -> 10 (5 kN steps)
+    assert s.model.loads[-1].w0 == 10
+
+
+def test_pinch_nudges_the_prompt_value_by_increments():
+    p = pipe()
+    p.set_prompt({"action": "new_rect", "key": "L", "step": 3, "default": 4000.0, "increment": 250.0, "kind": "length"})
+    pin = S.canonical_hand("pinch")
+    hold, t = clip(lambda a, tt: [hand(pin, (0.5, 0.65), t=tt)], 0.5)
+    up, t = clip(lambda a, tt: [hand(pin, (0.5, 0.65 - 0.25 * a), t=tt)], 1.0, t)
+    cmds = run(p, hold + up)
+    sets = [c["data"]["digits"] for c in cmds if c["kind"] == "number_set"]
+    assert sets and float(sets[-1]) > 4000 and float(sets[-1]) % 250 == 0
+    assert "number_digit" not in kinds(cmds)  # a pinch never types a digit
+
+
+def test_finger_states_are_reported_for_diagnostics():
+    p = pipe()
+    out = p.process(FrameInput(0.0, [count_hand(2)]))
+    assert out["hud"]["fingers"]["Right"] == [False, True, True, False, False]

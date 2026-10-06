@@ -108,7 +108,7 @@ class Calibrator:
             self.centers.append(h.palm_center[:2])
         elif el > self.settle_s:
             h = f.hand(self.profile.dominant) or h
-            self.samples.append((s.split(":", 1)[1], h.landmarks.copy(), h.handedness))
+            self.samples.append((s.split(":", 1)[1], h.shape.copy(), h.handedness))
         prog = min(1.0, el / self._duration())
         if prog >= 1.0:
             self._finish_step()

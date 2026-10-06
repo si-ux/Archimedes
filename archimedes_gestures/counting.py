@@ -24,9 +24,42 @@ from .features import finger_extension_ratios
 from .landmarks import HandFrame, normalize
 
 
+def finger_ratios(hand: HandFrame) -> np.ndarray:
+    return finger_extension_ratios(normalize(hand.shape, hand.handedness))
+
+
 def count_fingers(hand: HandFrame, finger_thr: float = 1.05, thumb_thr: float = 1.02) -> int:
-    r = finger_extension_ratios(normalize(hand.landmarks, hand.handedness))
+    r = finger_ratios(hand)
     return int(r[0] > thumb_thr) + int(np.sum(r[1:] > finger_thr))
+
+
+# per finger: (goes up above, goes down below). The gap between the two is the
+# hysteresis that stops a half-bent finger flickering between up and down.
+FINGER_BANDS = np.array([[1.08, 0.97],   # thumb (tip vs IP joint, from the pinky knuckle)
+                         [1.14, 0.98], [1.14, 0.98], [1.14, 0.98], [1.12, 0.97]])
+
+
+@dataclass
+class FingerTracker:
+    """Which fingers are up, per hand, with hysteresis. Shown live in the camera view."""
+
+    state: dict = field(default_factory=dict)  # handedness -> bool[5]
+
+    def update(self, hands: list[HandFrame]) -> dict[str, list[bool]]:
+        seen = set()
+        for h in hands:
+            r = finger_ratios(h)
+            prev = self.state.get(h.handedness)
+            if prev is None:
+                cur = r > (FINGER_BANDS[:, 0] + FINGER_BANDS[:, 1]) / 2
+            else:
+                cur = np.where(prev, r > FINGER_BANDS[:, 1], r > FINGER_BANDS[:, 0])
+            self.state[h.handedness] = cur
+            seen.add(h.handedness)
+        for k in list(self.state):
+            if k not in seen:
+                del self.state[k]
+        return {k: [bool(x) for x in v] for k, v in self.state.items()}
 
 
 @dataclass
@@ -45,6 +78,7 @@ class NumberEntry:
     _cancel_t: float = 0.0
     _last_t: float | None = None
     _nhands: int = 0
+    _fingers: FingerTracker = field(default_factory=FingerTracker)
     _swipe: SwipeDetector = field(default_factory=lambda: SwipeDetector(min_distance=1.6, min_speed=5.0))
 
     def reset(self) -> None:
@@ -56,12 +90,19 @@ class NumberEntry:
         self._swipe.reset()
 
     @property
-    def value(self) -> int | None:
-        return int(self.digits) if self.digits else None
+    def value(self) -> float | None:
+        return float(self.digits) if self.digits else None
+
+    def set_value(self, v: float) -> None:
+        """Replace the typed digits (used by the pinch nudge)."""
+        self.digits = f"{v:g}"
+        self._armed = False
 
     def _smoothed(self, hand: HandFrame) -> int:
+        up = self._fingers.state.get(hand.handedness)
+        n = int(np.sum(up)) if up is not None else count_fingers(hand)
         h = self._hist.setdefault(hand.handedness, deque(maxlen=5))
-        h.append(count_fingers(hand))
+        h.append(n)
         return int(np.bincount(list(h)).argmax())
 
     def update(self, t: float, hands: list[HandFrame], speed: float = 0.0,
@@ -78,6 +119,7 @@ class NumberEntry:
             self._confirm_t = self._cancel_t = 0.0
             return events, self.status(None, 0.0, None)
 
+        self._fingers.update(hands)
         counts = [self._smoothed(h) for h in hands]
         total = sum(counts)
         ctrl = control or hands[0]

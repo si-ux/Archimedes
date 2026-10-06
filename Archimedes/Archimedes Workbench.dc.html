@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./cadkernel.js"></script>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -123,7 +124,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
       </div>
       <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:3px 0 10px">
         <sc-for list="{{ tree }}" as="n" hint-placeholder-count="16">
-          <div onClick="{{ n.click }}" style="display:flex;align-items:center;gap:5px;height:19px;padding-right:8px;padding-left:{{ n.pad }}px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;border-left:2px solid {{ n.rail }};transition:background .12s ease,color .12s ease" style-hover="background:#151a20">
+          <div onClick="{{ n.click }}" onDoubleClick="{{ n.dbl }}" onContextMenu="{{ n.ctx }}" title="{{ n.tip }}" style="user-select:none;display:flex;align-items:center;gap:5px;height:19px;padding-right:8px;padding-left:{{ n.pad }}px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;border-left:2px solid {{ n.rail }};transition:background .12s ease,color .12s ease" style-hover="background:#151a20">
             <span onClick="{{ n.toggle }}" style="width:9px;flex:0 0 auto;text-align:center;font:400 7px/1 'IBM Plex Mono';color:{{ n.caretFg }};transition:color .12s ease" style-hover="color:#9fdbe6">{{ n.caret }}</span>
             <span style="width:5px;height:5px;border-radius:{{ n.dotR }};background:{{ n.dot }};flex:0 0 auto"></span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.label }}</span>
@@ -167,7 +168,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
     </div>
 
     <div ref="{{ viewportRef }}" style="flex:1;position:relative;min-width:0;overflow:hidden">
-      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block;cursor:{{ vpCursor }}"></canvas>
+      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
 
       <div style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:9px">
         <div style="display:flex;gap:5px">
@@ -175,6 +176,13 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
             <button onClick="{{ v.click }}" style="padding:6px 9px;border-radius:4px;background:rgba(16,19,23,.8);backdrop-filter:blur(8px);border:1px solid {{ v.bd }};color:{{ v.fg }};font:500 10px/1 'IBM Plex Mono';letter-spacing:.05em;transition:all .14s ease" style-hover="border-color:#3a4652;color:#dfe6ed">{{ v.label }}</button>
           </sc-for>
         </div>
+        <sc-if value="{{ cmdbar.on }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;gap:3px;max-width:520px;padding:4px;border-radius:7px;background:rgba(16,19,23,.84);border:1px solid #232b34">
+            <sc-for list="{{ cmdbar.items }}" as="b" hint-placeholder-count="10">
+              <button onClick="{{ b.run }}" title="{{ b.title }}" style="height:24px;padding:0 8px;border-radius:5px;color:{{ b.fg }};background:{{ b.bg }};font:500 10.5px/1 'IBM Plex Sans';white-space:nowrap;transition:all .12s ease" style-hover="background:#1d252e;color:#e6eef4">{{ b.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
         <div style="font:400 10px/1.65 'IBM Plex Mono';color:#4a5561;pointer-events:none">
           <div>{{ vpLine1 }}</div>
           <div>{{ vpLine2 }}</div>
@@ -198,6 +206,79 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
             <div style="color:#c8d2dc">max {{ legend.max }}</div>
             <div>{{ legend.maxLoc }}</div>
           </div>
+        </div>
+      </sc-if>
+
+      <!-- heads-up view toolbar (SolidWorks style) -->
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:3px;border-radius:7px;background:rgba(16,19,23,.84);backdrop-filter:blur(8px);border:1px solid #232b34;z-index:20">
+        <sc-for list="{{ hud }}" as="b" hint-placeholder-count="9">
+          <button onClick="{{ b.run }}" title="{{ b.title }}" style="height:24px;padding:0 8px;border-radius:5px;color:{{ b.fg }};background:{{ b.bg }};font:500 10.5px/1 'IBM Plex Mono';white-space:nowrap;transition:all .12s ease" style-hover="background:#1d252e;color:#e6eef4">{{ b.label }}</button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ vo.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:31;padding:10px;border-radius:8px;background:#161b21;border:1px solid #2b333c;box-shadow:0 18px 44px -12px rgba(0,0,0,.8);animation:kfade .09s ease">
+          <div style="font:600 9px/1 'IBM Plex Sans';letter-spacing:.15em;color:#5e6b78;margin-bottom:8px">VIEW ORIENTATION · SPACE</div>
+          <div style="display:grid;grid-template-columns:repeat(4,92px);gap:4px">
+            <sc-for list="{{ vo.items }}" as="v" hint-placeholder-count="8">
+              <button onClick="{{ v.run }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:7px 8px;border-radius:5px;background:#12171d;border:1px solid #232b34;color:#c9d2da;font:500 11px/1 'IBM Plex Sans';text-align:left;transition:all .12s ease" style-hover="border-color:#5ecfe0;background:#16222a">
+                <span>{{ v.label }}</span><span style="font:400 9px/1 'IBM Plex Mono';color:#5e6b78">{{ v.accel }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ ctx.on }}" hint-placeholder-val="{{ false }}">
+        <div onContextMenu="{{ ctx.stop }}" style="position:absolute;left:{{ ctx.x }}px;top:{{ ctx.y }}px;z-index:32;min-width:236px;padding:4px;background:#191d22;border:1px solid #2b333c;border-radius:7px;box-shadow:0 18px 44px -12px rgba(0,0,0,.8),0 2px 8px rgba(0,0,0,.5);animation:kfade .09s ease">
+          <sc-for list="{{ ctx.items }}" as="it" hint-placeholder-count="8">
+            <sc-if value="{{ it.isTitle }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:6px 8px 5px;font:600 9.5px/1.3 'IBM Plex Mono';color:#5ecfe0;letter-spacing:.04em">{{ it.label }}</div>
+            </sc-if>
+            <sc-if value="{{ it.isSep }}" hint-placeholder-val="{{ false }}">
+              <div style="height:1px;margin:4px 8px;background:#2b333c"></div>
+            </sc-if>
+            <sc-if value="{{ it.isItem }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ it.run }}" style="display:flex;align-items:center;gap:10px;width:100%;height:26px;padding:0 10px 0 6px;border-radius:4px;color:{{ it.fg }};font:400 12px/1 'Segoe UI','Segoe UI Variable Text',system-ui;transition:background .1s ease" style-hover="background:#262d36">
+                <span style="width:14px;flex:0 0 auto;text-align:center;font:400 11px/1 'Segoe UI',system-ui;color:#5ecfe0">{{ it.check }}</span>
+                <span style="text-align:left;white-space:nowrap">{{ it.label }}</span>
+                <span style="flex:1"></span>
+                <span style="font:400 11px/1 'Segoe UI',system-ui;color:#69747f;white-space:nowrap">{{ it.accel }}</span>
+              </button>
+            </sc-if>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ bar.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:{{ bar.x }}px;top:{{ bar.y }}px;z-index:29;display:flex;gap:2px;padding:3px;border-radius:7px;background:rgba(22,27,33,.94);border:1px solid #2b333c;box-shadow:0 10px 26px -12px #000;animation:kpop .14s ease both">
+          <sc-for list="{{ bar.items }}" as="b" hint-placeholder-count="3">
+            <button onClick="{{ b.run }}" title="{{ b.title }}" style="height:24px;padding:0 9px;border-radius:5px;color:#c9d2da;font:500 10.5px/1 'IBM Plex Mono';white-space:nowrap;transition:all .12s ease" style-hover="background:#24303b;color:#eaf7fa">{{ b.label }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ dimBox.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:{{ dimBox.x }}px;top:{{ dimBox.y }}px;z-index:33;width:226px;padding:8px 9px 9px;border-radius:7px;background:#161b21;border:1px solid #5ecfe0;box-shadow:0 18px 40px -14px #000,0 0 0 3px rgba(94,207,224,.12);animation:kpop .12s ease both">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
+            <span style="flex:1;font:600 9.5px/1.2 'IBM Plex Mono';color:#7fd8e6;letter-spacing:.04em">MODIFY · {{ dimBox.name }}</span>
+            <button onClick="{{ dimBox.ok }}" title="OK (Enter)" style="width:22px;height:20px;border-radius:4px;background:#173326;color:#7ee787;font:600 12px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✓</button>
+            <button onClick="{{ dimBox.cancel }}" title="Cancel (Esc)" style="width:22px;height:20px;border-radius:4px;background:#331a20;color:#ff8d9e;font:600 12px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✕</button>
+          </div>
+          <div style="display:flex;align-items:center;background:#0f1418;border:1px solid #2d5f68;border-radius:4px;overflow:hidden">
+            <button onClick="{{ dimBox.dec }}" style="width:22px;height:28px;color:#7fd8e6;font:400 14px/1 'IBM Plex Mono'" style-hover="background:#182029">−</button>
+            <input ref="{{ dimBox.ref }}" value="{{ dimBox.text }}" onChange="{{ dimBox.onInput }}" onKeyDown="{{ dimBox.onKey }}" aria-label="Dimension value" style="flex:1;min-width:0;text-align:right;background:none;border:0;padding:0 4px;font:600 14px/1 'IBM Plex Mono';color:#eaf7fa" />
+            <span style="font:400 10px/1 'IBM Plex Mono';color:#5e8790;padding:0 6px 0 2px">{{ dimBox.unit }}</span>
+            <button onClick="{{ dimBox.inc }}" style="width:22px;height:28px;color:#7fd8e6;font:400 14px/1 'IBM Plex Mono';border-left:1px solid #1e2a30" style-hover="background:#182029">+</button>
+          </div>
+          <div style="margin-top:6px;font:400 9px/1.4 'IBM Plex Mono';color:#55636f">{{ dimBox.ref2 }} · wheel / ↑↓ spin (Shift = 1 mm) · Enter ✓ · Esc ✕</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ pm.on }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:10px;right:{{ pm.right }}px;z-index:28;display:flex;gap:4px;padding:4px;border-radius:7px;background:rgba(16,19,23,.86);border:1px solid #2b333c;animation:kpop .14s ease both" title="Confirmation corner">
+          <button onClick="{{ pm.ok }}" title="OK (Enter)" style="width:34px;height:30px;border-radius:5px;background:#173326;color:#7ee787;font:600 16px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✓</button>
+          <button onClick="{{ pm.cancel }}" title="Cancel (Esc)" style="width:34px;height:30px;border-radius:5px;background:#331a20;color:#ff8d9e;font:600 16px/1 'IBM Plex Mono'" style-hover="filter:brightness(1.3)">✕</button>
         </div>
       </sc-if>
 
@@ -300,6 +381,12 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
       <div style="padding:10px 13px;border-bottom:1px solid #171d24">
         <div style="font:600 11.5px/1.3 'IBM Plex Sans';color:#dfe6ed;letter-spacing:.02em">{{ panel.title }}</div>
         <div style="font:400 10px/1.4 'IBM Plex Mono';color:#5b6672;margin-top:3px">{{ panel.sub }}</div>
+        <sc-if value="{{ pm.on }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <button onClick="{{ pm.ok }}" style="flex:1;height:26px;border-radius:5px;background:#173326;border:1px solid #2f6b47;color:#9fe0a8;font:600 11px/1 'IBM Plex Sans'" style-hover="filter:brightness(1.2)">✓ OK</button>
+            <button onClick="{{ pm.cancel }}" style="flex:1;height:26px;border-radius:5px;background:#26161a;border:1px solid #6b2f3a;color:#ff9fae;font:600 11px/1 'IBM Plex Sans'" style-hover="filter:brightness(1.2)">✕ Cancel</button>
+          </div>
+        </sc-if>
       </div>
 
       <div style="flex:1;overflow-y:auto;padding:4px 0 24px">
@@ -318,6 +405,24 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;b
                     <button onClick="{{ p.inc }}" style="width:19px;height:24px;color:#5f6b78;font:400 13px/1 'IBM Plex Mono';border-left:1px solid #1e252d;transition:all .12s ease" style-hover="color:#5ecfe0;background:#182029">+</button>
                   </div>
                 </div>
+              </sc-for>
+              <sc-for list="{{ sec.choices }}" as="c" hint-placeholder-count="1">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font:400 11px/1.3 'IBM Plex Sans';color:#8e99a5">{{ c.label }}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:3px">
+                    <sc-for list="{{ c.opts }}" as="o" hint-placeholder-count="3">
+                      <button onClick="{{ o.click }}" style="padding:4px 7px;border-radius:4px;background:{{ o.bg }};border:1px solid {{ o.bd }};color:{{ o.fg }};font:500 10px/1 'IBM Plex Mono';transition:all .12s ease" style-hover="border-color:#3f7d88">{{ o.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                <sc-for list="{{ sec.buttons }}" as="b" hint-placeholder-count="2">
+                  <button onClick="{{ b.click }}" title="{{ b.title }}" style="padding:5px 8px;border-radius:4px;background:{{ b.bg }};border:1px solid {{ b.bd }};color:{{ b.fg }};font:500 10.5px/1 'IBM Plex Sans';text-align:left;transition:all .12s ease" style-hover="border-color:#3f7d88;color:#eaf7fa">{{ b.label }}</button>
+                </sc-for>
+              </div>
+              <sc-for list="{{ sec.notes }}" as="t" hint-placeholder-count="1">
+                <div style="font:400 10px/1.5 'IBM Plex Mono';color:{{ t.fg }};white-space:pre-wrap">{{ t.text }}</div>
               </sc-for>
             </div>
           </div>
@@ -622,7 +727,13 @@ const MATS = [
   { id: 'al7075', name: 'Al 7075-T6',   E: 71700,  nu: 0.33, rho: 2810, alpha: 23.6e-6, sy: 503, sw: '#9aa6b3' },
   { id: 'steel',  name: 'Steel 4340',   E: 205000, nu: 0.29, rho: 7850, alpha: 12.3e-6, sy: 470, sw: '#7f8896' },
   { id: 'ti64',   name: 'Ti-6Al-4V',    E: 113800, nu: 0.34, rho: 4430, alpha: 8.6e-6,  sy: 880, sw: '#8b93a6' },
-  { id: 'cfrp',   name: 'CFRP [0/90]s', E: 135000, nu: 0.31, rho: 1570, alpha: 2.1e-6,  sy: 600, sw: '#3a3f47' }
+  { id: 'cfrp',   name: 'CFRP [0/90]s', E: 135000, nu: 0.31, rho: 1570, alpha: 2.1e-6,  sy: 600, sw: '#3a3f47' },
+  { id: 's355',   name: 'Steel S355',   E: 210000, nu: 0.30, rho: 7850, alpha: 12e-6,   sy: 355, sw: '#6f7884' },
+  { id: 'al6061', name: 'Al 6061-T6',   E: 68900,  nu: 0.33, rho: 2700, alpha: 23.6e-6, sy: 276, sw: '#a9b3bf' },
+  { id: 'c30',    name: 'Concrete C30', E: 33000,  nu: 0.20, rho: 2400, alpha: 10e-6,   sy: 30,  sw: '#8d8a83' },
+  { id: 'pla',    name: 'PLA (printed)', E: 3500,  nu: 0.36, rho: 1240, alpha: 68e-6,   sy: 50,  sw: '#c98fd6' },
+  // edited in stage 02; saved with the part
+  { id: 'custom', name: 'Custom material', E: 200000, nu: 0.30, rho: 7800, alpha: 12e-6, sy: 250, sw: '#e6c98a' }
 ];
 const MAT = {};
 MATS.forEach(m => { MAT[m.id] = m; });
@@ -732,38 +843,39 @@ function maxPrincipal(sx, sy, sz, txy, tyz, tzx) {
 }
 
 // ---------------------------------------------------------------------------
-// geometry: L-bracket — vertical leg of thickness t, top arm of thickness t,
-// filleted at the re-entrant corner with radius r. Extruded through depth D.
+// geometry comes from the CAD kernel (cadkernel.js): any feature-based part.
+// The mesher fills a structured hex8 grid over the part's bounding box.
 // ---------------------------------------------------------------------------
-function inSolid(x, y, g) {
-  if (x <= g.t) return true;
-  if (y >= g.H - g.t) return true;
-  if (g.r > 0 && x <= g.t + g.r && y >= g.H - g.t - g.r) {
-    const a = x - (g.t + g.r), b = y - (g.H - g.t - g.r);
-    return a*a + b*b >= g.r*g.r;
+// standard views: yaw / pitch with the camera looking at the face whose normal is listed
+const STD_VIEWS = [
+  ['Front', 'Ctrl+1', 0, 0], ['Back', 'Ctrl+2', Math.PI, 0], ['Left', 'Ctrl+3', Math.PI / 2, 0],
+  ['Right', 'Ctrl+4', -Math.PI / 2, 0], ['Top', 'Ctrl+5', 0, Math.PI / 2], ['Bottom', 'Ctrl+6', 0, -Math.PI / 2],
+  ['Isometric', 'Ctrl+7', -0.62, 0.42]
+];
+const pointInPoly = (x, y, X, Y, m) => {
+  let inside = false;
+  for (let i = 0, j = m - 1; i < m; j = i++) {
+    if ((Y[i] > y) !== (Y[j] > y) && x < (X[j] - X[i]) * (y - Y[i]) / (Y[j] - Y[i]) + X[i]) inside = !inside;
   }
-  return false;
-}
+  return inside;
+};
+// face directions of a hex: +x -x +y -y +z -z, and their corner nodes (local n = a + 2b + 4c)
+const HEX_DIRS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const HEX_QUADS = [
+  [[1,0,0],[1,1,0],[1,1,1],[1,0,1]], [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
+  [[0,1,0],[0,1,1],[1,1,1],[1,1,0]], [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+  [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], [[0,0,0],[0,1,0],[1,1,0],[1,0,0]]
+];
+const HEX_QN = HEX_QUADS.map(q => q.map(c => c[0] + 2 * c[1] + 4 * c[2]));
+const vecDir = n => { const i = [0, 1, 2].reduce((a, b) => (Math.abs(n[b]) > Math.abs(n[a]) ? b : a), 0); return (n[i] < 0 ? '-' : '+') + 'xyz'[i]; };
 
-// The in-plane spacing is snapped so the wall is a whole number of cells
-// (dx = t/m). Sampling occupancy at cell centres on an unsnapped grid makes the
-// *effective* wall thickness wobble with h — at t=30 a naive grid gives
-// 24/32/30/28 mm for h=12/8/6/4 — and bending stiffness goes as t^3, so that
-// error swamps the discretisation error and refinement stops converging.
-// The backend voxel mesher applies the identical snap, so both engines agree.
-function buildLevel(g, hx, hz) {
-  const m = Math.max(1, Math.round(g.t / hx));
-  const dx = g.t / m, dy = dx;
-  const nx = Math.max(m + 1, Math.round(g.W / dx));
-  const ny = Math.max(m + 1, Math.round(g.H / dy));
-  const nz = Math.max(1, Math.round(g.D / hz));
-  const dz = g.D / nz;
-  const geff = { W: nx * dx, H: ny * dy, D: g.D, t: g.t, r: g.r };
-  const solid = new Uint8Array(nx * ny * nz);
-  let ne = 0;
-  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-    if (inSolid((i + 0.5) * dx, (j + 0.5) * dy, geff)) { solid[(k*ny + j)*nx + i] = 1; ne++; }
-  }
+// Mesh a voxelised part (from CADK.voxelize): node numbering, coordinates in
+// the part's local frame (origin at its bounding-box corner, `org` in model
+// coordinates) and element connectivity.
+function buildLevel(vox) {
+  const { nx, ny, nz, dx, dy, dz, solid } = vox;
+  let ne = vox.ne;
+  const geff = { W: nx * dx, H: ny * dy, D: nz * dz, org: vox.org.slice() };
   const NX = nx + 1, NY = ny + 1, NZ = nz + 1;
   const nid = new Int32Array(NX * NY * NZ).fill(-1);
   for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -791,7 +903,30 @@ function buildLevel(g, hx, hz) {
       en[e*8 + n] = nid[((k + CORN[n][2])*NY + (j + CORN[n][1]))*NX + (i + CORN[n][0])];
     e++;
   }
-  return { nx, ny, nz, dx, dy, dz, NX, NY, NZ, solid, nid, ni, nj, nk, px, py, pz, en, ecell, ne, nn, geff };
+  return { nx, ny, nz, dx, dy, dz, NX, NY, NZ, solid, nid, ni, nj, nk, px, py, pz, en, ecell, ne, nn, geff,
+    org: vox.org.slice(), clamped: vox.clamped };
+}
+// The exposed element faces of a mesh, each named by the CAD kernel (the
+// nearest feature surface): what supports, loads and selection work on.
+// Cached on the mesh; `cm` is the compiled part the mesh was built from.
+function meshBoundary(L, cm) {
+  if (L.bf && L.bfFor === cm) return L.bf;
+  const out = [], fid = new Map(), h = Math.min(L.dx, L.dy, L.dz);
+  const area = [L.dy * L.dz, L.dy * L.dz, L.dx * L.dz, L.dx * L.dz, L.dx * L.dy, L.dx * L.dy];
+  for (let e = 0; e < L.ne; e++) {
+    const ci = L.ecell[e], i = ci % L.nx, j = Math.floor(ci / L.nx) % L.ny, k = Math.floor(ci / (L.nx * L.ny));
+    for (let d = 0; d < 6; d++) {
+      const D = HEX_DIRS[d], a = i + D[0], b = j + D[1], c = k + D[2];
+      if (a >= 0 && b >= 0 && c >= 0 && a < L.nx && b < L.ny && c < L.nz && L.solid[(c * L.ny + b) * L.nx + a]) continue;
+      const ctr = [(i + 0.5 + D[0] * 0.5) * L.dx, (j + 0.5 + D[1] * 0.5) * L.dy, (k + 0.5 + D[2] * 0.5) * L.dz];
+      const id = cm ? cm.faceAt([ctr[0] + L.org[0], ctr[1] + L.org[1], ctr[2] + L.org[2]], D, h) : null;
+      const q = HEX_QN[d].map(m => L.en[e * 8 + m]);
+      fid.set(e * 6 + d, id);
+      out.push({ e, d, id, nodes: q, area: area[d], c: ctr });
+    }
+  }
+  L.bf = out; L.bfFor = cm; L.fid = fid;
+  return out;
 }
 
 // nodal field transfer coarse -> fine (used as the CG initial guess)
@@ -830,52 +965,45 @@ function prolongate(C, F, uc) {
 }
 
 // ---------------------------------------------------------------------------
-// boundary conditions + consistent nodal load vector
+// boundary conditions + consistent nodal load vector, from the study: supports
+// and loads on named faces (any part), plus self weight and a temperature step
 // ---------------------------------------------------------------------------
-function buildLoads(L, g, p, mat, Ke) {
+function buildLoads(L, cm, studies, p, mat) {
   const nd = L.nn * 3;
   const free = new Uint8Array(nd).fill(1);
   const f = new Float64Array(nd);
-  const tag = { fixed: 0, tip: 0, press: 0 };
-
-  if (p.enc) for (let n = 0; n < L.nn; n++) if (L.nj[n] === 0) {
-    free[3*n] = 0; free[3*n + 1] = 0; free[3*n + 2] = 0; tag.fixed++;
-  }
-  if (p.sym) {
-    const kk = Math.round(L.nz / 2);
-    for (let n = 0; n < L.nn; n++) if (L.nk[n] === kk) free[3*n + 2] = 0;
-  }
-
-  // resultant tip force spread over the outer t of the top face, area weighted
-  if (p.force && p.F !== 0) {
-    const w = new Float64Array(L.nn);
-    const i0 = Math.max(0, L.nx - Math.max(1, Math.round(g.t / L.dx)));
-    let tot = 0;
-    for (let e = 0; e < L.ne; e++) {
-      const ci = L.ecell[e], i = ci % L.nx, j = Math.floor(ci / L.nx) % L.ny;
-      if (j !== L.ny - 1 || i < i0) continue;
-      const A = L.dx * L.dz / 4;
-      for (const m of [2, 3, 6, 7]) { w[L.en[e*8 + m]] += A; tot += A; }
-      tag.tip++;
-    }
-    if (tot > 0) {
-      const dx = Math.sin(p.theta), dy = -Math.cos(p.theta);
-      for (let n = 0; n < L.nn; n++) if (w[n] > 0) {
-        const s = p.F * w[n] / tot;
-        f[3*n] += s * dx; f[3*n + 1] += s * dy;
+  const tag = { fixed: 0, faces: {}, loaded: 0 };
+  const bf = meshBoundary(L, cm);
+  for (const s of studies || []) {
+    if (s.suppressed) continue;
+    const set = new Set(s.faces || []), faces = bf.filter(b => set.has(b.id));
+    tag.faces[s.id] = faces.length;
+    if (!faces.length) continue;
+    if (s.type === 'fixed') {
+      for (const b of faces) for (const n of b.nodes) {
+        if (free[3*n] || free[3*n+1] || free[3*n+2]) tag.fixed++;
+        free[3*n] = free[3*n + 1] = free[3*n + 2] = 0;
       }
+    } else if (s.type === 'roller') {                    // normal displacement held, free to slide
+      for (const b of faces) { const ax = b.d >> 1; for (const n of b.nodes) { if (free[3*n + ax]) tag.fixed++; free[3*n + ax] = 0; } }
+    } else if (s.type === 'force') {                     // total force, shared by area
+      const F = s.F || [0, 0, 0];
+      let A = 0; for (const b of faces) A += b.area;
+      for (const b of faces) for (const n of b.nodes) {
+        const w = b.area / 4 / A;
+        f[3*n] += F[0] * w; f[3*n + 1] += F[1] * w; f[3*n + 2] += F[2] * w;
+      }
+      tag.loaded += faces.length;
+    } else if (s.type === 'pressure') {                  // normal pressure, positive pushes into the part
+      const P = s.P || 0;
+      for (const b of faces) {
+        const D = HEX_DIRS[b.d], q = P * b.area / 4;
+        for (const n of b.nodes) { f[3*n] -= D[0] * q; f[3*n + 1] -= D[1] * q; f[3*n + 2] -= D[2] * q; }
+      }
+      tag.loaded += faces.length;
     }
   }
-  // uniform pressure on the outer web face (x = 0), acting into the part
-  if (p.press && p.P !== 0) {
-    for (let e = 0; e < L.ne; e++) {
-      if (L.ecell[e] % L.nx !== 0) continue;
-      const fn = p.P * L.dy * L.dz / 4;
-      for (const m of [0, 2, 4, 6]) f[3 * L.en[e*8 + m]] += fn;
-      tag.press++;
-    }
-  }
-  // self weight
+  // self weight (−y)
   if (p.grav) {
     const wn = mat.rho * p.mScale * 1e-12 * GRAV * L.dx * L.dy * L.dz / 8;
     for (let e = 0; e < L.ne; e++)
@@ -1166,18 +1294,21 @@ class Component extends DCLogic {
     shade: 'shaded', planes: false, pick: null,
     gestOpen: false, aiOpen: false,
     material: 'al7075', outputs: { u: true, s: true, e: true, rf: true, mode: false },
-    bcOn: { enc: true, force: true, press: true, sym: false },
     solving: false, solvePct: 0, stagePct: 0, solved: false, solveStep: 0,
     logOpen: false, bridge: 'off', bridgeEngine: null, log: [],
     engine: 'auto', mesher: 'voxel',
     tab: 'view', focus: null, history: [], chat: [], chatInput: '',
     probe: null, fps: 60, gestAct: 'idle', edit: null, editText: '',
     stats: null, quality: null, times: null, wall: 0, modes: null,
+    // CAD interaction: face selection, Modify box, PropertyManager, menus
+    selCad: null, selSet: [], dimEdit: null, featEdit: null, ctxMenu: null, viewMenu: false, ctxBar: null,
+    mouseMode: 'solidworks', undoN: 0, redoN: 0, grav: true, customMat: null,
+    // the part: an ordered feature list (cadkernel.js) and its study (supports and loads on named faces)
+    part: CADK.TEMPLATES.bracket.make(),
+    sketchTool: 'select', sketchGrid: 5, sketchFillet: 5, sketchSel: null, insertOpen: false,
     nums: {
-      gWidth: 120, gDepth: 60, gHeight: 180, gFillet: 10, gThk: 30,
       mTemp: 22, mScale: 1,
-      lForce: 4200, lAngle: 0, lPress: 0.8,
-      hSize: 6, hThick: 2, hAspect: 1, hBudget: 24,
+      hSize: 6, hSub: 2, hAspect: 1, hBudget: 24,
       sTol: 6, sIncr: 12, sMaxIt: 4000
     }
   };
@@ -1186,6 +1317,8 @@ class Component extends DCLogic {
   cam = { yaw: -0.62, pitch: 0.42, dist: 24 };
   tgt = { yaw: -0.62, pitch: 0.42, dist: 24 };
   mouse = { x: -1e4, y: -1e4, down: false, lx: 0, ly: 0 };
+  pan = [0, 0]; tgtPan = [0, 0];                       // screen-space pan, eased like the orbit
+  undoStack = []; redoStack = []; viewStack = [];
   prog = { step: 0, pct: 0 };
   faces = [];
   res = null;
@@ -1200,36 +1333,100 @@ class Component extends DCLogic {
   // ---------- lifecycle ----------
   componentDidMount() {
     this.frames = 0; this.fpsT = performance.now(); this.lastProbe = 0;
+    window.__workbench = this;                         // handle for scripted checks
     this.syncModel();
     if (/[?&]tour\b/.test(location.search)) this.setState({ gestureOn: true });   // camera-free gesture tour
+    // served by the gesture modeller: a way back to it. Both pages open in named
+    // tabs, so switching keeps each one's state instead of reloading it.
+    if (/^https?:$/.test(location.protocol) && !document.getElementById('arch-nav')) {
+      if (!window.name) window.name = 'archimedes-workbench';
+      const a = document.createElement('a');
+      a.id = 'arch-nav'; a.href = '/'; a.target = 'archimedes-modeller';
+      a.textContent = '← Gesture modeller';
+      a.title = 'Switch to the gesture modeller tab (its model and results are kept)';
+      a.style.cssText = 'position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:9999;'
+        + 'background:rgba(16,20,25,.92);color:#5ecfe0;border:1px solid rgba(94,207,224,.5);border-radius:999px;'
+        + "padding:4px 12px;font:500 11px 'IBM Plex Mono',monospace;text-decoration:none;";
+      document.body.appendChild(a);
+    }
 
     const c = this.canvas, vp = this.viewport;
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(vp);
     this.resize();
 
+    // Mouse, SolidWorks style by default: left or middle drag rotates, Ctrl+middle
+    // or right drag pans, Shift+middle zooms, the wheel zooms at the cursor, a
+    // click selects, a right click opens the context menu, double-middle fits.
+    // CATIA style (menu): middle pans, middle+left/right rotates, Ctrl+middle zooms.
     this.onDown = e => {
       const r = c.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
-      if (this.gizmoClick(mx, my)) return;               // view cube swallows the press
-      if (this.state.shade === 'nodes') {
+      if (e.button === 1) e.preventDefault();            // no autoscroll
+      if (this.state.ctxMenu || this.state.viewMenu) this.setState({ ctxMenu: null, viewMenu: false });
+      if (e.button === 0 && this.gizmoClick(mx, my)) return;   // view cube swallows the press
+      if (e.button === 0 && this.sketchFeat() && !e.altKey) { this.sketchDown(mx, my, e); this.setCursor(); return; }
+      if (e.button === 0 && this.state.stage === 1 && this.handleAt(mx, my)) { this.beginHandleDrag(mx, my); this.setCursor(); return; }
+      if (e.button === 0 && this.overDim) { this.openDimEdit(this.overDim.target, mx, my); return; }
+      if (e.button === 0 && this.state.shade === 'nodes') {
         const n = this.pickNode(mx, my);
         if (n >= 0) { this.setState({ pick: n }); return; }
       }
-      this.mouse.down = true; this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
+      if (e.button === 1) {                              // double-middle-click = zoom to fit
+        const now = performance.now();
+        if (now - (this.lastMid || 0) < 350) { this.zoomFit(); this.lastMid = 0; return; }
+        this.lastMid = now;
+      }
+      Object.assign(this.mouse, { down: true, lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: false,
+        btn: e.button, nav: null, saved: false });
       this.setState({ vpDown: true });
     };
-    this.onUp = () => { if (this.mouse.down) { this.mouse.down = false; this.setState({ vpDown: false }); } };
+    this.onUp = e => {
+      if (this.cadDrag) { this.endHandleDrag(); this.setCursor(); return; }
+      if (this.skDrag) {
+        if (this.skDrag.moved) this.pushUndo(this.skDrag.snap);
+        this.sketchUp(); this.setCursor(); return;
+      }
+      const m = this.mouse;
+      if (!m.down) return;
+      m.down = false;
+      this.setState({ vpDown: false });
+      if (m.moved || !e) return;
+      const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      if (m.btn === 0) this.clickSelect(mx, my, e.ctrlKey || e.shiftKey);
+      else if (m.btn === 2) this.openCtxMenu(mx, my);
+    };
     this.onMove = e => {
       const r = c.getBoundingClientRect();
       this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
-      if (this.mouse.down) {
-        this.tgt.yaw += (e.clientX - this.mouse.lx) * 0.008;
-        this.tgt.pitch = Math.max(-1.3, Math.min(1.3, this.tgt.pitch + (e.clientY - this.mouse.ly) * 0.006));
-        this.mouse.lx = e.clientX; this.mouse.ly = e.clientY;
-      }
+      if (this.cadDrag) { this.moveHandleDrag(this.mouse.x, this.mouse.y, e.shiftKey); return; }
+      if (this.sketchFeat()) this.sketchMove(this.mouse.x, this.mouse.y);
+      if (this.skDrag) return;
+      const m = this.mouse;
+      if (!m.down) return;
+      if (!m.moved && Math.abs(e.clientX - m.sx) + Math.abs(e.clientY - m.sy) < 4) return;   // still a click
+      if (!m.moved) { m.moved = true; this.saveView(); if (this.state.ctxBar) this.setState({ ctxBar: null }); }
+      const nav = m.nav = this.navFor(e) || 'rotate', dx = e.clientX - m.lx, dy = e.clientY - m.ly;
+      if (nav === 'rotate') {
+        this.tgt.yaw += dx * 0.008;
+        this.tgt.pitch = Math.max(-1.5708, Math.min(1.5708, this.tgt.pitch + dy * 0.006));
+      } else if (nav === 'pan') {
+        this.tgtPan[0] += dx; this.tgtPan[1] += dy; this.pan[0] += dx; this.pan[1] += dy;   // panning follows the hand 1:1
+      } else if (nav === 'zoom') this.zoomAt(m.sx - r.left, m.sy - r.top, 1 + dy * 0.006);
+      m.lx = e.clientX; m.ly = e.clientY;
+      this.setCursor();
     };
-    this.onWheel = e => { e.preventDefault(); this.tgt.dist = Math.max(11, Math.min(80, this.tgt.dist * (1 + e.deltaY * 0.0012))); };
+    this.onWheel = e => { e.preventDefault(); const r = c.getBoundingClientRect(); this.zoomAt(e.clientX - r.left, e.clientY - r.top, 1 + e.deltaY * 0.0012); };
+    this.onCtx = e => e.preventDefault();               // our own menu replaces the browser's
+    this.onDbl = e => {
+      const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      if (this.sketchFeat()) { if (this.state.sketchTool === 'line') this.finishPoly(); return; }
+      const f = this.pickFace(mx, my), F = f && this.faceInfo(f.cad);
+      if (F && F.drag) { this.setState({ selCad: f.cad, selSet: [f.cad] }); this.openDimEdit({ face: f.cad }, mx, my); }
+      else if (F && F.feat) this.editFeature(F.feat);
+    };
+    c.addEventListener('contextmenu', this.onCtx);
+    c.addEventListener('dblclick', this.onDbl);
     this.onLeave = () => { this.mouse.x = -1e4; this.mouse.y = -1e4; };
     c.addEventListener('mousedown', this.onDown);
     window.addEventListener('mouseup', this.onUp);
@@ -1247,7 +1444,16 @@ class Component extends DCLogic {
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
       const typing = e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
       if (mod && k === 'k') { e.preventDefault(); this.setState({ palOpen: !this.state.palOpen, palQuery: '', palIdx: 0, menu: null }); return; }
-      if (e.key === 'Escape') { this.setState({ palOpen: false, menu: null, edit: null }); if (e.shiftKey) this.abortSolve('cancelled by operator'); return; }
+      if (e.key === 'Escape') {
+        if (this.skPts) { this.skPts = null; return; }
+        if (this.sketchFeat() && this.state.sketchTool !== 'select') { this.setState({ sketchTool: 'select' }); return; }
+        if (this.state.dimEdit) this.dimCancel();
+        else if (this.state.featEdit) this.featureCancel();
+        else if (!this.state.palOpen && !this.state.menu && !this.state.ctxMenu && !this.state.viewMenu) this.setState({ selCad: null, ctxBar: null });
+        this.setState({ palOpen: false, menu: null, edit: null, ctxMenu: null, viewMenu: false });
+        if (e.shiftKey) this.abortSolve('cancelled by operator');
+        return;
+      }
       if (this.state.palOpen) {
         const n = this.palList().length;
         if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ palIdx: n ? (this.state.palIdx + 1) % n : 0 }); }
@@ -1256,9 +1462,40 @@ class Component extends DCLogic {
         return;
       }
       if (typing && !mod) return;                       // never steal keys from a field
+      if (typing && mod && (k === 'z' || k === 'y')) return;   // the field's own undo
+      // CAD keys: undo / redo, standard views (Ctrl+1..8), Space = view orientation,
+      // F = fit, arrows rotate 15° (Shift: 90°), Ctrl+arrows pan, Enter = ✓ in a feature
+      if (mod && k === 'z' && e.shiftKey) { e.preventDefault(); this.prevView(); return; }
+      if (mod && k === 'z') { e.preventDefault(); this.undo(); return; }
+      if (mod && k === 'y') { e.preventDefault(); this.redo(); return; }
+      if (mod && e.key >= '1' && e.key <= '7') { e.preventDefault(); this.stdView(+e.key - 1); return; }
+      if (mod && e.key === '8') { e.preventDefault(); this.normalTo(); return; }
+      if (e.key === ' ' && !mod) { e.preventDefault(); this.setState({ viewMenu: !this.state.viewMenu, ctxMenu: null }); return; }
+      if (k === 'f' && !mod) { this.zoomFit(); return; }
+      if (e.key === 'Enter' && this.skPts && this.state.sketchTool === 'line') { this.finishPoly(); return; }
+      if (e.key === 'Enter' && this.state.featEdit) { this.featureOk(); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (this.sketchFeat()) { this.sketchDelete(); return; }
+        const sl = this.state.sel;
+        if (sl && sl.startsWith('f:')) { this.deleteFeature(sl.slice(2)); return; }
+        if (sl && sl.startsWith('s:')) { this.deleteStudy(sl.slice(2)); return; }
+      }
+      if (this.sketchFeat() && !mod) {
+        const tool = { s: 'select', l: 'line', r: 'rect', c: 'circle' }[k];
+        if (tool) { this.skPts = null; this.setState({ sketchTool: tool }); return; }
+      }
+      if (e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const a = e.shiftKey ? Math.PI / 2 : Math.PI / 12, d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+        if (mod) { this.tgtPan[0] += d[0] * 40; this.tgtPan[1] += d[1] * 40; }
+        else { this.saveView(); this.tgt.yaw += d[0] * a; this.tgt.pitch = Math.max(-1.5708, Math.min(1.5708, this.tgt.pitch - d[1] * a)); }
+        return;
+      }
       if (mod && k === 'l') { e.preventDefault(); this.setState({ logOpen: !this.state.logOpen }); }
       else if (mod && k === 'g') { e.preventDefault(); this.setState({ gestureOn: !this.state.gestureOn }); }
-      else if (mod && k === 's') { e.preventDefault(); this.setState({ savedAgo: '· saved just now' }); }
+      else if (mod && k === 's') { e.preventDefault(); this.savePart(); }
+      else if (mod && k === 'o') { e.preventDefault(); this.openPart(); }
+      else if (e.key === 'Home') { this.zoomFit(); this.setView(-0.62, 0.42, true); }
       else if (e.key === 'F5') { e.preventDefault(); if (!this.state.solving) this.startSolve(); }
       else if (e.key === 'F4' && !e.altKey) { e.preventDefault(); this.setState({ stage: 4 }); }
       else if (e.key === 'F9') { e.preventDefault(); this.setState({ arOn: !this.state.arOn }); }
@@ -1296,8 +1533,11 @@ class Component extends DCLogic {
     window.removeEventListener('mouseup', this.onUp);
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('mousedown', this.onDocDown, true);
+    if (this.canvas) { this.canvas.removeEventListener('contextmenu', this.onCtx); this.canvas.removeEventListener('dblclick', this.onDbl); }
   }
   componentDidUpdate() {
+    if (this.state.customMat && MAT.custom !== this.state.customMat && JSON.stringify(MAT.custom) !== JSON.stringify(this.state.customMat))
+      MAT.custom = { ...this.state.customMat };
     // the runtime hands componentDidUpdate prevProps only, so track prev state here
     this.syncModel();
     if (this.state.palOpen && !this.prevPal && this.palInput) setTimeout(() => this.palInput && this.palInput.focus(), 30);
@@ -1311,45 +1551,46 @@ class Component extends DCLogic {
   }
 
   // ---------- model spec ----------
-  geom() {
-    const n = this.state.nums;
-    const W = n.gWidth, H = n.gHeight, D = n.gDepth;
-    const t = Math.max(1, Math.min(n.gThk, Math.min(W, H) * 0.7));
-    const r = Math.max(0, Math.min(n.gFillet, Math.min(W - t, H - t) * 0.85));
-    return { W, H, D, t, r };
+  // the compiled part (CSG of the feature list), recompiled when the features change
+  part() { return this.state.part; }
+  compiled() {
+    const f = this.state.part.features;
+    if (!this.cm || this.cmFor !== f) { this.cm = CADK.compile(this.state.part); this.cmFor = f; }
+    return this.cm;
   }
-  sizes(g) {
+  meshOpts(fast) {
     const n = this.state.nums;
-    const fill = (t => (t * g.H + g.W * t - t * t) / (g.W * g.H))(g.t);
-    const est = (hx, hz) => Math.round(g.W / hx) * Math.round(g.H / hx) * Math.max(1, Math.round(g.D / hz)) * fill;
-    let hx = Math.max(0.4, Math.min(n.hSize, g.t / Math.max(1, n.hThick)));
-    let hz = Math.max(0.4, hx * n.hAspect);
-    const budget = n.hBudget * 1000;
-    let clamped = false, guard = 0;
-    while (est(hx, hz) > budget && guard++ < 400) { hx *= 1.06; hz *= 1.06; clamped = true; }
-    return { hx, hz, clamped };
+    return { h: n.hSize, aspect: n.hAspect, budget: n.hBudget * 1000, sub: fast ? 1 : n.hSub };
   }
   modelSig() {
-    const g = this.geom(), n = this.state.nums;
-    return [g.W, g.H, g.D, g.t, g.r, n.hSize, n.hThick, n.hAspect, n.hBudget].join('|');
+    const s = this.state, n = s.nums;
+    if (s.part.features !== this._fref) { this._fref = s.part.features; this._fver = (this._fver || 0) + 1; }
+    return [this._fver, n.hSize, n.hAspect, n.hBudget, n.hSub, this.cadDrag ? 'fast' : ''].join('|');
   }
   inputSig() {
     const n = this.state.nums, s = this.state;
-    return [this.modelSig(), s.material, n.mTemp, n.mScale, n.lForce, n.lAngle, n.lPress,
-      n.sTol, n.sMaxIt, JSON.stringify(s.bcOn), JSON.stringify(s.outputs)].join('|');
+    if (s.part.studies !== this._sref) { this._sref = s.part.studies; this._sver = (this._sver || 0) + 1; }
+    return [this.modelSig().replace(/\|fast$/, '|'), s.material, JSON.stringify(s.customMat), n.mTemp, n.mScale, s.grav, this._sver,
+      n.sTol, n.sMaxIt, JSON.stringify(s.outputs)].join('|');
   }
-  // rebuild the display mesh when geometry changes; invalidate stale results
+  // rebuild the display mesh when the part changes; invalidate stale results
   syncModel() {
     const ms = this.modelSig();
     if (ms !== this.msig) {
       this.msig = ms;
-      const fine = this.sizes(this.geom());
-      this.mesh = buildLevel(this.geom(), fine.hx, fine.hz);
-      // downstream drawing, cuts and BC placement all work on the geometry the
-      // mesh actually realises, not the requested box
+      const t0 = performance.now(), cm = this.compiled();
+      const prevOrg = this.mesh && this.mesh.org;
+      this.mesh = buildLevel(CADK.voxelize(cm, this.meshOpts(!!this.cadDrag)));
+      meshBoundary(this.mesh, cm);
+      this.rebuildMs = performance.now() - t0;
+      // drawing works in the mesh's local frame (origin at the part's bounding-box
+      // corner); when that corner moves, shift the view centre with it so nothing jumps
       const g = this.g = this.mesh.geff;
-      this.ctr = [g.W / 2, g.H / 2, g.D / 2];
-      this.vs = 10 / Math.max(g.W, g.H);
+      if (prevOrg && this.ctr) for (let i = 0; i < 3; i++) this.ctr[i] += prevOrg[i] - this.mesh.org[i];
+      // the view centre eases to the new body (see loop), so a resize never jumps
+      this.ctrTgt = [g.W / 2, g.H / 2, g.D / 2];
+      this.vsTgt = 10 / Math.max(g.W, g.H, g.D * 0.8);
+      if (!this.ctr) { this.ctr = this.ctrTgt.slice(); this.vs = this.vsTgt; }
       this.sx = new Float32Array(this.mesh.nn);
       this.sy = new Float32Array(this.mesh.nn);
       this.sz = new Float32Array(this.mesh.nn);
@@ -1365,12 +1606,15 @@ class Component extends DCLogic {
     const fs = this.faceSig();
     if (fs !== this.fsig) { this.fsig = fs; this.rebuildValues(); this.rebuildFaces(); }
   }
+  // model <-> mesh-local coordinates
+  toLocal(p) { const o = this.mesh ? this.mesh.org : [0, 0, 0]; return [p[0] - o[0], p[1] - o[1], p[2] - o[2]]; }
+  toModel(p) { const o = this.mesh ? this.mesh.org : [0, 0, 0]; return [p[0] + o[0], p[1] + o[1], p[2] + o[2]]; }
   faceSig() {
     const s = this.state;
     const pl = s.cutAxis === 'free' && s.cutPlane
       ? s.cutPlane.n.concat(s.cutPlane.o).map(v => v.toFixed(2)).join(',') : '';
     return [this.msig, s.cutOn, s.cutAxis, s.cutPos, pl, s.thresh, s.threshLo, s.stage,
-      s.solved, s.field, s.timeStep, s.modal, s.mode, !!this.res].join('|');
+      s.solved, s.field, s.timeStep, s.modal, s.mode, !!this.res, this._sver].join('|');
   }
 
   // ---------- solve job ----------
@@ -1389,6 +1633,8 @@ class Component extends DCLogic {
       return;
     }
     this.remote = false;
+    if (this.state.engine !== 'local' && this.state.bridge === 'live' && !this.bracketSpec())
+      setTimeout(() => this.pushLog('core', 'the DOLFINx core takes the parametric bracket only — this part solves in-browser', 'warn'), 0);
     this.job = this.runSolve();
     this.setState(base);
   }
@@ -1411,22 +1657,24 @@ class Component extends DCLogic {
 
   *runSolve() {
     const st = this.state, n = st.nums, mat = MAT[st.material], want = st.outputs;
-    const g = this.geom();
+    const part = st.part, cm = this.compiled();
     const times = [0, 0, 0, 0, 0, 0];
     let t0 = performance.now();
     const mark = i => { times[i] = performance.now() - t0; t0 = performance.now(); };
 
     // 1 · geometry -----------------------------------------------------------
     this.prog = { step: 1, pct: 0 };
-    this.pushLog('geom', 'L-bracket ' + sig(g.W) + ' × ' + sig(g.H) + ' × ' + sig(g.D)
-      + ' mm · wall ' + sig(g.t) + ' · fillet r' + sig(g.r), 'info');
+    const ext = cm.bbox[1].map((v, i) => v - cm.bbox[0][i]);
+    this.pushLog('geom', (part.name || 'part') + ' · ' + part.features.filter(f => !f.suppressed).length + ' features · box '
+      + ext.map(sig).join(' × ') + ' mm', 'info');
     yield;
-    const sz = this.sizes(g);
-    if (sz.clamped) this.pushLog('geom', 'element size raised to ' + sig(sz.hx)
+    const vox = CADK.voxelize(cm, this.meshOpts(false));
+    if (vox.clamped) this.pushLog('geom', 'element size raised to ' + sig(vox.dx)
       + ' mm to stay inside the ' + n.hBudget + 'k element budget', 'warn');
-    const F = buildLevel(g, sz.hx, sz.hz);
+    const F = buildLevel(vox);
+    const g = F.geff;
     this.prog.pct = 100; yield;
-    if (F.ne === 0) { this.pushLog('geom', 'no material inside the bounding box — check thickness', 'err'); this.job = null; this.setState({ solving: false }); return; }
+    if (F.ne === 0) { this.pushLog('geom', 'no solid material — add a boss feature (Insert ▸ Extrude, Box…)', 'err'); this.job = null; this.setState({ solving: false }); return; }
     mark(0);
 
     // 2 · material -----------------------------------------------------------
@@ -1440,14 +1688,19 @@ class Component extends DCLogic {
 
     // 3 · loads --------------------------------------------------------------
     this.prog = { step: 3, pct: 0 };
-    const p = { enc: st.bcOn.enc, sym: st.bcOn.sym, force: st.bcOn.force, press: st.bcOn.press,
-      grav: true, therm: true, F: n.lForce, theta: n.lAngle * Math.PI / 180,
-      P: n.lPress, dT: n.mTemp - 22, mScale: n.mScale };
-    const S = buildLoads(F, g, p, mat, Kf);
-    if (S.tag.fixed === 0) this.pushLog('load', 'no Dirichlet set — the system is singular', 'err');
-    this.pushLog('load', S.tag.fixed + ' nodes encastré · tip resultant ' + sig(n.lForce / 1000)
-      + ' kN at ' + sig(n.lAngle) + '° · web ' + sig(n.lPress) + ' MPa'
-      + (p.dT ? ' · ΔT ' + sig(p.dT) + ' K' : ''), 'info');
+    const p = { grav: st.grav !== false, therm: true, dT: n.mTemp - 22, mScale: n.mScale };
+    const S = buildLoads(F, cm, part.studies, p, mat);
+    for (const sd of part.studies || []) {
+      if (sd.suppressed) continue;
+      const k = S.tag.faces[sd.id] || 0;
+      this.pushLog('load', sd.name + ' — ' + (k ? grp(k) + ' element faces' : 'no faces: its face no longer exists, reselect it'), k ? 'info' : 'warn');
+    }
+    if (S.tag.fixed === 0) {
+      this.pushLog('load', 'no support — add a Fixed or Roller support on a face (stage 03) or the system is singular', 'err');
+      this.job = null; this.setState({ solving: false, stage: 3 }); return;
+    }
+    this.pushLog('load', S.tag.fixed + ' supported nodes · ' + grp(S.tag.loaded) + ' loaded faces'
+      + (p.grav ? ' · self weight' : '') + (p.dT ? ' · ΔT ' + sig(p.dT) + ' K' : ''), 'info');
     yield;
     mark(2);
 
@@ -1456,8 +1709,8 @@ class Component extends DCLogic {
     this.pushLog('mesh', 'voxel core ' + F.nx + '×' + F.ny + '×' + F.nz + ' — ' + grp(F.ne)
       + ' hex8 · ' + grp(F.nn) + ' nodes · ' + grp(F.nn * 3) + ' DOF', 'info');
     const quality = this.quality(F, g);
-    if (quality.thin > 0) this.pushLog('mesh', quality.thin + ' elements span the wall alone — '
-      + 'raise "through-thickness min" for bending accuracy', 'warn');
+    if (quality.thin > 0) this.pushLog('mesh', quality.thin + ' elements span a wall alone — '
+      + 'use a smaller element size (stage 04) for bending accuracy', 'warn');
     yield;
     mark(3);
 
@@ -1486,7 +1739,7 @@ class Component extends DCLogic {
         rx += kv[3*nn] - S.fext[3*nn]; ry += kv[3*nn+1] - S.fext[3*nn+1]; rz += kv[3*nn+2] - S.fext[3*nn+2];
       }
       R.rf = [rx, ry, rz]; R.rfMag = Math.hypot(rx, ry, rz);
-      this.pushLog('post', 'reaction resultant ' + sig(R.rfMag / 1000) + ' kN at the encastré face', 'info');
+      this.pushLog('post', 'reaction resultant ' + sig(R.rfMag / 1000) + ' kN at the supports', 'info');
     }
     this.prog.pct = 60; yield;
     if (want.s) this.pushLog('post', 'σ_vm max ' + sig(R.max.vm) + ' MPa · yield ' + mat.sy
@@ -1500,9 +1753,9 @@ class Component extends DCLogic {
       // eigen extraction is many solves deep, so it runs on a ~500 element
       // reduction of the same geometry and is prolongated back for display
       const cf = F.ne > 900 ? Math.cbrt(F.ne / 500) : 1;
-      const C = cf > 1.05 ? buildLevel(g, F.dx * cf, F.dz * cf) : F;
+      const C = cf > 1.05 ? buildLevel(CADK.voxelize(cm, { h: F.dx * cf, aspect: F.dz / F.dx, noBudget: true, sub: n.hSub })) : F;
       const KeC = C === F ? Kf : hexKe(C.dx, C.dy, C.dz, mat.E, mat.nu);
-      const SC = C === F ? S : buildLoads(C, g, p, mat, KeC);
+      const SC = C === F ? S : buildLoads(C, cm, part.studies, p, mat);
       const nModes = 3;
       this.pushLog('modal', 'inverse iteration on ' + grp(C.ne) + ' elements · lumped mass', 'info');
       const hz = [];
@@ -1548,7 +1801,7 @@ class Component extends DCLogic {
       }
       if (open >= 3) thin++;
     }
-    return { ar, thin, ne: L.ne, span: Math.round(g.t / L.dx) };
+    return { ar, thin, ne: L.ne };
   }
 
   // ---------- derived display data ----------
@@ -1592,17 +1845,19 @@ class Component extends DCLogic {
     const g = this.g, a = this.state.cutAxis;
     return (a === 'x' ? g.W : a === 'y' ? g.H : g.D) * (this.state.cutPos / 100);
   }
-  culled(i, j, k) {
-    const L = this.mesh, st = this.state;
-    if (!st.cutOn || st.stage < 4) return false;
-    const a = st.cutAxis;
-    if (a === 'free' && st.cutPlane) {           // palm plane from the gesture engine
-      const P = st.cutPlane;
-      return ((i + 0.5) * L.dx - P.o[0]) * P.n[0] + ((j + 0.5) * L.dy - P.o[1]) * P.n[1]
-        + ((k + 0.5) * L.dz - P.o[2]) * P.n[2] > 0;
+  // The section as a plane n·x = c in model coordinates; the kept side is n·x <= c.
+  // Elements are clipped exactly against it, so the cut face is flat rather
+  // than the staircase whole-element culling leaves behind.
+  cutEq() {
+    const st = this.state;
+    if (!st.cutOn || st.stage < 4) return null;
+    if (st.cutAxis === 'free' && st.cutPlane) {  // palm plane from the gesture engine
+      const P = st.cutPlane, l = Math.hypot(P.n[0], P.n[1], P.n[2]) || 1;
+      const n = [P.n[0] / l, P.n[1] / l, P.n[2] / l];
+      return { n, c: n[0] * P.o[0] + n[1] * P.o[1] + n[2] * P.o[2] };
     }
-    const v = a === 'x' ? (i + 0.5) * L.dx : a === 'y' ? (j + 0.5) * L.dy : (k + 0.5) * L.dz;
-    return v > this.cutBound();
+    const a = st.cutAxis;
+    return { n: [a === 'x' ? 1 : 0, a === 'y' ? 1 : 0, a === 'x' || a === 'y' ? 0 : 1], c: this.cutBound() };
   }
   belowThreshold(ci) {
     const st = this.state;
@@ -1619,27 +1874,110 @@ class Component extends DCLogic {
       [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], [[0,0,0],[0,1,0],[1,1,0],[1,0,0]]
     ];
     const nx = L.nx, ny = L.ny, nz = L.nz;
+    const P = this.cutEq(), eps = 1e-6 * Math.max(L.dx, L.dy, L.dz);
+    // signed distance of lattice point (I, J, K) from the section plane (> 0 is cut away)
+    const sd = P ? (I, J, K) => P.n[0] * I * L.dx + P.n[1] * J * L.dy + P.n[2] * K * L.dz - P.c : () => -1;
+    const side = (i, j, k) => {                           // 0 kept, 1 crossing, 2 cut away
+      if (!P) return 0;
+      let lo = Infinity, hi = -Infinity;
+      for (let m = 0; m < 8; m++) {
+        const v = sd(i + CORN[m][0], j + CORN[m][1], k + CORN[m][2]);
+        if (v < lo) lo = v; if (v > hi) hi = v;
+      }
+      return lo >= -eps ? 2 : hi <= eps ? 0 : 1;
+    };
     const vis = (i, j, k) => {
       if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return 0;
       const ci = (k*ny + j)*nx + i;
       if (!L.solid[ci]) return 0;
-      if (this.culled(i, j, k)) return 2;                 // hidden by the cut
+      const c = side(i, j, k);
+      if (c === 2) return 2;                              // hidden by the cut
       if (this.belowThreshold(ci)) return 3;              // hidden by the threshold
-      return 1;
+      return c === 1 ? 4 : 1;                             // 4: the plane runs through it
     };
+    const node = (I, J, K) => L.nid[(K * L.NY + J) * L.NX + I];
+    // polygon corners are (a, b, t): t of the way from node a to node b, so the
+    // cut follows the deformed mesh. a is always on the kept side.
+    const mkPoly = pts => ({ a: Int32Array.from(pts, p => p[0]), b: Int32Array.from(pts, p => p[1]),
+      t: Float32Array.from(pts, p => p[2]) });
+    const polyNodes = pts => [...new Set(pts.map(p => p[0]))];
     const faces = [];
+    const EDGES = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+    const u0 = P ? (Math.abs(P.n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]) : null;
+    let U = null, Wb = null;
+    if (P) {
+      const n = P.n, d = u0[0] * n[0] + u0[1] * n[1] + u0[2] * n[2];
+      U = [u0[0] - d * n[0], u0[1] - d * n[1], u0[2] - d * n[2]];
+      const l = Math.hypot(U[0], U[1], U[2]); U = U.map(v => v / l);
+      Wb = [n[1] * U[2] - n[2] * U[1], n[2] * U[0] - n[0] * U[2], n[0] * U[1] - n[1] * U[0]];
+    }
     for (let e = 0; e < L.ne; e++) {
       const ci = L.ecell[e], i = ci % nx, j = Math.floor(ci / nx) % ny, k = Math.floor(ci / (nx * ny));
-      if (vis(i, j, k) !== 1) continue;
+      const me = vis(i, j, k);
+      if (me !== 1 && me !== 4) continue;
       for (let d = 0; d < 6; d++) {
         const s = vis(i + dirs[d][0], j + dirs[d][1], k + dirs[d][2]);
-        if (s === 1) continue;
+        if (s === 1 || s === 4) continue;
         const q = quads[d], n = [0, 0, 0, 0];
-        for (let m = 0; m < 4; m++)
-          n[m] = L.nid[((k + q[m][2]) * L.NY + (j + q[m][1])) * L.NX + (i + q[m][0])];
-        faces.push({ n, d, cap: s === 2, iface: s === 3, ci, gx: i, gy: j, gz: k });
+        for (let m = 0; m < 4; m++) n[m] = node(i + q[m][0], j + q[m][1], k + q[m][2]);
+        if (me === 1) { faces.push({ n, d, e, cap: s === 2, iface: s === 3, ci, gx: i, gy: j, gz: k }); continue; }
+        if (s === 2) continue;                            // shares no area with the kept part
+        // Sutherland-Hodgman against the plane; one plane, so every new corner
+        // lies on an edge between two of the quad's own nodes
+        const v = q.map(c => sd(i + c[0], j + c[1], k + c[2])), pts = [];
+        for (let m = 0; m < 4; m++) {
+          const r = (m + 1) % 4, va = v[m], vb = v[r];
+          if (va <= 0) pts.push([n[m], n[m], 0]);
+          if ((va <= 0) !== (vb <= 0)) {
+            const t = va / (va - vb);
+            pts.push(va <= 0 ? [n[m], n[r], t] : [n[r], n[m], 1 - t]);
+          }
+        }
+        if (pts.length >= 3) faces.push({ n: polyNodes(pts), poly: mkPoly(pts), d, e, iface: s === 3, ci, gx: i, gy: j, gz: k });
       }
+      if (me !== 4) continue;
+      // the cap: this element's slice through the plane, ordered anticlockwise about +n
+      const cv = CORN.map(c => sd(i + c[0], j + c[1], k + c[2]));
+      const cn = CORN.map(c => node(i + c[0], j + c[1], k + c[2]));
+      const pts = [];
+      for (let m = 0; m < 8; m++) if (Math.abs(cv[m]) <= eps) pts.push([cn[m], cn[m], 0, CORN[m][0], CORN[m][1], CORN[m][2]]);
+      for (const [a0, b0] of EDGES) {
+        const va = cv[a0], vb = cv[b0];
+        if (Math.abs(va) <= eps || Math.abs(vb) <= eps || (va < 0) === (vb < 0)) continue;
+        const [a, b] = va < 0 ? [a0, b0] : [b0, a0], t = cv[a] / (cv[a] - cv[b]);
+        pts.push([cn[a], cn[b], t, CORN[a][0] + (CORN[b][0] - CORN[a][0]) * t,
+          CORN[a][1] + (CORN[b][1] - CORN[a][1]) * t, CORN[a][2] + (CORN[b][2] - CORN[a][2]) * t]);
+      }
+      if (pts.length < 3) continue;
+      const ang = p => { const x = p[3] * L.dx, y = p[4] * L.dy, z = p[5] * L.dz;
+        return Math.atan2(x * Wb[0] + y * Wb[1] + z * Wb[2], x * U[0] + y * U[1] + z * U[2]); };
+      let mx = 0, my = 0, mz = 0;
+      for (const p of pts) { mx += p[3]; my += p[4]; mz += p[5]; }
+      const cx = mx / pts.length, cy = my / pts.length, cz = mz / pts.length;
+      pts.sort((p, r) => ang([0, 0, 0, p[3] - cx, p[4] - cy, p[5] - cz]) - ang([0, 0, 0, r[3] - cx, r[4] - cy, r[5] - cz]));
+      faces.push({ n: polyNodes(pts), poly: mkPoly(pts), d: -1, nrm: P.n, cap: true, iface: false, ci, gx: i, gy: j, gz: k });
     }
+    for (const f of faces) if (f.poly) { f.X = new Float32Array(f.poly.a.length); f.Y = new Float32Array(f.poly.a.length); }
+    // CAD face of every element face, and each CAD face's centre (where its handle sits)
+    const info = {};
+    for (const f of faces) {
+      const id = f.cad = this.cadFaceOf(f);
+      if (!id) continue;
+      const I = info[id] || (info[id] = { c: [0, 0, 0], n: 0 });
+      for (const q of f.n) { I.c[0] += L.px[q]; I.c[1] += L.py[q]; I.c[2] += L.pz[q]; I.n++; }
+    }
+    for (const id in info) info[id].c = info[id].c.map(v => v / info[id].n);
+    // the handle sits on the face itself: an L-shaped face's centroid can lie in the void
+    const best = {};
+    for (const f of faces) {
+      const I = f.cad && info[f.cad]; if (!I) continue;
+      let x = 0, y = 0, z = 0;
+      for (const q of f.n) { x += L.px[q]; y += L.py[q]; z += L.pz[q]; }
+      const m = f.n.length, d = (x / m - I.c[0]) ** 2 + (y / m - I.c[1]) ** 2 + (z / m - I.c[2]) ** 2;
+      if (!best[f.cad] || d < best[f.cad].d) best[f.cad] = { d, c: [x / m, y / m, z / m] };
+    }
+    for (const id in best) info[id].c = best[id].c;
+    this.cadInfo = info;
     this.faces = faces;
     this.order = new Int32Array(faces.length);
     this.fcx = new Float32Array(faces.length);
@@ -1649,9 +1987,11 @@ class Component extends DCLogic {
     const seen = new Uint8Array(L.nn), nodes = [];
     for (let e = 0; e < L.ne; e++) {
       const ci = L.ecell[e], i = ci % nx, j = Math.floor(ci / nx) % ny, k = Math.floor(ci / (nx * ny));
-      if (vis(i, j, k) !== 1) continue;
+      const me = vis(i, j, k);
+      if (me !== 1 && me !== 4) continue;
       for (let m = 0; m < 8; m++) {
         const n = L.en[e * 8 + m];
+        if (me === 4 && sd(i + CORN[m][0], j + CORN[m][1], k + CORN[m][2]) > eps) continue;
         if (!seen[n]) { seen[n] = 1; nodes.push(n); }
       }
     }
@@ -1683,6 +2023,11 @@ class Component extends DCLogic {
     this.tickGesture(now);
     const c = this.cam, t = this.tgt, k = 0.14;
     c.yaw += (t.yaw - c.yaw) * k; c.pitch += (t.pitch - c.pitch) * k; c.dist += (t.dist - c.dist) * k;
+    this.pan[0] += (this.tgtPan[0] - this.pan[0]) * k; this.pan[1] += (this.tgtPan[1] - this.pan[1]) * k;
+    if (!this.cadDrag && this.ctrTgt) {                 // frozen while a handle is dragged
+      for (let i = 0; i < 3; i++) this.ctr[i] += (this.ctrTgt[i] - this.ctr[i]) * k;
+      this.vs += (this.vsTgt - this.vs) * k;
+    }
     this.draw(now);
     this.syncPops(now);
   };
@@ -1738,7 +2083,7 @@ class Component extends DCLogic {
     const Y = y * cp - Z * sp; Z = y * sp + Z * cp;
     const d = Z + c.dist;
     const s = this.h * 1.02 / Math.max(1, d);
-    return [this.w / 2 + X * s, this.h / 2 - Y * s, d];
+    return [this.w / 2 + this.pan[0] + X * s, this.h / 2 + this.pan[1] - Y * s, d];
   }
   projectNodes() {
     const L = this.mesh, R = this.res, st = this.state, c = this.cam;
@@ -1749,7 +2094,7 @@ class Component extends DCLogic {
     else if (showResult && R) { src = R.u; sc = st.deform * this.lf(); }
     const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
     const vs = this.vs, cx = this.ctr[0], cyy = this.ctr[1], cz = this.ctr[2];
-    const f = this.h * 1.02, hw = this.w / 2, hh = this.h / 2;
+    const f = this.h * 1.02, hw = this.w / 2 + this.pan[0], hh = this.h / 2 + this.pan[1];
     const sx = this.sx, sy2 = this.sy, sz2 = this.sz;
     for (let n = 0; n < L.nn; n++) {
       let x = L.px[n], y = L.py[n], z = L.pz[n];
@@ -1791,7 +2136,22 @@ class Component extends DCLogic {
     const ord = [];
     const depth = this.fdepth && this.fdepth.length === nf ? this.fdepth : (this.fdepth = new Float32Array(nf));
     for (let i = 0; i < nf; i++) {
-      const n = faces[i].n;
+      const fp = faces[i], P = fp.poly;
+      if (P) {                                            // clipped face or cap slice
+        const m = P.a.length, X = fp.X, Y = fp.Y;
+        let z = 0, cx = 0, cy = 0, ar = 0;
+        for (let q = 0; q < m; q++) {
+          const a = P.a[q], b = P.b[q], t = P.t[q];
+          X[q] = sx[a] + (sx[b] - sx[a]) * t; Y[q] = sy[a] + (sy[b] - sy[a]) * t;
+          z += sz[a] + (sz[b] - sz[a]) * t; cx += X[q]; cy += Y[q];
+        }
+        for (let q = 0; q < m; q++) { const r = q + 1 === m ? 0 : q + 1; ar += X[q] * Y[r] - X[r] * Y[q]; }
+        if (ar >= 0) { depth[i] = -1; continue; }
+        depth[i] = z / m; this.fcx[i] = cx / m; this.fcy[i] = cy / m;
+        ord.push(i);
+        continue;
+      }
+      const n = fp.n;
       const ax = sx[n[1]] - sx[n[0]], ay = sy[n[1]] - sy[n[0]];
       const bx = sx[n[2]] - sx[n[1]], by = sy[n[2]] - sy[n[1]];
       if (ax * by - ay * bx >= 0) { depth[i] = -1; continue; }        // backface (screen y down)
@@ -1810,9 +2170,17 @@ class Component extends DCLogic {
     const showEdges = wire || st.stage === 4 || nf < 1400;
     const edge = st.stage === 4 ? 0.55 : showResult ? 0.24 : 0.5;
     const matCol = { al7075: [150,162,175], steel: [128,136,146], ti64: [136,146,160], cfrp: [42,46,52] }[st.material] || [150,162,175];
+    const cadOn = st.stage <= 4 && !st.modal, hovC = this.mouse.down ? null : this.hoverCad;
+    const selS = new Set(st.selSet), hlSet = new Set(cadOn ? this.featureFaces() : []);
+    const stT = cadOn && st.stage === 3 ? this.studyTints() : null;
     for (const i of ord) {
-      const f = faces[i], n = f.n;
-      const v = (nv[n[0]] + nv[n[1]] + nv[n[2]] + nv[n[3]]) * 0.25;
+      const f = faces[i], n = f.n, P = f.poly;
+      let v;
+      if (P) {
+        v = 0;
+        for (let q = 0; q < P.a.length; q++) v += nv[P.a[q]] + (nv[P.b[q]] - nv[P.a[q]]) * P.t[q];
+        v /= P.a.length;
+      } else v = (nv[n[0]] + nv[n[1]] + nv[n[2]] + nv[n[3]]) * 0.25;
       let r, g, b;
       if (f.cap && !showResult) {
         r = 176; g = 122; b = 96;                        // machined-face tint
@@ -1823,14 +2191,25 @@ class Component extends DCLogic {
       } else if (st.stage === 2) { r = matCol[0]; g = matCol[1]; b = matCol[2]; }
       else if (st.stage === 4) { r = 118; g = 136; b = 154; }
       else { r = 132; g = 148; b = 164; }
+      if (cadOn && f.cad) {                              // CAD selection: blue, pre-highlight: light
+        const mix = (k, R, G, B) => { r = r * (1 - k) + R * k; g = g * (1 - k) + G * k; b = b * (1 - k) + B * k; };
+        if (selS.has(f.cad) || hlSet.has(f.cad)) mix(0.62, 64, 150, 255);
+        else if (stT && stT.has(f.cad)) { const c = stT.get(f.cad); mix(0.55, c[0], c[1], c[2]); }
+        else if (f.cad === hovC) mix(0.32, 190, 230, 255);
+      }
 
-      const nr = dirs[f.d];
+      const nr = f.nrm || dirs[f.d];
       const sh = 0.5 + 0.5 * Math.max(0, nr[0] * L[0] + nr[1] * L[1] + nr[2] * L[2]);
       ctx.beginPath();
-      ctx.moveTo(sx[n[0]], sy[n[0]]);
-      ctx.lineTo(sx[n[1]], sy[n[1]]);
-      ctx.lineTo(sx[n[2]], sy[n[2]]);
-      ctx.lineTo(sx[n[3]], sy[n[3]]);
+      if (P) {
+        ctx.moveTo(f.X[0], f.Y[0]);
+        for (let q = 1; q < P.a.length; q++) ctx.lineTo(f.X[q], f.Y[q]);
+      } else {
+        ctx.moveTo(sx[n[0]], sy[n[0]]);
+        ctx.lineTo(sx[n[1]], sy[n[1]]);
+        ctx.lineTo(sx[n[2]], sy[n[2]]);
+        ctx.lineTo(sx[n[3]], sy[n[3]]);
+      }
       ctx.closePath();
       if (wire) {
         // still painter-sorted, so the far side stays hidden — a hidden-line
@@ -1855,7 +2234,7 @@ class Component extends DCLogic {
 
   drawContact(ctx) {
     const g = this.g;
-    const gp = this.proj([g.t / 2, 0.02, g.D / 2]);
+    const gp = this.proj([g.W / 2, 0.02, g.D / 2]);
     const r = 2600 / Math.max(1, gp[2]);
     ctx.save(); ctx.translate(gp[0], gp[1]); ctx.scale(1, 0.28);
     const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
@@ -1894,7 +2273,9 @@ class Component extends DCLogic {
   // overlays that sit on top of whichever model representation was drawn
   afterModel(ctx, W, H, now) {
     const st = this.state;
-    if (st.stage === 1) this.drawDims(ctx);
+    this.dimHits = [];
+    if (st.stage === 1) { this.drawDims(ctx); this.drawHandles(ctx); this.drawSketch(ctx); }
+    this.updateHover();
     if (st.stage === 3) this.drawBCs(ctx);
     if (st.arOn) this.drawReticle(ctx, W, H, now);
     if (st.gestureOn) this.drawHand(ctx, W, H, now);
@@ -1934,8 +2315,8 @@ class Component extends DCLogic {
   // XY / YZ / ZX datum planes through the model origin
   drawPlanes(ctx) {
     const g = this.g;
-    const ex = g.W * 0.7, ey = g.H * 0.7, ez = g.D * 1.6;
-    const c = [g.W / 2, g.H / 2, g.D / 2];
+    const ex = g.W * 0.7, ey = g.H * 0.7, ez = Math.max(g.D, g.W * 0.5) * 0.9;
+    const c = this.toLocal([0, 0, 0]);                     // the reference planes pass through the model origin
     const defs = [
       { n: 'XY', col: '94,207,224', pts: [[-ex,-ey,0],[ex,-ey,0],[ex,ey,0],[-ex,ey,0]] },
       { n: 'YZ', col: '255,107,129', pts: [[0,-ey,-ez],[0,ey,-ez],[0,ey,ez],[0,-ey,ez]] },
@@ -2042,62 +2423,66 @@ class Component extends DCLogic {
     }
     return best;
   }
+  // Smart dimensions on the model for the feature being edited (or the one that
+  // owns the selected face): click one to edit it in the Modify box.
   drawDims(ctx) {
-    const g = this.g, c = this.cv('len'), off = Math.max(g.W, g.H) * 0.1;
-    const line = (p, q, txt) => {
-      const a = this.proj(p), b = this.proj(q);
-      ctx.strokeStyle = 'rgba(94,207,224,.45)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#7fd8e6'; ctx.font = "500 10px 'IBM Plex Mono'";
-      ctx.fillText(txt, (a[0] + b[0]) / 2 + 6, (a[1] + b[1]) / 2 - 4);
-    };
-    const u = v => sig(v * c[1]) + ' ' + c[0];
-    line([0, -off, 0], [g.W, -off, 0], u(g.W));
-    line([g.W + off, 0, 0], [g.W + off, g.H, 0], u(g.H));
-    line([0, -off, g.D], [0, -off, 0], u(g.D));
-    line([0, g.H + off * 0.4, 0], [g.t, g.H + off * 0.4, 0], u(g.t) + ' wall');
-  }
-  drawBCs(ctx) {
-    const g = this.g, st = this.state, n = st.nums;
-    if (st.bcOn.enc) {
-      ctx.strokeStyle = '#7ee787'; ctx.lineWidth = 1.2;
-      const hs = g.t / 6;
-      for (let x = 0; x <= g.t + 1e-6; x += hs) for (const z of [0, g.D]) {
-        const a = this.proj([x, 0, z]), b = this.proj([x - hs, -g.H * 0.045, z]);
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-      }
-      const ba = this.proj([0, -g.H * 0.05, g.D / 2]);
-      ctx.fillStyle = '#7ee787'; ctx.font = "500 10px 'IBM Plex Mono'";
-      ctx.fillText('ENCASTRE  U1=U2=U3=0', ba[0] - 40, ba[1] + 22);
-    }
-    if (st.bcOn.force && n.lForce) {
-      const th = n.lAngle * Math.PI / 180, dx = Math.sin(th), dy = -Math.cos(th);
-      const len = g.H * 0.16;
-      ctx.strokeStyle = '#ff6b81'; ctx.fillStyle = '#ff6b81'; ctx.lineWidth = 1.6;
-      for (let q = 0.2; q <= 0.85; q += 0.3) {
-        const z = g.D * q, x = g.W - g.t / 2;
-        const tip = this.proj([x, g.H + g.H * 0.01, z]);
-        const top = this.proj([x - dx * len, g.H + g.H * 0.01 - dy * len, z]);
-        ctx.beginPath(); ctx.moveTo(top[0], top[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
-        const a = Math.atan2(tip[1] - top[1], tip[0] - top[0]);
-        ctx.beginPath();
-        ctx.moveTo(tip[0], tip[1]);
-        ctx.lineTo(tip[0] - 7 * Math.cos(a - 0.4), tip[1] - 7 * Math.sin(a - 0.4));
-        ctx.lineTo(tip[0] - 7 * Math.cos(a + 0.4), tip[1] - 7 * Math.sin(a + 0.4));
-        ctx.closePath(); ctx.fill();
-      }
-      const lp = this.proj([g.W - g.t / 2, g.H + g.H * 0.19, g.D / 2]);
+    const st = this.state;
+    if (this.sketchFeat()) return;
+    const fid = st.featEdit ? st.featEdit.id : st.selCad && this.faceInfo(st.selCad) ? this.faceInfo(st.selCad).feat : null;
+    const f = fid && this.feat(fid);
+    if (!f) return;
+    const c = this.cv('len'), cm = this.compiled();
+    for (const d of CADK.featureDims(f, cm)) {
+      if (!d.at) continue;
+      const p = this.proj(this.toLocal(d.at));
+      const over = this.overDim && this.overDim.key === d.key;
+      const txt = d.label.replace(/[0-9.]+/, m => sig(+m * c[1]));
       ctx.font = "500 10px 'IBM Plex Mono'";
-      ctx.fillText('F = ' + sig(n.lForce * this.cv('force')[1]) + ' ' + this.cv('force')[0]
-        + '  ' + sig(n.lAngle) + '°', lp[0] - 34, lp[1] - 6);
+      const w = ctx.measureText(txt).width + 10, h = 16, x = p[0] - w / 2, y = p[1] - h / 2;
+      ctx.fillStyle = over ? 'rgba(94,207,224,.22)' : 'rgba(11,14,17,.82)';
+      ctx.strokeStyle = over ? '#5ecfe0' : 'rgba(94,207,224,.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = over ? '#eaf7fa' : '#7fd8e6';
+      ctx.fillText(txt, x + 5, y + 11.5);
+      this.dimHits.push({ key: d.key, target: { feat: f.id, key: d.key }, x, y, w, h });
     }
-    if (st.bcOn.press && n.lPress) {
-      ctx.strokeStyle = '#ffa23a'; ctx.fillStyle = '#ffa23a'; ctx.lineWidth = 1.3;
-      for (let q = 0.15; q <= 0.9; q += 0.25) {
-        const a = this.proj([-g.t * 0.7, g.H * q, g.D / 2]), b = this.proj([0, g.H * q, g.D / 2]);
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[0] - 6, b[1] - 3); ctx.lineTo(b[0] - 6, b[1] + 3); ctx.closePath(); ctx.fill();
+  }
+  // glyphs for the study: hatches on supports, arrows for forces and pressures
+  drawBCs(ctx) {
+    const L = this.mesh, bf = L && L.bf, studies = this.state.part.studies || [];
+    if (!bf) return;
+    const g = this.g, len = 0.09 * Math.max(g.W, g.H, g.D), cf = this.cv('force'), cs = this.cv('stress');
+    const col = { fixed: '#7ee787', roller: '#b9e37a', force: '#ff6b81', pressure: '#ffa23a' };
+    ctx.font = "500 10px 'IBM Plex Mono'";
+    for (const s of studies) {
+      if (s.suppressed) continue;
+      const set = new Set(s.faces || []), faces = bf.filter(b => set.has(b.id));
+      if (!faces.length) continue;
+      const stride = Math.max(1, Math.floor(faces.length / 26));
+      ctx.strokeStyle = ctx.fillStyle = col[s.type] || '#ccc'; ctx.lineWidth = 1.3;
+      const Fn = s.F ? Math.hypot(s.F[0], s.F[1], s.F[2]) : 0;
+      for (let i = 0; i < faces.length; i += stride) {
+        const b = faces[i], D = HEX_DIRS[b.d], c = b.c;
+        if (s.type === 'fixed' || s.type === 'roller') {
+          const a = this.proj(c), q = this.proj([c[0] + D[0] * len * 0.35, c[1] + D[1] * len * 0.35, c[2] + D[2] * len * 0.35]);
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+          if (s.type === 'roller') { ctx.beginPath(); ctx.arc(q[0], q[1], 2.5, 0, 6.284); ctx.stroke(); }
+          else { ctx.beginPath(); ctx.moveTo(q[0] - 3, q[1] - 3); ctx.lineTo(q[0] + 3, q[1] + 3); ctx.stroke(); }
+        } else {
+          const dir = s.type === 'force' ? (Fn > 0 ? s.F.map(v => v / Fn) : [0, 0, 0]) : D.map(v => -v * Math.sign(s.P || 1));
+          const tip = s.type === 'force' ? c : c, tail = [tip[0] - dir[0] * len, tip[1] - dir[1] * len, tip[2] - dir[2] * len];
+          const a = this.proj(tail), q = this.proj(tip);
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+          const an = Math.atan2(q[1] - a[1], q[0] - a[0]);
+          ctx.beginPath(); ctx.moveTo(q[0], q[1]);
+          ctx.lineTo(q[0] - 7 * Math.cos(an - 0.4), q[1] - 7 * Math.sin(an - 0.4));
+          ctx.lineTo(q[0] - 7 * Math.cos(an + 0.4), q[1] - 7 * Math.sin(an + 0.4));
+          ctx.closePath(); ctx.fill();
+        }
       }
+      const b0 = faces[Math.floor(faces.length / 2)], lp = this.proj([b0.c[0] + HEX_DIRS[b0.d][0] * len * 1.3, b0.c[1] + HEX_DIRS[b0.d][1] * len * 1.3, b0.c[2] + HEX_DIRS[b0.d][2] * len * 1.3]);
+      const val = s.type === 'force' ? ' ' + sig(Fn * cf[1]) + ' ' + cf[0] : s.type === 'pressure' ? ' ' + sig((s.P || 0) * cs[1]) + ' ' + cs[0] : '';
+      ctx.fillText(s.name.split(' · ')[0] + val, lp[0] + 4, lp[1]);
     }
   }
   drawReticle(ctx, W, H, now) {
@@ -2152,7 +2537,7 @@ class Component extends DCLogic {
       x: Math.min(this.w - 190, this.mouse.x + 16), y: Math.max(8, this.mouse.y - 30),
       l1: M.short + ' ' + sig(F.arr[node] * M.conv * this.lf()) + ' ' + M.unit,
       l2: 'node ' + node + ' · |U| ' + sig(this.res.umag[node] * c[1] * this.lf()) + ' ' + c[0],
-      l3: 'xyz ' + sig(L.px[node] * c[1]) + ', ' + sig(L.py[node] * c[1]) + ', ' + sig(L.pz[node] * c[1]) + ' ' + c[0]
+      l3: 'xyz ' + sig((L.px[node] + L.org[0]) * c[1]) + ', ' + sig((L.py[node] + L.org[1]) * c[1]) + ', ' + sig((L.pz[node] + L.org[2]) * c[1]) + ' ' + c[0]
     } });
   }
 
@@ -2181,10 +2566,856 @@ class Component extends DCLogic {
 
   // ---------- parameter plumbing ----------
   cv(kind) { return UNITS[this.state.units][kind]; }
+  // =====================================================================
+  // CAD interaction, SolidWorks / CATIA style, on any part the kernel builds:
+  // pre-highlight and select named faces, Instant3D drag handles, the Modify
+  // box, the PropertyManager (✓ / ✕) for every feature type, a sketcher,
+  // insert commands, studies (supports and loads on faces), undo / redo,
+  // standard views, pan / zoom-at-cursor and right-click menus.
+  // =====================================================================
+  cadFaceOf(f) {
+    if (f.cap) return 'cut';
+    const L = this.mesh;
+    return (L && L.fid && L.fid.get(f.e * 6 + f.d)) || null;
+  }
+  faceInfo(id) {
+    if (id === 'cut') return { id, name: 'Section face', feat: null, drag: null };
+    const cm = this.compiled();
+    return (cm && cm.faces[id]) || null;
+  }
+  feat(id) { return this.state.part.features.find(f => f.id === id) || null; }
+  featLabel(f) { return f ? (f.name || f.id) : ''; }
+  consumersOf(id) { return this.state.part.features.filter(f => f.sketch === id || f.src === id); }
+  // faces lit because their feature is selected in the tree (or being edited)
+  featureFaces() {
+    const st = this.state;
+    if (st.selSet.length && !st.featEdit) return [];      // picked faces show on their own
+    let id = st.featEdit ? st.featEdit.id : (st.stage === 1 && st.sel && st.sel.startsWith('f:') ? st.sel.slice(2) : null);
+    if (!id) return [];
+    const f = this.feat(id);
+    const ids = new Set([id]);
+    if (f && f.type === 'sketch') for (const c of this.consumersOf(id)) ids.add(c.id);
+    const cm = this.compiled(), out = [];
+    for (const k in cm.faces) if (ids.has(cm.faces[k].feat)) out.push(k);
+    return out;
+  }
+  studyTints() {
+    const studies = this.state.part.studies;
+    if (this._tintFor === studies) return this._tints;
+    const col = { fixed: [80, 200, 120], roller: [150, 220, 120], force: [255, 107, 129], pressure: [255, 162, 58] }, m = new Map();
+    for (const s of studies || []) if (!s.suppressed) for (const id of s.faces || []) m.set(id, col[s.type] || [200, 200, 200]);
+    this._tintFor = studies; this._tints = m;
+    return m;
+  }
+  pickFace(x, y) {
+    const ord = this.visOrder || [], F = this.faces, sx = this.sx, sy = this.sy;
+    const X = new Float32Array(4), Y = new Float32Array(4);
+    for (let o = ord.length - 1; o >= 0; o--) {          // nearest first
+      const f = F[ord[o]];
+      if (f.poly) { if (pointInPoly(x, y, f.X, f.Y, f.poly.a.length)) return f; continue; }
+      for (let q = 0; q < 4; q++) { X[q] = sx[f.n[q]]; Y[q] = sy[f.n[q]]; }
+      if (pointInPoly(x, y, X, Y, 4)) return f;
+    }
+    return null;
+  }
+  updateHover() {
+    const mx = this.mouse.x, my = this.mouse.y;
+    this.overDim = null; this.overHandle = false;
+    if (mx < -100 || this.mouse.down || this.state.shade === 'nodes' || this.sketchFeat()) { this.hoverCad = null; this.setCursor(); return; }
+    for (const h of this.dimHits) if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) this.overDim = h;
+    this.overHandle = !this.overDim && this.handleAt(mx, my);
+    const f = this.overDim || this.overHandle ? null : this.pickFace(mx, my);
+    this.hoverCad = f ? f.cad : null;
+    this.setCursor();
+  }
+  setCursor() {
+    const c = this.canvas; if (!c) return;
+    const m = this.mouse, sk = this.sketchFeat();
+    const cur = this.cadDrag || this.skDrag ? 'grabbing' : m.down ? (m.nav === 'pan' ? 'move' : m.nav === 'zoom' ? 'ns-resize' : 'grabbing')
+      : sk ? (this.state.sketchTool === 'select' ? (this.skHover ? 'pointer' : 'default') : 'crosshair')
+      : this.overDim || this.overHandle ? 'pointer' : this.hoverCad && this.state.stage <= 4 ? 'pointer' : 'default';
+    if (c.style.cursor !== cur) c.style.cursor = cur;
+  }
+  // where a named face sits: the element face nearest its centroid (in mesh-local coordinates)
+  faceAnchor(id) {
+    const bf = this.mesh && this.mesh.bf;
+    if (!bf) return null;
+    if (this._anchFor !== bf) { this._anchFor = bf; this._anch = {}; }
+    if (this._anch[id]) return this._anch[id];
+    let c = [0, 0, 0], k = 0;
+    for (const b of bf) if (b.id === id) { c[0] += b.c[0]; c[1] += b.c[1]; c[2] += b.c[2]; k++; }
+    if (!k) return null;
+    c = c.map(v => v / k);
+    let best = null, bd = Infinity;
+    for (const b of bf) if (b.id === id) {
+      const d = (b.c[0] - c[0]) ** 2 + (b.c[1] - c[1]) ** 2 + (b.c[2] - c[2]) ** 2;
+      if (d < bd) { bd = d; best = b; }
+    }
+    return (this._anch[id] = { c: best.c, n: HEX_DIRS[best.d], count: k });
+  }
+
+  // ---- Instant3D handle on the selected face ----------------------------------
+  dragAxis(id) {
+    const F = this.faceInfo(id), dr = F && F.drag;
+    if (!dr) return null;
+    if (dr.kind === 'param') return dr.axis;
+    const A = this.faceAnchor(id);
+    if (dr.kind === 'radial') return A ? A.n : null;
+    if (dr.kind === 'seg') {
+      const sk = this.feat(dr.sketch), owner = this.feat(F.feat);
+      if (sk && owner && owner.type === 'extrude') {
+        const P = CADK.PLANES[sk.plane] || CADK.PLANES.XY, n2 = CADK.segDist(dr.seg, (dr.seg.a || dr.seg.c)[0], (dr.seg.a || dr.seg.c)[1]);
+        const nn = dr.seg.t === 'line' ? [n2[1], n2[2]] : null;
+        if (nn) return [P.u[0] * nn[0] + P.v[0] * nn[1], P.u[1] * nn[0] + P.v[1] * nn[1], P.u[2] * nn[0] + P.v[2] * nn[1]];
+      }
+      return A ? A.n : null;
+    }
+    return null;
+  }
+  drawHandles(ctx) {
+    this.handleHit = null;
+    const st = this.state, id = st.selCad;
+    if (!id || st.stage !== 1 || this.sketchFeat()) return;
+    const F = this.faceInfo(id), ax = this.dragAxis(id), A = this.faceAnchor(id);
+    if (!F || !F.drag || !ax || !A) return;
+    const g = this.g, Lh = 0.16 * Math.max(g.W, g.H, g.D), a = A.c;
+    const p0 = this.proj(a), p1 = this.proj([a[0] + ax[0] * Lh, a[1] + ax[1] * Lh, a[2] + ax[2] * Lh]);
+    const hot = this.cadDrag || this.overHandle;
+    ctx.strokeStyle = hot ? '#ffd166' : '#5ecfe0'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = hot ? 2.4 : 1.8;
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+    const an = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+    ctx.beginPath(); ctx.moveTo(p1[0] + Math.cos(an) * 9, p1[1] + Math.sin(an) * 9);
+    ctx.lineTo(p1[0] + Math.cos(an + 2.5) * 8, p1[1] + Math.sin(an + 2.5) * 8);
+    ctx.lineTo(p1[0] + Math.cos(an - 2.5) * 8, p1[1] + Math.sin(an - 2.5) * 8);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(p0[0], p0[1], 3, 0, 6.284); ctx.fill();
+    const dv = this.dragValue(id), c = this.cv('len');
+    const txt = (dv ? dv.label + ' ' + sig(dv.value * c[1]) + ' ' + c[0] : 'drag') + (this.cadDrag ? '' : '  ⇢ drag');
+    ctx.font = "600 10.5px 'IBM Plex Mono'";
+    const w = ctx.measureText(txt).width + 12, lx = p1[0] + Math.cos(an) * 16 + (Math.cos(an) < 0 ? -w : 0), ly = p1[1] + Math.sin(an) * 16;
+    ctx.fillStyle = 'rgba(11,14,17,.9)'; ctx.fillRect(lx, ly - 10, w, 19);
+    ctx.strokeStyle = hot ? '#ffd166' : 'rgba(94,207,224,.5)'; ctx.lineWidth = 1; ctx.strokeRect(lx, ly - 10, w, 19);
+    ctx.fillStyle = hot ? '#ffe3a3' : '#cfeff5'; ctx.fillText(txt, lx + 6, ly + 3.5);
+    this.handleHit = { p0, p1, Lh, id };
+  }
+  handleAt(x, y) {
+    const h = this.handleHit; if (!h) return false;
+    const vx = h.p1[0] - h.p0[0], vy = h.p1[1] - h.p0[1], l2 = vx * vx + vy * vy || 1;
+    const t = Math.max(0, Math.min(1.15, ((x - h.p0[0]) * vx + (y - h.p0[1]) * vy) / l2));
+    const dx = h.p0[0] + vx * t - x, dy = h.p0[1] + vy * t - y;
+    return t > 0.2 && dx * dx + dy * dy < 100;
+  }
+  // the one number a face's drag changes: { label, value, apply(newValue) -> part }
+  dragValue(id) {
+    const F = this.faceInfo(id), dr = F && F.drag;
+    if (!dr) return null;
+    if (dr.kind === 'seg') {
+      const sk = this.feat(dr.sketch); if (!sk) return null;
+      const sv = CADK.segValue(dr.seg);
+      return { label: sv.label, value: sv.value, ref: this.featLabel(sk),
+        apply: (part, v) => {
+          // a delta along the segment's outward normal
+          let d = v - sv.value;
+          if (dr.seg.t === 'arc') d = /\.c$/.test(dr.seg.id) ? v - sv.value : sv.value - v;
+          else if (sv.axis !== undefined) {
+            const dx = dr.seg.b[0] - dr.seg.a[0], dy = dr.seg.b[1] - dr.seg.a[1], l = Math.hypot(dx, dy) || 1;
+            const n = [dy / l * dr.seg.out, -dx / l * dr.seg.out];
+            d = (v - sv.value) * Math.sign(n[sv.axis] || 1);
+          }
+          return this.withFeature(part, sk.id, () => CADK.moveSegment(sk, dr.seg, d));
+        } };
+    }
+    const f = this.feat(F.feat); if (!f) return null;
+    const fac = dr.factor || 1;
+    return { label: dr.key === 'd' ? 'Ø' : dr.key, value: f[dr.key], ref: this.featLabel(f) + '.' + dr.key,
+      apply: (part, v) => this.withFeature(part, f.id, g => {
+        const out = { ...g, [dr.key]: Math.max(0.1, v) };
+        if (dr.move) out[dr.move] = f[dr.move] - (out[dr.key] - f[dr.key]);   // a −X face grows the box toward −X
+        return out;
+      }), fac };
+  }
+  withFeature(part, id, fn) {
+    return { ...part, features: part.features.map(f => (f.id === id ? fn(f) : f)) };
+  }
+  beginHandleDrag(x, y) {
+    const h = this.handleHit, dv = this.dragValue(h.id);
+    if (!dv) return;
+    const ax = this.dragAxis(h.id), F = this.faceInfo(h.id);
+    this.cadDrag = { id: h.id, mx: x, my: y, p0: h.p0, p1: h.p1, Lh: h.Lh, v0: dv.value, last: dv.value, dv,
+      fac: (F.drag && F.drag.factor) || 1, part0: this.state.part, snap: this.snapshot(), ax };
+    this.inSession = true;
+  }
+  moveHandleDrag(x, y, fine) {
+    const d = this.cadDrag;
+    const vx = d.p1[0] - d.p0[0], vy = d.p1[1] - d.p0[1], l2 = vx * vx + vy * vy || 1;
+    const t = ((x - d.mx) * vx + (y - d.my) * vy) / l2;
+    const step = fine ? 1 : this.state.sketchGrid;
+    // moving the face by Δ changes the value by Δ·factor (a mid-plane depth grows on both sides)
+    let v = d.v0 + Math.round(t * d.Lh / step) * step * d.fac;
+    if (v === d.last) return;
+    d.last = v;
+    this.setState({ part: d.dv.apply(d.part0, v) });
+  }
+  endHandleDrag() {
+    const d = this.cadDrag; this.cadDrag = null; this.inSession = false;
+    if (d.last !== d.v0) {
+      this.pushUndo(d.snap);
+      const c = this.cv('len');
+      this.pushLog('geom', d.dv.ref + ' ' + d.dv.label + ' ' + sig(d.v0 * c[1]) + ' → ' + sig(d.last * c[1]) + ' ' + c[0] + ' (drag)', 'ok');
+    }
+    this.msig = null;                                      // remesh at full sampling now the drag is over
+  }
+
+  // ---- Modify box -------------------------------------------------------------
+  // target: { face } (the face's driving value) or { feat, key } (a feature parameter)
+  modifyTarget(t) {
+    if (t.face) {
+      const dv = this.dragValue(t.face);
+      return dv ? { name: dv.label.toUpperCase(), ref: dv.ref, value: dv.value, apply: (p, v) => dv.apply(p, v) } : null;
+    }
+    const f = this.feat(t.feat); if (!f) return null;
+    const fld = CADK.featureFields(f).find(x => x.key === t.key);
+    return { name: (fld ? fld.label : t.key).toUpperCase(), ref: this.featLabel(f) + '.' + t.key, value: f[t.key],
+      apply: (p, v) => this.withFeature(p, f.id, g => ({ ...g, [t.key]: fld ? Math.max(fld.min, Math.min(fld.max, v)) : v })) };
+  }
+  openDimEdit(target, x, y) {
+    const T = this.modifyTarget(target); if (!T) return;
+    this.dimT = T;                                         // its apply() captured today's geometry
+    const c = this.cv('len'), W = this.w || 800, H = this.h || 600;
+    this.setState({ stage: 1, ctxMenu: null, ctxBar: null,
+      dimEdit: { target, x: Math.max(8, Math.min(W - 236, x + 10)), y: Math.max(8, Math.min(H - 120, y - 40)),
+        text: sig(T.value * c[1]), v0: T.value, part0: this.state.part, snap: this.snapshot(), name: T.name, ref: T.ref } });
+    this.inSession = true;
+  }
+  dimSet(v, text) {
+    const e = this.state.dimEdit; if (!e) return;
+    const c = this.cv('len');
+    // always applied to the part as it was when the box opened
+    this.setState({ part: this.dimT.apply(e.part0, v), dimEdit: { ...e, cur: v, text: text !== undefined ? text : sig(v * c[1]) } });
+  }
+  dimSpin(dir, fine) {
+    const e = this.state.dimEdit; if (!e) return;
+    const step = fine ? 1 : this.state.sketchGrid, cur = e.cur !== undefined ? e.cur : e.v0;
+    this.dimSet(Math.round((cur + dir * step) / step) * step);
+  }
+  dimType(text) {
+    const e = this.state.dimEdit; if (!e) return;
+    const v = parseFloat(String(text).replace(/[^0-9eE+\-.]/g, ''));
+    if (isFinite(v)) this.dimSet(v / this.cv('len')[1], text);   // live preview while typing
+    else this.setState({ dimEdit: { ...e, text } });
+  }
+  dimOk() {
+    const e = this.state.dimEdit; if (!e) return;
+    this.inSession = false;
+    if (this.state.part !== e.part0) {
+      this.pushUndo(e.snap);
+      const c = this.cv('len');
+      this.pushLog('geom', e.ref + ' = ' + sig((e.cur !== undefined ? e.cur : e.v0) * c[1]) + ' ' + c[0], 'ok');
+    }
+    this.setState({ dimEdit: null });
+  }
+  dimCancel() {
+    const e = this.state.dimEdit; if (!e) return;
+    this.inSession = false;
+    this.setState({ dimEdit: null, part: e.part0 });
+  }
+  refDim = el => {
+    if (!el || el === this.dimEl) return;
+    this.dimEl = el;
+    el.addEventListener('wheel', ev => { ev.preventDefault(); this.dimSpin(ev.deltaY < 0 ? 1 : -1, ev.shiftKey); }, { passive: false });
+    setTimeout(() => { try { el.focus(); el.select(); } catch (err) { /* gone */ } }, 20);
+  };
+
+  // ---- PropertyManager: edit any feature with ✓ / ✕ ------------------------------
+  editFeature(id, isNew, snap) {
+    const f = this.feat(id); if (!f) return;
+    if (this.state.featEdit && this.state.featEdit.id !== id) this.featureOk();
+    this.inSession = true;
+    const next = { featEdit: { id, snap: snap || this.snapshot(), isNew: !!isNew, pending: null }, stage: 1, sel: 'f:' + id,
+      ctxMenu: null, ctxBar: null, selCad: null, selSet: [], sketchSel: null };
+    if (f.type === 'sketch') { next.sketchTool = f.entities.length ? 'select' : 'rect'; this.lookAtPlane(f); }
+    this.setState(next);
+  }
+  featureOk() {
+    const e = this.state.featEdit; if (!e) return;
+    this.inSession = false;
+    this.skPts = null;
+    const f = this.feat(e.id);
+    if (this.state.part !== e.snap.part) {
+      this.pushUndo(e.snap);
+      this.pushLog('geom', this.featLabel(f) + (e.isNew ? ' created' : ' edited') + ' · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms', 'ok');
+    }
+    this.setState({ featEdit: null });
+    // a sketch made for Extrude / Revolve goes straight on to that feature
+    if (f && f.type === 'sketch' && e.pending && f.entities.length) setTimeout(() => this.insertFeature(e.pending, { sketch: f.id }), 0);
+  }
+  featureCancel() {
+    const e = this.state.featEdit; if (!e) return;
+    this.inSession = false;
+    this.skPts = null;
+    this.setState({ featEdit: null, part: e.snap.part, selCad: null, selSet: [] });
+  }
+  setFeatureParam(id, key, v) {
+    const part = this.withFeature(this.state.part, id, f => ({ ...f, [key]: v }));
+    if (!this.inSession) this.pushUndo();
+    this.setState({ part });
+  }
+  toggleSuppress(id) {
+    const f = this.feat(id); if (!f) return;
+    this.pushUndo();
+    this.pushLog('geom', this.featLabel(f) + (f.suppressed ? ' unsuppressed' : ' suppressed'), 'ok');
+    this.setState({ part: this.withFeature(this.state.part, id, g => ({ ...g, suppressed: !g.suppressed })), ctxMenu: null, selCad: null, selSet: [] });
+  }
+  deleteFeature(id) {
+    const f = this.feat(id); if (!f) return;
+    const users = this.consumersOf(id);
+    this.pushUndo();
+    const drop = new Set([id, ...users.map(u => u.id)]);
+    this.pushLog('geom', 'deleted ' + this.featLabel(f) + (users.length ? ' and ' + users.map(u => this.featLabel(u)).join(', ') : ''), 'ok');
+    this.setState({ part: { ...this.state.part, features: this.state.part.features.filter(g => !drop.has(g.id)) }, ctxMenu: null, featEdit: null, selCad: null, selSet: [] });
+  }
+  moveFeature(id, dir) {
+    const fs = this.state.part.features.slice(), i = fs.findIndex(f => f.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= fs.length) return;
+    // a feature cannot move above the sketch or feature it uses
+    const a = dir < 0 ? fs[j] : fs[i], b = dir < 0 ? fs[i] : fs[j];
+    if (b.sketch === a.id || b.src === a.id) return;
+    this.pushUndo();
+    [fs[i], fs[j]] = [fs[j], fs[i]];
+    this.setState({ part: { ...this.state.part, features: fs }, ctxMenu: null });
+  }
+
+  // ---- inserting features ----------------------------------------------------------
+  // SolidWorks flow: Extrude / Revolve with no free sketch starts a sketch (on
+  // the selected planar face, or the Front plane) and continues once it is OK'd.
+  facePlane(id) {
+    const F = this.faceInfo(id), A = this.faceAnchor(id);
+    if (!F || !F.plane || !A) return null;
+    const n = F.plane.normal, ax = [0, 1, 2].find(i => Math.abs(n[i]) > 0.999);
+    if (ax === undefined) return null;
+    const pt = this.toModel(A.c);
+    return { plane: ['YZ', 'XZ', 'XY'][ax], offset: +pt[ax].toFixed(4), point: pt, normal: n };
+  }
+  insertFeature(type, opt) {
+    const o = opt || {}, st = this.state, part = st.part, cm = this.compiled();
+    const selPlane = st.selCad ? this.facePlane(st.selCad) : null;
+    const selFeat = st.sel && st.sel.startsWith('f:') ? this.feat(st.sel.slice(2)) : null;
+    if (st.featEdit) this.featureOk();
+    if ((type === 'extrude' || type === 'revolve') && !o.sketch) {
+      const free = selFeat && selFeat.type === 'sketch' ? selFeat
+        : part.features.filter(f => f.type === 'sketch' && !this.consumersOf(f.id).length && f.entities.length).slice(-1)[0];
+      if (free) o.sketch = free.id;
+      else { this.insertFeature('sketch', { pending: type, op: o.op }); return; }
+    }
+    const ctx = { bbox: cm.empty ? [[0, 0, 0], [100, 100, 100]] : cm.bbox, sketch: o.sketch, op: o.op,
+      plane: selPlane ? selPlane.plane : 'XY', offset: selPlane ? selPlane.offset : 0,
+      src: selFeat && CADK.FEATURE_INFO[selFeat.type].solid ? selFeat.id : undefined };
+    const f = CADK.featureDefaults(type, part, ctx);
+    if (type === 'extrude' && selPlane === null && o.sketch) {
+      const sk = this.feat(o.sketch);
+      if (sk && sk.offset && Math.sign(sk.offset) < 0) f.dir = 'normal';
+    }
+    // primitives and holes land on the selected planar face
+    if (selPlane && ['box', 'cylinder', 'sphere', 'hole'].includes(type)) {
+      const p = selPlane.point, n = selPlane.normal;
+      if (type === 'hole') { f.x = p[0]; f.y = p[1]; f.z = p[2]; f.dir = vecDir(n.map(v => -v)); }
+      else if (type === 'cylinder') { f.x = p[0]; f.y = p[1]; f.z = p[2]; f.axis = vecDir(n); f.r = 15; f.h = 40; }
+      else if (type === 'sphere') { f.x = p[0]; f.y = p[1]; f.z = p[2]; }
+      else { f.x = p[0] - 25; f.y = p[1] - 25; f.z = p[2] - 25; f.sx = f.sy = f.sz = 50; for (let i = 0; i < 3; i++) if (Math.abs(n[i]) > 0.5) { const k = 'xyz'[i]; f[k] = n[i] > 0 ? p[i] : p[i] - 50; } }
+    }
+    const snap = this.snapshot();
+    this.setState({ part: { ...part, features: part.features.concat([f]) }, insertOpen: false }, () => {
+      this.editFeature(f.id, true, snap);
+      if (o.pending) this.setState({ featEdit: { ...this.state.featEdit, pending: o.pending } });
+    });
+  }
+  pickFile(accept, cb) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = accept;
+    inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) cb(f); };
+    inp.click();
+  }
+  importSTL() {
+    this.pickFile('.stl', file => {
+      const rd = new FileReader();
+      rd.onload = () => {
+        let tris;
+        try { tris = CADK.parseSTL(new Uint8Array(rd.result)); } catch (err) { this.pushLog('io', 'could not read ' + file.name + ': ' + err.message, 'err'); return; }
+        if (!tris.length) { this.pushLog('io', file.name + ': no triangles', 'err'); return; }
+        const part = this.state.part, f = CADK.featureDefaults('stl', part);
+        Object.assign(f, { name: file.name.replace(/\.stl$/i, ''), op: 'boss', data: CADK.b64(tris), scale: 1, tx: 0, ty: 0, tz: 0, file: file.name });
+        this.pushUndo();
+        this.setState({ part: { ...part, features: part.features.concat([f]) }, stage: 1 });
+        this.pushLog('io', 'imported ' + file.name + ' — ' + grp(tris.length / 9) + ' triangles (needs to be watertight)', 'ok');
+        setTimeout(() => this.zoomFit(), 50);
+      };
+      rd.readAsArrayBuffer(file);
+    });
+  }
+  newPart(tpl) {
+    const T = CADK.TEMPLATES[tpl || 'blank'];
+    if (!T) return;
+    this.pushUndo();
+    this.setState({ part: T.make(), featEdit: null, dimEdit: null, selCad: null, selSet: [], stage: 1, solved: false, sel: 'root' });
+    this.pushLog('geom', 'new part from template: ' + T.label, 'ok');
+    setTimeout(() => this.zoomFit(), 50);
+  }
+  savePart() {
+    const st = this.state, doc = { format: 'archimedes-part', version: 1, part: st.part, material: st.material,
+      customMat: st.material === 'custom' ? MAT.custom : null, nums: st.nums, grav: st.grav, units: st.units };
+    const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = (st.part.name || 'part') + '.archpart.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    this.setState({ savedAgo: '· saved just now' });
+    this.pushLog('io', 'saved ' + a.download, 'ok');
+  }
+  openPart() {
+    this.pickFile('.json,.stl', file => {
+      if (/\.stl$/i.test(file.name)) { this.newPart('blank'); setTimeout(() => this.importSTLFile(file), 30); return; }
+      file.text().then(txt => {
+        try {
+          const d = JSON.parse(txt);
+          if (!d.part || !Array.isArray(d.part.features)) throw new Error('not an Archimedes part');
+          this.pushUndo();
+          if (d.customMat) MAT.custom = { ...MAT.custom, ...d.customMat };
+          this.setState({ part: { studies: [], ...d.part }, material: MAT[d.material] ? d.material : this.state.material, customMat: d.customMat || null,
+            nums: { ...this.state.nums, ...(d.nums || {}) }, grav: d.grav !== false, featEdit: null, selCad: null, selSet: [], stage: 1 });
+          this.pushLog('io', 'opened ' + file.name + ' — ' + d.part.features.length + ' features', 'ok');
+          setTimeout(() => this.zoomFit(), 50);
+        } catch (err) { this.pushLog('io', 'could not open ' + file.name + ': ' + err.message, 'err'); }
+      });
+    });
+  }
+  importSTLFile(file) {
+    const save = this.pickFile;
+    this.pickFile = (a, cb) => cb(file);
+    try { this.importSTL(); } finally { this.pickFile = save; }
+  }
+  // the voxel skin as a binary STL (what the solver sees)
+  exportSTL() {
+    const L = this.mesh, bf = L && L.bf;
+    if (!bf || !bf.length) { this.pushLog('io', 'nothing to export', 'warn'); return; }
+    const buf = new ArrayBuffer(84 + bf.length * 2 * 50), dv = new DataView(buf);
+    dv.setUint32(80, bf.length * 2, true);
+    let o = 84;
+    const P = n => [L.px[n] + L.org[0], L.py[n] + L.org[1], L.pz[n] + L.org[2]];
+    for (const b of bf) {
+      const D = HEX_DIRS[b.d], q = b.nodes.map(P);
+      for (const tri of [[q[0], q[1], q[2]], [q[0], q[2], q[3]]]) {
+        dv.setFloat32(o, D[0], true); dv.setFloat32(o + 4, D[1], true); dv.setFloat32(o + 8, D[2], true);
+        for (let v = 0; v < 3; v++) for (let k = 0; k < 3; k++) dv.setFloat32(o + 12 + v * 12 + k * 4, tri[v][k], true);
+        o += 50;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'model/stl' })); a.download = (this.state.part.name || 'part') + '_voxel.stl'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    this.pushLog('io', 'exported ' + grp(bf.length * 2) + ' triangles', 'ok');
+  }
+
+  // ---- studies: supports and loads on faces ------------------------------------------
+  addStudy(type) {
+    const st = this.state, faces = st.selSet.length ? st.selSet.slice() : st.selCad ? [st.selCad] : [];
+    if (!faces.length) { this.pushLog('load', 'select one or more faces first (click, Ctrl+click to add)', 'warn'); return; }
+    const studies = st.part.studies || [], n = studies.filter(s => s.type === type).length + 1;
+    const label = { fixed: 'Fixed', roller: 'Roller', force: 'Force', pressure: 'Pressure' }[type];
+    const first = this.faceInfo(faces[0]);
+    const s = { id: type + Date.now().toString(36), type, name: label + '-' + n + (first ? ' · ' + first.name.split(' · ').slice(-1)[0] : ''), faces };
+    if (type === 'force') {
+      const A = this.faceAnchor(faces[0]);
+      s.F = A ? A.n.map(v => -v * 1000) : [0, -1000, 0];   // 1 kN pushing into the face
+    }
+    if (type === 'pressure') s.P = 1;
+    this.pushUndo();
+    this.setState({ part: { ...st.part, studies: studies.concat([s]) }, stage: 3, selCad: null, selSet: [], ctxBar: null });
+    this.pushLog('load', 'added ' + s.name + ' on ' + faces.length + ' face' + (faces.length > 1 ? 's' : ''), 'ok');
+  }
+  setStudy(id, patch) {
+    if (!this.inSession) this.pushUndo();
+    this.setState({ part: { ...this.state.part, studies: this.state.part.studies.map(s => (s.id === id ? { ...s, ...patch } : s)) } });
+  }
+  deleteStudy(id) {
+    this.pushUndo();
+    this.setState({ part: { ...this.state.part, studies: this.state.part.studies.filter(s => s.id !== id) }, ctxMenu: null });
+  }
+
+  // ---- sketcher -----------------------------------------------------------------
+  sketchFeat() {
+    const e = this.state.featEdit;
+    const f = e && this.feat(e.id);
+    return f && f.type === 'sketch' ? f : null;
+  }
+  lookAtPlane(sk) {
+    const n = (CADK.PLANES[sk.plane] || CADK.PLANES.XY).w;
+    this.setView(Math.atan2(-n[0], n[2]), Math.asin(n[1]));
+  }
+  // screen -> point on the sketch plane, in sketch (u, v) coordinates
+  screenToSketch(mx, my, sk) {
+    const c = this.cam, f = this.h * 1.02, hw = this.w / 2 + this.pan[0], hh = this.h / 2 + this.pan[1];
+    const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const inv = (X, Y, Z) => { const y = Y * cp + Z * sp, Z1 = -Y * sp + Z * cp; return [X * cy - Z1 * sy, y, X * sy + Z1 * cy]; };
+    const vs = this.vs, C = this.ctr;
+    const O = inv(0, 0, -c.dist).map((v, i) => v / vs + C[i]);
+    const D = inv((mx - hw) / f, -(my - hh) / f, 1).map(v => v / vs);
+    const Fr = CADK.sketchFrame(sk), n = Fr.P.w, p0 = this.toLocal(Fr.o);
+    const den = n[0] * D[0] + n[1] * D[1] + n[2] * D[2];
+    if (Math.abs(den) < 1e-9) return null;
+    const t = (n[0] * (p0[0] - O[0]) + n[1] * (p0[1] - O[1]) + n[2] * (p0[2] - O[2])) / den;
+    const l = Fr.toLocal(this.toModel([O[0] + D[0] * t, O[1] + D[1] * t, O[2] + D[2] * t]));
+    return [l[0], l[1]];
+  }
+  sketchToScreen(sk, u, v) { return this.proj(this.toLocal(CADK.sketchFrame(sk).toWorld(u, v, 0))); }
+  // snap to grid, then to any existing sketch point within 9 px
+  sketchSnap(sk, uv, mx, my) {
+    const g = this.state.sketchGrid;
+    let best = [Math.round(uv[0] / g) * g, Math.round(uv[1] / g) * g], bd = 81;
+    for (const p of this.sketchPoints(sk)) {
+      const s = this.sketchToScreen(sk, p.u, p.v), d = (s[0] - mx) ** 2 + (s[1] - my) ** 2;
+      if (d < bd) { bd = d; best = [p.u, p.v]; }
+    }
+    return best;
+  }
+  // draggable points: poly vertices, rectangle corners, circle centres and radius points
+  sketchPoints(sk) {
+    const out = [];
+    sk.entities.forEach((e, k) => {
+      if (e.type === 'poly') e.pts.forEach((p, i) => out.push({ k, kind: 'v', i, u: p[0], v: p[1] }));
+      if (e.type === 'rect') [[e.x, e.y], [e.x + e.w, e.y], [e.x + e.w, e.y + e.h], [e.x, e.y + e.h]].forEach((p, i) => out.push({ k, kind: 'c', i, u: p[0], v: p[1] }));
+      if (e.type === 'circle') { out.push({ k, kind: 'o', u: e.cx, v: e.cy }); out.push({ k, kind: 'r', u: e.cx + e.r, v: e.cy }); }
+    });
+    return out;
+  }
+  setSketch(sk, entities) {
+    this.setState({ part: this.withFeature(this.state.part, sk.id, f => ({ ...f, entities })) });
+  }
+  sketchDown(mx, my, e) {
+    const sk = this.sketchFeat(), st = this.state, uvRaw = this.screenToSketch(mx, my, sk);
+    if (!uvRaw) return;
+    const uv = this.sketchSnap(sk, uvRaw, mx, my), tool = st.sketchTool, ents = sk.entities;
+    if (tool === 'select' || tool === 'fillet') {
+      let hit = null, bd = 100;
+      for (const p of this.sketchPoints(sk)) {
+        const s = this.sketchToScreen(sk, p.u, p.v), d = (s[0] - mx) ** 2 + (s[1] - my) ** 2;
+        if (d < bd) { bd = d; hit = p; }
+      }
+      if (tool === 'fillet') {
+        const r = st.sketchFillet;
+        if (hit && hit.kind === 'v') {
+          const en = ents[hit.k], fl = (en.fillets || en.pts.map(() => 0)).slice();
+          fl[hit.i] = fl[hit.i] === r ? 0 : r;
+          this.setSketch(sk, ents.map((x, i) => (i === hit.k ? { ...x, fillets: fl } : x)));
+        } else {
+          const k = hit ? hit.k : this.sketchEntityAt(sk, mx, my);
+          if (k !== null && ents[k].type === 'rect') this.setSketch(sk, ents.map((x, i) => (i === k ? { ...x, r: x.r === r ? 0 : r } : x)));
+        }
+        return;
+      }
+      if (hit) { this.skDrag = { ...hit }; this.setState({ sketchSel: hit.k }); return; }
+      this.setState({ sketchSel: this.sketchEntityAt(sk, mx, my) });
+      return;
+    }
+    if (tool === 'line') {
+      const pts = this.skPts || [];
+      if (pts.length >= 3) {
+        const s0 = this.sketchToScreen(sk, pts[0][0], pts[0][1]);
+        if ((s0[0] - mx) ** 2 + (s0[1] - my) ** 2 < 100) { this.finishPoly(); return; }
+      }
+      const last = pts[pts.length - 1];
+      if (!last || last[0] !== uv[0] || last[1] !== uv[1]) this.skPts = pts.concat([uv]);
+      this.forceUpdate && this.forceUpdate();
+      return;
+    }
+    if (tool === 'rect' || tool === 'circle') {
+      if (!this.skPts) { this.skPts = [uv]; return; }
+      const a = this.skPts[0];
+      this.skPts = null;
+      if (tool === 'rect') {
+        if (a[0] === uv[0] || a[1] === uv[1]) return;
+        this.setSketch(sk, ents.concat([{ type: 'rect', x: Math.min(a[0], uv[0]), y: Math.min(a[1], uv[1]), w: Math.abs(uv[0] - a[0]), h: Math.abs(uv[1] - a[1]), r: 0 }]));
+      } else {
+        const r = Math.hypot(uv[0] - a[0], uv[1] - a[1]);
+        if (r <= 0) return;
+        this.setSketch(sk, ents.concat([{ type: 'circle', cx: a[0], cy: a[1], r: +r.toFixed(4) }]));
+      }
+      this.setState({ sketchSel: ents.length });
+    }
+  }
+  finishPoly() {
+    const sk = this.sketchFeat(), pts = this.skPts;
+    this.skPts = null;
+    if (!sk || !pts || pts.length < 3) return false;
+    this.setSketch(sk, sk.entities.concat([{ type: 'poly', pts, fillets: pts.map(() => 0) }]));
+    this.setState({ sketchSel: sk.entities.length });
+    return true;
+  }
+  sketchMove(mx, my) {
+    const sk = this.sketchFeat(); if (!sk) return;
+    const uvRaw = this.screenToSketch(mx, my, sk);
+    this.skCursor = uvRaw ? this.sketchSnap(sk, uvRaw, mx, my) : null;
+    const d = this.skDrag;
+    if (d && this.skCursor) {
+      const [u, v] = this.skCursor, ents = sk.entities.map(x => ({ ...x }));
+      const e = ents[d.k];
+      if (d.kind === 'v') { e.pts = e.pts.slice(); e.pts[d.i] = [u, v]; }
+      else if (d.kind === 'o') { e.cx = u; e.cy = v; }
+      else if (d.kind === 'r') e.r = Math.max(0.01, Math.hypot(u - e.cx, v - e.cy));
+      else if (d.kind === 'c') {
+        const xs = [e.x, e.x + e.w], ys = [e.y, e.y + e.h];
+        const fx = d.i === 0 || d.i === 3 ? 1 : 0, fy = d.i <= 1 ? 1 : 0;   // the opposite corner stays
+        const ox = xs[fx], oy = ys[fy];
+        e.x = Math.min(ox, u); e.y = Math.min(oy, v); e.w = Math.abs(u - ox); e.h = Math.abs(v - oy);
+      }
+      if (!d.moved) { d.moved = true; d.snap = this.snapshot(); }
+      this.setSketch(sk, ents);
+    }
+    let hov = false;
+    if (!d && this.state.sketchTool === 'select')
+      for (const p of this.sketchPoints(sk)) { const s = this.sketchToScreen(sk, p.u, p.v); if ((s[0] - mx) ** 2 + (s[1] - my) ** 2 < 100) hov = true; }
+    this.skHover = hov;
+    this.setCursor();
+  }
+  sketchUp() { this.skDrag = null; }
+  sketchEntityAt(sk, mx, my) {
+    let best = null, bd = 64;
+    sk.entities.forEach((e, k) => {
+      for (const seg of CADK.entityLoop(e, k)) {
+        const pts = this.segPoints(seg).map(p => this.sketchToScreen(sk, p[0], p[1]));
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy || 1;
+          const t = Math.max(0, Math.min(1, ((mx - a[0]) * vx + (my - a[1]) * vy) / l2));
+          const d = (a[0] + vx * t - mx) ** 2 + (a[1] + vy * t - my) ** 2;
+          if (d < bd) { bd = d; best = k; }
+        }
+      }
+    });
+    return best;
+  }
+  segPoints(seg) {
+    if (seg.t === 'line') return [seg.a, seg.b];
+    const m = Math.max(4, Math.ceil(Math.abs(seg.sw) / (Math.PI / 24))), out = [];
+    for (let q = 0; q <= m; q++) { const a = seg.a0 + seg.sw * q / m; out.push([seg.c[0] + seg.r * Math.cos(a), seg.c[1] + seg.r * Math.sin(a)]); }
+    return out;
+  }
+  sketchDelete() {
+    const sk = this.sketchFeat(), k = this.state.sketchSel;
+    if (!sk || k === null || k === undefined || !sk.entities[k]) return;
+    this.setSketch(sk, sk.entities.filter((e, i) => i !== k));
+    this.setState({ sketchSel: null });
+  }
+  drawSketch(ctx) {
+    const sk = this.sketchFeat(); if (!sk) return;
+    const st = this.state, g = st.sketchGrid, Fr = CADK.sketchFrame(sk);
+    const S = (u, v) => this.proj(this.toLocal(Fr.toWorld(u, v, 0)));
+    // grid around the sketch and the part
+    const cm = this.compiled(), pts = [];
+    for (const c of [cm.bbox[0], cm.bbox[1]]) { const l = Fr.toLocal(c); pts.push([l[0], l[1]]); }
+    for (const p of this.sketchPoints(sk)) pts.push([p.u, p.v]);
+    if (this.skCursor) pts.push(this.skCursor);
+    let u0 = Math.min(0, ...pts.map(p => p[0])), u1 = Math.max(0, ...pts.map(p => p[0])), v0 = Math.min(0, ...pts.map(p => p[1])), v1 = Math.max(0, ...pts.map(p => p[1]));
+    const padU = Math.max(40, (u1 - u0) * 0.4), padV = Math.max(40, (v1 - v0) * 0.4);
+    u0 -= padU; u1 += padU; v0 -= padV; v1 += padV;
+    let step = g; while ((u1 - u0) / step > 70 || (v1 - v0) / step > 70) step *= 2;
+    u0 = Math.floor(u0 / step) * step; v0 = Math.floor(v0 / step) * step;
+    ctx.lineWidth = 1;
+    for (let u = u0; u <= u1; u += step) { const a = S(u, v0), b = S(u, v1); ctx.strokeStyle = Math.abs(u) < 1e-9 ? 'rgba(255,107,129,.55)' : 'rgba(94,207,224,.07)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    for (let v = v0; v <= v1; v += step) { const a = S(u0, v), b = S(u1, v); ctx.strokeStyle = Math.abs(v) < 1e-9 ? 'rgba(126,231,135,.55)' : 'rgba(94,207,224,.07)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+    // entities
+    sk.entities.forEach((e, k) => {
+      const on = st.sketchSel === k;
+      ctx.strokeStyle = on ? '#ffd166' : '#5ecfe0'; ctx.lineWidth = on ? 2.2 : 1.6;
+      for (const seg of CADK.entityLoop(e, k)) {
+        const ps = this.segPoints(seg).map(p => S(p[0], p[1]));
+        ctx.beginPath(); ctx.moveTo(ps[0][0], ps[0][1]); for (let i = 1; i < ps.length; i++) ctx.lineTo(ps[i][0], ps[i][1]); ctx.stroke();
+      }
+    });
+    for (const p of this.sketchPoints(sk)) {
+      const s = S(p.u, p.v);
+      ctx.fillStyle = p.kind === 'o' ? '#ffd166' : '#eaf7fa';
+      ctx.fillRect(s[0] - 2.5, s[1] - 2.5, 5, 5);
+    }
+    // preview of the entity being drawn
+    const cur = this.skCursor, tool = st.sketchTool;
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.4;
+    let info = '';
+    if (this.skPts && cur) {
+      const P0 = this.skPts[0];
+      ctx.beginPath();
+      if (tool === 'line') {
+        const all = this.skPts.concat([cur]).map(p => S(p[0], p[1]));
+        ctx.moveTo(all[0][0], all[0][1]); for (let i = 1; i < all.length; i++) ctx.lineTo(all[i][0], all[i][1]);
+        const l = this.skPts[this.skPts.length - 1]; info = 'L ' + sig(Math.hypot(cur[0] - l[0], cur[1] - l[1]));
+      } else if (tool === 'rect') {
+        const q = [S(P0[0], P0[1]), S(cur[0], P0[1]), S(cur[0], cur[1]), S(P0[0], cur[1])];
+        ctx.moveTo(q[0][0], q[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(q[i][0], q[i][1]); ctx.closePath();
+        info = sig(Math.abs(cur[0] - P0[0])) + ' × ' + sig(Math.abs(cur[1] - P0[1]));
+      } else if (tool === 'circle') {
+        const r = Math.hypot(cur[0] - P0[0], cur[1] - P0[1]);
+        for (let i = 0; i <= 48; i++) { const a = i / 48 * 2 * Math.PI, s = S(P0[0] + r * Math.cos(a), P0[1] + r * Math.sin(a)); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); }
+        info = 'R ' + sig(r);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if (cur) {
+      const s = S(cur[0], cur[1]);
+      ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s[0] - 7, s[1]); ctx.lineTo(s[0] + 7, s[1]); ctx.moveTo(s[0], s[1] - 7); ctx.lineTo(s[0], s[1] + 7); ctx.stroke();
+      const txt = '(' + sig(cur[0]) + ', ' + sig(cur[1]) + ')' + (info ? '  ' + info : '');
+      ctx.font = "500 10px 'IBM Plex Mono'";
+      const w = ctx.measureText(txt).width + 10;
+      ctx.fillStyle = 'rgba(11,14,17,.9)'; ctx.fillRect(s[0] + 12, s[1] + 8, w, 17);
+      ctx.fillStyle = '#ffe3a3'; ctx.fillText(txt, s[0] + 17, s[1] + 20);
+    }
+  }
+
+  // ---- undo / redo: model inputs, not the view ----------------------------
+  snapshot() {
+    const s = this.state;
+    return { part: s.part, nums: { ...s.nums }, material: s.material, grav: s.grav, customMat: s.customMat };
+  }
+  pushUndo(snap) {
+    this.undoStack.push(snap || this.snapshot());
+    if (this.undoStack.length > 80) this.undoStack.shift();
+    this.redoStack = [];
+    this.setState({ undoN: this.undoStack.length, redoN: 0 });
+  }
+  undo() {
+    if (this.state.dimEdit) return this.dimCancel();
+    if (this.state.featEdit) return this.featureCancel();
+    const s = this.undoStack.pop(); if (!s) return;
+    this.redoStack.push(this.snapshot());
+    this.pushLog('geom', 'undo', 'ok');
+    this.setState({ ...s, undoN: this.undoStack.length, redoN: this.redoStack.length, selCad: null, selSet: [] });
+  }
+  redo() {
+    const s = this.redoStack.pop(); if (!s) return;
+    this.undoStack.push(this.snapshot());
+    this.pushLog('geom', 'redo', 'ok');
+    this.setState({ ...s, undoN: this.undoStack.length, redoN: this.redoStack.length, selCad: null, selSet: [] });
+  }
+
+  // ---- views ----------------------------------------------------------------
+  saveView() {
+    const t = this.tgt;
+    this.viewStack.push({ yaw: t.yaw, pitch: t.pitch, dist: t.dist, pan: this.tgtPan.slice() });
+    if (this.viewStack.length > 30) this.viewStack.shift();
+  }
+  setView(yaw, pitch, keep) {
+    if (!keep) this.saveView();
+    const t = this.tgt;
+    // take the equivalent yaw nearest the current one, so the camera turns the short way
+    t.yaw = yaw + Math.round((t.yaw - yaw) / (2 * Math.PI)) * 2 * Math.PI;
+    t.pitch = pitch;
+    if (this.state.viewMenu || this.state.ctxMenu) this.setState({ viewMenu: false, ctxMenu: null });
+  }
+  stdView(i) { const v = STD_VIEWS[i]; this.setView(v[2], v[3]); }
+  zoomFit() {
+    this.saveView();
+    this.tgt.dist = 24; this.tgtPan = [0, 0];
+    if (this.state.viewMenu || this.state.ctxMenu) this.setState({ viewMenu: false, ctxMenu: null });
+  }
+  prevView() {
+    const v = this.viewStack.pop(); if (!v) return;
+    this.tgt.yaw = v.yaw; this.tgt.pitch = v.pitch; this.tgt.dist = v.dist; this.tgtPan = v.pan;
+    this.setState({ ctxMenu: null });
+  }
+  // look straight at the selected face (camera along its normal)
+  normalTo(id) {
+    const fid = id || this.state.selCad, F = this.faceInfo(fid);
+    const n = (F && F.plane && F.plane.normal) || (this.faceAnchor(fid) || {}).n;
+    if (!n) return;
+    this.setView(Math.atan2(-n[0], n[2]), Math.asin(Math.max(-1, Math.min(1, n[1]))));
+  }
+  // which navigation a held mouse does: SolidWorks or CATIA conventions
+  navFor(e) {
+    const b = e.buttons, catia = this.state.mouseMode === 'catia';
+    if (b & 4) {
+      if (catia) return (b & 3) ? 'rotate' : e.ctrlKey ? 'zoom' : 'pan';
+      return e.ctrlKey ? 'pan' : e.shiftKey ? 'zoom' : 'rotate';
+    }
+    if (b & 2) return 'pan';
+    if (b & 1) return e.ctrlKey ? 'pan' : e.shiftKey ? 'zoom' : 'rotate';
+    return null;
+  }
+  zoomAt(x, y, factor) {
+    const t = this.tgt, nd = Math.max(5, Math.min(140, t.dist * factor)), ratio = t.dist / nd;
+    const cx = x - this.w / 2, cy = y - this.h / 2;
+    this.tgtPan = [cx - (cx - this.tgtPan[0]) * ratio, cy - (cy - this.tgtPan[1]) * ratio];
+    t.dist = nd;
+  }
+  // clicked (no drag): select the named face under the cursor; Ctrl / Shift adds
+  clickSelect(x, y, additive) {
+    const st = this.state;
+    if (st.stage > 4) { if (st.selCad || st.selSet.length) this.setState({ selCad: null, selSet: [], ctxBar: null }); return; }
+    const f = this.pickFace(x, y), id = f ? f.cad : null, F = id && this.faceInfo(id);
+    let set = additive ? st.selSet.slice() : [];
+    if (id) { const i = set.indexOf(id); if (i >= 0 && additive) set.splice(i, 1); else if (!set.includes(id)) set.push(id); }
+    else if (!additive) set = [];
+    if (!additive && id && st.selSet.length === 1 && st.selSet[0] === id) set = [];
+    const next = { selSet: set, selCad: set.length ? set[set.length - 1] : null, ctxMenu: null, viewMenu: false,
+      ctxBar: set.length ? { x: Math.min(this.w - 330, x + 14), y: Math.max(8, y - 44) } : null };
+    if (F && F.feat && st.stage === 1 && !st.featEdit) next.sel = 'f:' + F.feat;
+    this.setState(next);
+  }
+  openCtxMenu(x, y) {
+    const st = this.state;
+    if (this.sketchFeat()) { if (this.skPts && this.state.sketchTool === 'line' && this.finishPoly()) return; }
+    const f = st.stage <= 4 ? this.pickFace(x, y) : null;
+    const id = f ? f.cad : st.stage <= 4 ? st.selCad : null, F = id && this.faceInfo(id);
+    const extra = F && F.feat && st.stage === 1 && !st.featEdit ? { sel: 'f:' + F.feat } : {};
+    const set = id ? (st.selSet.includes(id) ? st.selSet : [id]) : st.selSet;
+    this.setState({ ctxMenu: { x: Math.max(6, Math.min(this.w - 250, x)), y, cad: id }, selCad: id, selSet: set, ctxBar: null, viewMenu: false, ...extra });
+  }
+  ctxItems() {
+    const st = this.state, m = st.ctxMenu; if (!m) return [];
+    const F = m.tree || m.study ? null : this.faceInfo(m.cad), featId = m.tree || (F && F.feat), f = featId && this.feat(featId), out = [];
+    const it = (label, accel, run, check) => out.push({ label, accel: accel || '', run: () => { this.setState({ ctxMenu: null }); run && run(); },
+      fg: run ? '#d3dae1' : '#56616d', check: check ? '✓' : '', isItem: true, isSep: false, isTitle: false });
+    const sep = () => out.push({ isSep: true, isItem: false, isTitle: false });
+    const title = t => out.push({ isTitle: true, isItem: false, isSep: false, label: t });
+    if (m.study) {
+      const s = st.part.studies.find(x => x.id === m.study);
+      if (s) { title(s.name); it(s.suppressed ? 'Unsuppress' : 'Suppress', '', () => this.setStudy(s.id, { suppressed: !s.suppressed })); it('Delete', 'Del', () => this.deleteStudy(s.id)); sep(); }
+    }
+    if (F) title(F.name);
+    if (F && F.drag) it('Edit dimension…', 'dbl-click', () => { const a = this.faceAnchor(m.cad); const p = a ? this.proj(a.c) : [m.x, m.y]; this.openDimEdit({ face: m.cad }, p[0], p[1]); });
+    if (f) {
+      it('Edit feature — ' + this.featLabel(f), '', () => this.editFeature(f.id));
+      it(f.suppressed ? 'Unsuppress' : 'Suppress', '', () => this.toggleSuppress(f.id));
+      it('Delete feature', '', () => this.deleteFeature(f.id));
+      it('Move up', '', () => this.moveFeature(f.id, -1)); it('Move down', '', () => this.moveFeature(f.id, 1));
+    }
+    if (F && st.stage <= 4) {
+      sep();
+      for (const [t, l] of [['fixed', 'Fixed support'], ['roller', 'Roller / slider'], ['force', 'Force'], ['pressure', 'Pressure']])
+        it('Add ' + l + ' here', '', () => this.addStudy(t));
+      if (F.plane) it('Sketch on this face', '', () => this.insertFeature('sketch'));
+      if (F.plane) it('Hole on this face', '', () => this.insertFeature('hole'));
+    }
+    if (F && (F.plane || this.faceAnchor(m.cad))) it('Normal to', 'Ctrl+8', () => this.normalTo(m.cad));
+    if (out.length) sep();
+    it('Zoom to fit', 'F', () => this.zoomFit());
+    it('Previous view', 'Ctrl+Shift+Z', this.viewStack.length ? () => this.prevView() : null);
+    it('View orientation…', 'Space', () => this.setState({ viewMenu: true }));
+    sep();
+    it('Shaded with edges', '', () => this.setState({ shade: 'shaded' }), st.shade === 'shaded');
+    it('Wireframe (hidden lines removed)', '', () => this.setState({ shade: 'wire' }), st.shade === 'wire');
+    it('Section view', '', () => this.setState({ cutOn: !st.cutOn, stage: Math.max(st.stage, 4) }), st.cutOn);
+    it('Reference planes', '', () => this.setState({ planes: !st.planes }), st.planes);
+    sep();
+    it('Undo', 'Ctrl+Z', this.undoStack.length ? () => this.undo() : null);
+    it('Redo', 'Ctrl+Y', this.redoStack.length ? () => this.redo() : null);
+    sep();
+    it('Mouse: SolidWorks', '', () => this.setState({ mouseMode: 'solidworks' }), st.mouseMode !== 'catia');
+    it('Mouse: CATIA', '', () => this.setState({ mouseMode: 'catia' }), st.mouseMode === 'catia');
+    return out;
+  }
   setNum(k, v, min, max, dp) {
     const n = { ...this.state.nums };
     n[k] = Math.max(min, Math.min(max, +(+v).toFixed(dp || 0)));
-    if (!isFinite(n[k])) return;
+    if (!isFinite(n[k]) || n[k] === this.state.nums[k]) return;
+    if (!this.inSession) this.pushUndo();               // feature / Modify sessions undo as one step
     this.setState({ nums: n });
   }
   // one editable, unit-aware numeric field
@@ -2262,7 +3493,7 @@ class Component extends DCLogic {
     if (!R) { this.pushLog('io', 'nothing to export — solve first', 'warn'); return; }
     const rows = ['node,x,y,z,ux,uy,uz,umag' + (R.vm ? ',vm,p1' : '') + (R.se ? ',sed' : '')];
     for (let n = 0; n < L.nn; n++) {
-      let r = n + ',' + L.px[n].toFixed(3) + ',' + L.py[n].toFixed(3) + ',' + L.pz[n].toFixed(3)
+      let r = n + ',' + (L.px[n] + L.org[0]).toFixed(3) + ',' + (L.py[n] + L.org[1]).toFixed(3) + ',' + (L.pz[n] + L.org[2]).toFixed(3)
         + ',' + R.u[3*n].toExponential(5) + ',' + R.u[3*n+1].toExponential(5) + ',' + R.u[3*n+2].toExponential(5)
         + ',' + R.umag[n].toExponential(5);
       if (R.vm) r += ',' + R.vm[n].toFixed(4) + ',' + R.p1[n].toFixed(4);
@@ -2271,19 +3502,29 @@ class Component extends DCLogic {
     }
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'bracket_L_results.csv';
+    a.href = URL.createObjectURL(blob); a.download = (this.state.part.name || 'part') + '_results.csv';
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    this.pushLog('io', 'wrote bracket_L_results.csv — ' + grp(L.nn) + ' nodes', 'ok');
+    this.pushLog('io', 'wrote ' + a.download + ' — ' + grp(L.nn) + ' nodes', 'ok');
   }
   menuDefs() {
     const s = this.state, set = o => () => this.setState(o);
     return [
       { label: 'File', ai: 0, items: [
-        ['New Study', 'Ctrl+N'], ['Open Geometry…', 'Ctrl+O'], ['Import IFC / STEP…', 'Ctrl+Shift+I'], '-',
-        ['Save Study', 'Ctrl+S', set({ savedAgo: '· saved just now' })], ['Save Study As…', 'Ctrl+Shift+S'], '-',
-        ['Export Results (CSV)…', '', () => this.exportCsv()], ['Exit', 'Alt+F4']] },
+        ['New Part (blank)', '', () => this.newPart('blank')]].concat(
+        Object.keys(CADK.TEMPLATES).filter(k => k !== 'blank').map(k => ['New from template · ' + CADK.TEMPLATES[k].label, '', () => this.newPart(k)]), ['-',
+        ['Open Part / STL…', 'Ctrl+O', () => this.openPart()], ['Import STL…', '', () => this.importSTL()], '-',
+        ['Save Part', 'Ctrl+S', () => this.savePart()], ['Export STL (meshed surface)', '', () => this.exportSTL()], '-',
+        ['Export Results (CSV)…', '', () => this.exportCsv()], ['Exit', 'Alt+F4']]) },
+      { label: 'Insert', ai: 0, items: [
+        ['Sketch', '', () => this.insertFeature('sketch')], '-',
+        ['Boss-Extrude', '', () => this.insertFeature('extrude')], ['Cut-Extrude', '', () => this.insertFeature('extrude', { op: 'cut' })],
+        ['Revolved Boss', '', () => this.insertFeature('revolve')], ['Revolved Cut', '', () => this.insertFeature('revolve', { op: 'cut' })], '-',
+        ['Box', '', () => this.insertFeature('box')], ['Cylinder', '', () => this.insertFeature('cylinder')], ['Sphere', '', () => this.insertFeature('sphere')],
+        ['Hole', '', () => this.insertFeature('hole')], '-',
+        ['Linear Pattern', '', () => this.insertFeature('lpattern')], ['Circular Pattern', '', () => this.insertFeature('cpattern')], ['Mirror', '', () => this.insertFeature('mirror')], '-',
+        ['Imported Body (STL)…', '', () => this.importSTL()]] },
       { label: 'Edit', ai: 0, items: [
-        ['Undo', 'Ctrl+Z'], ['Redo', 'Ctrl+Y'], '-',
+        ['Undo', 'Ctrl+Z', this.undoStack.length ? () => this.undo() : null], ['Redo', 'Ctrl+Y', this.redoStack.length ? () => this.redo() : null], '-',
         ['Delete Selected', 'Del'], ['Select All Faces', 'Ctrl+A'], '-', ['Preferences…', 'Ctrl+,']] },
       { label: 'View', ai: 0, items: [
         ['Solver Log', 'Ctrl+L', set({ logOpen: !s.logOpen }), s.logOpen],
@@ -2291,8 +3532,13 @@ class Component extends DCLogic {
         ['AR Mode', 'F9', set({ arOn: !s.arOn }), s.arOn], '-',
         ['Section Cut', '', set({ cutOn: !s.cutOn }), s.cutOn],
         ['Element Edges', '', set({ stage: 4 })],
-        ['Reset Camera', 'Home', () => { this.tgt.dist = 24; this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; }], '-',
-        ['Full Screen', 'F11']] },
+        ['Reset Camera', 'Home', () => { this.zoomFit(); this.setView(-0.62, 0.42, true); }],
+        ['Zoom to Fit', 'F', () => this.zoomFit()], ['Previous View', 'Ctrl+Shift+Z', this.viewStack.length ? () => this.prevView() : null],
+        ['View Orientation…', 'Space', set({ viewMenu: true })], '-'].concat(
+        STD_VIEWS.map((v, i) => [v[0], v[1], () => this.stdView(i)]), ['-',
+        ['Mouse: SolidWorks', '', set({ mouseMode: 'solidworks' }), s.mouseMode !== 'catia'],
+        ['Mouse: CATIA', '', set({ mouseMode: 'catia' }), s.mouseMode === 'catia'], '-',
+        ['Full Screen', 'F11']]) },
       { label: 'Solve', ai: 0, items: [
         ['Generate Mesh', 'F4', set({ stage: 4 })],
         ['Run Solve', 'F5', s.solving ? null : () => this.startSolve()],
@@ -2438,24 +3684,46 @@ class Component extends DCLogic {
       stats: { ne: st.elements || L.ne, nn: st.nodes || L.nn, dof: st.dof || L.nn * 3,
         it: st.iterations || 0, res: st.residual || 0, hx: st.h || L.dx } });
   }
+  // The bracket template in its parametric form, if the part is still that shape
+  // with its three default study items (values may differ): what the DOLFINx
+  // backend's spec can express. Anything else solves with the in-browser core.
+  bracketSpec() {
+    const part = this.state.part;
+    if (part.template !== 'bracket' || part.features.length !== 2) return null;
+    const [sk, ex] = part.features;
+    if (sk.type !== 'sketch' || ex.type !== 'extrude' || ex.sketch !== sk.id || sk.entities.length !== 1 || sk.plane !== 'XY' || sk.offset
+      || ex.dir !== 'normal' || ex.op !== 'boss' || sk.suppressed || ex.suppressed) return null;
+    const e = sk.entities[0];
+    if (e.type !== 'poly' || e.pts.length !== 7) return null;
+    const t = e.pts[1][0], W = e.pts[3][0], H = e.pts[4][1], r = (e.fillets || [])[2] || 0, D = ex.depth;
+    const ref = CADK.bracket({ W, H, D, t, r }).features[0].entities[0];
+    if (JSON.stringify(ref.pts) !== JSON.stringify(e.pts) || (e.fillets || []).some((v, i) => i !== 2 && v)) return null;
+    const ss = part.studies || [], by = id => ss.find(x => x.id === id), fix = by('fix1'), fo = by('force1'), pr = by('press1');
+    if (ss.length !== 3 || !fix || !fo || !pr || fix.faces.join() !== 'extrude1/e0.l0' || fo.faces.join() !== 'extrude1/e0.l4'
+      || pr.faces.join() !== 'extrude1/e0.l6' || fo.F[2]) return null;
+    return { W, H, D, t, r, F: Math.hypot(fo.F[0], fo.F[1]), theta: Math.atan2(fo.F[0], -fo.F[1]) * 180 / Math.PI, P: pr.P,
+      enc: !fix.suppressed, force: !fo.suppressed, press: !pr.suppressed };
+  }
   studySpec() {
-    const n = this.state.nums, m = MAT[this.state.material], b = this.state.bcOn, o = this.state.outputs;
-    return {
-      name: 'bracket_L', version: 1,
-      geometry: { W: n.gWidth, H: n.gHeight, D: n.gDepth, t: n.gThk, r: n.gFillet },
+    const n = this.state.nums, m = MAT[this.state.material], o = this.state.outputs, b = this.bracketSpec();
+    const common = {
       material: { id: m.id, name: m.name, E: m.E, nu: m.nu, rho: m.rho, alpha: m.alpha, sy: m.sy },
       mesh: { mesher: this.state.mesher, h: n.hSize, hz: n.hSize * n.hAspect,
-        across: n.hThick, budget: n.hBudget * 1000, order: this.state.mesher === 'gmsh' ? 2 : 1 },
-      loads: { tip_force: n.lForce, theta: n.lAngle, pressure: n.lPress,
-        dT: n.mTemp - 22, gravity: true, density_scale: n.mScale },
-      bcs: { enc: b.enc, force: b.force, press: b.press, sym: b.sym },
+        across: 2, budget: n.hBudget * 1000, order: this.state.mesher === 'gmsh' ? 2 : 1 },
       solver: { rtol: Math.pow(10, -n.sTol), maxit: n.sMaxIt, ksp: 'cg', pc: 'gamg' },
       outputs: { u: o.u, s: o.s, e: o.e, rf: o.rf, modes: o.mode ? 3 : 0 }
     };
+    if (b) return { name: 'bracket_L', version: 1, geometry: { W: b.W, H: b.H, D: b.D, t: b.t, r: b.r }, ...common,
+      loads: { tip_force: b.F, theta: b.theta, pressure: b.P, dT: n.mTemp - 22, gravity: this.state.grav !== false, density_scale: n.mScale },
+      bcs: { enc: b.enc, force: b.force, press: b.press, sym: false } };
+    const part = this.state.part;
+    return { name: part.name || 'part', version: 2, ...common,
+      part: { features: part.features.map(f => (f.data ? { ...f, data: '<' + f.data.length + ' bytes of STL>' } : f)), studies: part.studies },
+      loads: { dT: n.mTemp - 22, gravity: this.state.grav !== false, density_scale: n.mScale } };
   }
   useRemote() {
     return this.state.engine !== 'local' && this.state.bridge === 'live'
-      && this.ws && this.ws.readyState === 1;
+      && this.ws && this.ws.readyState === 1 && !!this.bracketSpec();
   }
   recordSolve(engine, st, R, wall) {
     const row = { engine, elements: st.elements || (this.mesh && this.mesh.ne) || 0,
@@ -2616,7 +3884,7 @@ class Component extends DCLogic {
     this.setState({ field: list[((i < 0 ? 0 : i) + step + list.length * 4) % list.length] });
   }
   resetView() {
-    this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; this.tgt.dist = 24;
+    this.tgt.yaw = -0.62; this.tgt.pitch = 0.42; this.tgt.dist = 24; this.tgtPan = [0, 0];
     this.setState({ cutOn: false, cutAxis: 'z', cutPlane: null, pick: null });
   }
   liveLabel(h) {
@@ -2665,8 +3933,8 @@ class Component extends DCLogic {
       x: Math.max(12, (this.w || 400) * 0.5), y: Math.max(12, (this.h || 300) * 0.32),
       l1: M.short + ' ' + sig(F.arr[n] * M.conv * this.lf()) + ' ' + M.unit + '  (peak)',
       l2: 'node ' + n + ' · pointed',
-      l3: 'xyz ' + sig(this.mesh.px[n] * c[1]) + ', ' + sig(this.mesh.py[n] * c[1])
-        + ', ' + sig(this.mesh.pz[n] * c[1]) + ' ' + c[0] } });
+      l3: 'xyz ' + sig((this.mesh.px[n] + this.mesh.org[0]) * c[1]) + ', ' + sig((this.mesh.py[n] + this.mesh.org[1]) * c[1])
+        + ', ' + sig((this.mesh.pz[n] + this.mesh.org[2]) * c[1]) + ' ' + c[0] } });
   }
 
   // ======================== tabs and detached windows =====================
@@ -2781,11 +4049,12 @@ class Component extends DCLogic {
     // mechanism an assistant backend would drive.
     if (R && R.max.vm > 0) {
       const sf = m.sy / R.max.vm;
-      if (sf < 2) {
-        const t = this.state.nums.gThk * Math.sqrt(2 / sf);
+      const b = this.bracketSpec();
+      if (sf < 2 && b) {
+        const t = Math.min(Math.min(b.W, b.H) * 0.7, b.t * Math.sqrt(2 / sf));
         actions.push({ verb: 'APPLY', label: 'Wall thickness → ' + sig(t)
           + ' mm (bending estimate for SF 2.0)',
-          apply: () => this.setNum('gThk', t, 2, 200, 0) });
+          apply: () => { this.pushUndo(); this.setState({ part: { ...this.state.part, features: CADK.bracket({ ...b, t: +t.toFixed(1) }).features } }); } });
       }
     }
     actions.push({ verb: 'APPLY', label: 'Halve the element size and re-solve',
@@ -2804,6 +4073,205 @@ class Component extends DCLogic {
     ]);
     this.chatDirty = true;
     this.setState({ chat: next, chatInput: '' });
+  }
+  // a numeric field bound to anything: unit is '@len' / '@force' / '@stress' (converted) or a plain label
+  numField(ek, label, unit, value, step, min, max, set) {
+    const st = this.state;
+    let cf = 1, u = unit;
+    if (unit && unit[0] === '@') { const c = this.cv(unit.slice(1)); cf = c[1]; u = c[0]; }
+    const raw = (value || 0) * cf, shown = Number.isInteger(raw) && Math.abs(raw) < 1e6 ? String(raw) : sig(raw);
+    const clamp = v => Math.max(min, Math.min(max, v));
+    const commit = txt => { const v = parseFloat(String(txt).replace(/[^0-9eE+\-.]/g, '')); if (isFinite(v)) set(clamp(v / cf)); };
+    return { label, unit: u, val: st.edit === ek ? st.editText : shown, w: 54,
+      dec: () => set(clamp((value || 0) - step)), inc: () => set(clamp((value || 0) + step)),
+      onFocus: () => this.setState({ edit: ek, editText: shown }),
+      onEdit: e => this.setState({ editText: e.target.value }),
+      onCommit: () => { if (this.state.edit === ek) commit(this.state.editText); this.setState({ edit: null }); },
+      onKeyDown: e => {
+        if (e.key === 'Enter') { e.stopPropagation(); commit(e.target.value); this.setState({ edit: null }); e.target.blur(); }
+        else if (e.key === 'Escape') { e.stopPropagation(); this.setState({ edit: null }); e.target.blur(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); set(clamp((value || 0) + step)); this.setState({ edit: null }); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); set(clamp((value || 0) - step)); this.setState({ edit: null }); }
+      } };
+  }
+  choice(label, options, cur, pick) {
+    return { label, opts: options.map(([v, l]) => {
+      const on = v === cur;
+      return { label: l, bg: on ? 'rgba(94,207,224,.14)' : '#13181e', bd: on ? 'rgba(94,207,224,.5)' : '#232b34', fg: on ? '#dff3f7' : '#8b96a2', click: () => pick(v) };
+    }) };
+  }
+  btn(label, click, title, tone) {
+    const t = { on: ['rgba(94,207,224,.14)', 'rgba(94,207,224,.5)', '#dff3f7'], warn: ['#26161a', '#6b2f3a', '#ff9fae'], go: ['#173326', '#2f6b47', '#9fe0a8'] }[tone]
+      || ['#13181e', '#232b34', '#a9b4bf'];
+    return { label, click, title: title || '', bg: t[0], bd: t[1], fg: t[2] };
+  }
+  section(title, o) {
+    const x = o || {};
+    return { title, params: x.params || [], choices: x.choices || [], buttons: x.buttons || [], notes: (x.notes || []).map(t => (typeof t === 'string' ? { text: t, fg: '#5e6b78' } : t)) };
+  }
+  // the PropertyManager of one feature
+  featurePanel(f) {
+    const st = this.state, len = u => (u === 'mm' ? '@len' : u);
+    if (f.type === 'sketch') return this.sketchPanel(f);
+    const nums = [], choices = [];
+    for (const fld of CADK.featureFields(f)) {
+      if (fld.kind === 'num') {
+        if (fld.key === 'depth' && f.type === 'hole' && f.through) continue;
+        nums.push(this.numField('f:' + f.id + ':' + fld.key, fld.label, len(fld.unit), f[fld.key], fld.step, fld.min, fld.max, v => this.setFeatureParam(f.id, fld.key, v)));
+      } else if (fld.kind === 'choice') choices.push(this.choice(fld.label, fld.options, f[fld.key], v => this.setFeatureParam(f.id, fld.key, v)));
+      else if (fld.kind === 'feature') {
+        const opts = st.part.features.slice(0, st.part.features.findIndex(g => g.id === f.id))
+          .filter(g => CADK.FEATURE_INFO[g.type].solid && g.id !== f.id).map(g => [g.id, this.featLabel(g)]);
+        choices.push(this.choice(fld.label, opts, f[fld.key], v => this.setFeatureParam(f.id, fld.key, v)));
+      }
+    }
+    const secs = [this.section(CADK.FEATURE_INFO[f.type].label.toUpperCase() + ' PARAMETERS', { params: nums, choices })];
+    if (f.sketch) {
+      const sk = this.feat(f.sketch);
+      secs.push(this.section('PROFILE', { notes: [sk ? this.featLabel(sk) + ' · ' + sk.entities.length + ' entities on the ' + (CADK.PLANES[sk.plane] || {}).name + ' plane' : 'sketch missing'],
+        buttons: sk ? [this.btn('✎ Edit ' + this.featLabel(sk), () => { this.featureOk(); this.editFeature(sk.id); })] : [] }));
+    }
+    if (f.type === 'stl') secs.push(this.section('IMPORTED MESH', { notes: [(f.file || 'STL') + ' · faces are facets grouped by normal'] }));
+    secs.push(this.section('', { buttons: [this.btn(f.suppressed ? 'Unsuppress' : 'Suppress', () => this.toggleSuppress(f.id)), this.btn('Delete', () => this.deleteFeature(f.id), 'Delete this feature', 'warn')] }));
+    return { title: this.featLabel(f), sub: 'PropertyManager · live preview · ✓ Enter · ✕ Esc', sections: secs };
+  }
+  sketchPanel(sk) {
+    const st = this.state, tool = st.sketchTool, len = '@len';
+    const tools = [['select', 'Select (S)'], ['line', 'Line (L)'], ['rect', 'Rectangle (R)'], ['circle', 'Circle (C)'], ['fillet', 'Sketch fillet']]
+      .map(([t, l]) => this.btn(l, () => { this.skPts = null; this.setState({ sketchTool: t }); }, '', tool === t ? 'on' : null));
+    const hint = { select: 'click an entity to select it · drag its points · Del deletes it',
+      line: 'click points · click the first point, double-click or Enter to close · Esc cancels',
+      rect: 'click two opposite corners', circle: 'click the centre, then a point on the circle',
+      fillet: 'click a polyline corner (or a rectangle) to round it with the radius below' }[tool];
+    const secs = [
+      this.section('TOOLS', { buttons: tools, notes: [hint] }),
+      this.section('SKETCH PLANE', { choices: [this.choice('Plane', [['XY', 'Front'], ['XZ', 'Top'], ['YZ', 'Right']], sk.plane, v => { this.setFeatureParam(sk.id, 'plane', v); this.lookAtPlane({ ...sk, plane: v }); })],
+        params: [this.numField('sk:off', 'Offset', len, sk.offset, 5, -1e5, 1e5, v => this.setFeatureParam(sk.id, 'offset', v)),
+          this.numField('sk:grid', 'Snap / grid', len, st.sketchGrid, 1, 0.1, 500, v => this.setState({ sketchGrid: v })),
+          this.numField('sk:fil', 'Fillet radius', len, st.sketchFillet, 1, 0.1, 1000, v => this.setState({ sketchFillet: v }))] })
+    ];
+    const label = (e, k) => ({ rect: 'Rectangle', circle: 'Circle', poly: 'Polyline' }[e.type] || e.type) + ' ' + (k + 1) + (e.type === 'poly' ? ' (' + e.pts.length + ')' : '');
+    secs.push(this.section('ENTITIES · ' + sk.entities.length, { buttons: sk.entities.map((e, k) => this.btn(label(e, k), () => this.setState({ sketchSel: k, sketchTool: 'select' }), '', st.sketchSel === k ? 'on' : null)),
+      notes: sk.entities.length ? [] : ['empty: draw a closed profile — nested profiles become holes'] }));
+    const k = st.sketchSel, e = k !== null && k !== undefined ? sk.entities[k] : null;
+    if (e) {
+      const set = (key, v) => this.setSketchEntity(sk, k, { [key]: v });
+      const P = [];
+      if (e.type === 'rect') for (const [key, l] of [['x', 'x'], ['y', 'y'], ['w', 'Width'], ['h', 'Height'], ['r', 'Corner radius']])
+        P.push(this.numField('se:' + k + key, l, len, e[key], key === 'r' ? 1 : 5, key === 'w' || key === 'h' ? 0.1 : key === 'r' ? 0 : -1e5, 1e5, v => set(key, v)));
+      if (e.type === 'circle') for (const [key, l] of [['cx', 'Centre x'], ['cy', 'Centre y'], ['r', 'Radius']])
+        P.push(this.numField('se:' + k + key, l, len, e[key], key === 'r' ? 1 : 5, key === 'r' ? 0.1 : -1e5, 1e5, v => set(key, v)));
+      if (e.type === 'poly') e.pts.slice(0, 24).forEach((pt, i) => {
+        P.push(this.numField('se:' + k + 'x' + i, 'P' + (i + 1) + ' x', len, pt[0], 5, -1e5, 1e5, v => { const pts = e.pts.slice(); pts[i] = [v, pt[1]]; set('pts', pts); }));
+        P.push(this.numField('se:' + k + 'y' + i, 'P' + (i + 1) + ' y', len, pt[1], 5, -1e5, 1e5, v => { const pts = e.pts.slice(); pts[i] = [pt[0], v]; set('pts', pts); }));
+        P.push(this.numField('se:' + k + 'f' + i, 'P' + (i + 1) + ' fillet', len, (e.fillets || [])[i] || 0, 1, 0, 1e5, v => { const fl = (e.fillets || e.pts.map(() => 0)).slice(); fl[i] = v; set('fillets', fl); }));
+      });
+      secs.push(this.section('SELECTED · ' + label(e, k).toUpperCase(), { params: P, buttons: [this.btn('Delete entity', () => this.sketchDelete(), 'Del', 'warn')] }));
+    }
+    const pend = st.featEdit && st.featEdit.pending;
+    return { title: this.featLabel(sk) + ' — sketch', sub: (pend ? '✓ goes on to ' + pend + ' · ' : '') + 'middle / right drag to move the view', sections: secs };
+  }
+  setSketchEntity(sk, k, patch) {
+    const ents = sk.entities.map((e, i) => (i === k ? { ...e, ...patch } : e));
+    if (!this.inSession) this.pushUndo();
+    this.setSketch(sk, ents);
+  }
+  geometryPanel() {
+    const st = this.state, cm = this.compiled(), M = this.mesh, part = st.part, c = this.cv('len');
+    const ext = cm.bbox[1].map((v, i) => sig((v - cm.bbox[0][i]) * c[1])).join(' × ');
+    const ins = [['sketch', 'Sketch'], ['extrude', 'Extrude'], ['revolve', 'Revolve'], ['box', 'Box'], ['cylinder', 'Cylinder'], ['sphere', 'Sphere'],
+      ['hole', 'Hole'], ['lpattern', 'Linear pattern'], ['cpattern', 'Circular pattern'], ['mirror', 'Mirror']]
+      .map(([t, l]) => this.btn(l, () => this.insertFeature(t)));
+    ins.push(this.btn('Extruded cut', () => this.insertFeature('extrude', { op: 'cut' })), this.btn('Import STL…', () => this.importSTL()));
+    const secs = [
+      this.section('PART', { notes: [(part.name || 'part') + ' · ' + part.features.length + ' features', 'box ' + ext + ' ' + c[0], grp(M.ne) + ' hex8 elements'] }),
+      this.section('INSERT FEATURE', { buttons: ins, notes: ['a selected planar face is used as the sketch plane or hole / primitive position'] }),
+      this.section('NEW FROM TEMPLATE', { buttons: Object.keys(CADK.TEMPLATES).map(k => this.btn(CADK.TEMPLATES[k].label, () => this.newPart(k))) }),
+      this.section('FILE', { buttons: [this.btn('Open…', () => this.openPart(), '.archpart.json or .stl'), this.btn('Save', () => this.savePart(), 'Download the part, its study and settings'),
+        this.btn('Export STL', () => this.exportSTL(), 'The meshed surface')] })
+    ];
+    return { title: 'Geometry', sub: 'feature-based part · CSG · voxel hex8 mesh', sections: secs };
+  }
+  studyPanel() {
+    const st = this.state, studies = st.part.studies || [], sel = st.selSet.length ? st.selSet : st.selCad ? [st.selCad] : [];
+    const names = sel.map(id => { const F = this.faceInfo(id); return F ? F.name : id; });
+    const secs = [this.section('SELECTED FACES · ' + sel.length, {
+      notes: sel.length ? names.slice(0, 6).concat(names.length > 6 ? ['…'] : []) : ['click faces on the model · Ctrl / Shift + click adds faces'],
+      buttons: sel.length ? [this.btn('+ Fixed', () => this.addStudy('fixed'), 'All displacements zero'), this.btn('+ Roller', () => this.addStudy('roller'), 'Normal displacement zero, free to slide'),
+        this.btn('+ Force', () => this.addStudy('force'), 'Total force shared over the faces'), this.btn('+ Pressure', () => this.addStudy('pressure'), 'Normal pressure; positive pushes in')] : [] })];
+    const cf = '@force', cs = '@stress';
+    for (const sd of studies) {
+      const P = [];
+      if (sd.type === 'force') ['Fx', 'Fy', 'Fz'].forEach((l, i) => P.push(this.numField('st:' + sd.id + i, l, cf, sd.F[i], 100, -1e9, 1e9, v => { const F = sd.F.slice(); F[i] = v; this.setStudy(sd.id, { F }); })));
+      if (sd.type === 'pressure') P.push(this.numField('st:' + sd.id + 'p', 'Pressure', cs, sd.P, 0.1, -1e6, 1e6, v => this.setStudy(sd.id, { P: v })));
+      const n = (sd.faces || []).length, bfN = this.mesh && this.mesh.bf ? this.mesh.bf.filter(b => sd.faces.includes(b.id)).length : 0;
+      secs.push(this.section((sd.name || sd.type).toUpperCase() + (sd.suppressed ? ' (suppressed)' : ''), { params: P,
+        notes: [{ text: n + ' face' + (n === 1 ? '' : 's') + ' · ' + grp(bfN) + ' element faces' + (bfN ? '' : ' — its faces no longer exist'), fg: bfN ? '#5e6b78' : '#e6c98a' }],
+        buttons: [this.btn('Show', () => this.setState({ selSet: sd.faces.slice(), selCad: sd.faces[0] || null })),
+          this.btn('Use selection', () => sel.length && this.setStudy(sd.id, { faces: sel.slice() }), 'Replace its faces with the selected ones'),
+          this.btn(sd.suppressed ? 'Unsuppress' : 'Suppress', () => this.setStudy(sd.id, { suppressed: !sd.suppressed })),
+          this.btn('Delete', () => this.deleteStudy(sd.id), '', 'warn')] }));
+    }
+    secs.push(this.section('BODY LOADS', { buttons: [this.btn('Gravity (−Y) ' + (st.grav !== false ? 'on' : 'off'), () => { this.pushUndo(); this.setState({ grav: st.grav === false }); }, '', st.grav !== false ? 'on' : null)],
+      notes: ['temperature step: stage 02 · Material'] }));
+    return { title: 'Loads & supports', sub: 'on named faces · they follow the geometry through edits', sections: secs };
+  }
+  cadVals() {
+    const st = this.state, c = this.cv('len'), A = '#5ecfe0';
+    const btn = (label, title, run, on) => ({ label, title, run, fg: on ? '#07171a' : '#a9b4bf', bg: on ? A : 'transparent' });
+    const de = st.dimEdit, sel = st.selCad && this.faceInfo(st.selCad);
+    const vo = STD_VIEWS.map((v, i) => ({ label: v[0], accel: v[1], run: () => this.stdView(i) }))
+      .concat([{ label: 'Normal to', accel: sel ? 'Ctrl+8' : 'select a face', run: () => sel ? this.normalTo() : this.setState({ viewMenu: false }) }]);
+    const barItems = [], ctxItems = this.ctxItems(), close = fn => () => { this.setState({ ctxBar: null }); fn(); };
+    if (sel) barItems.push({ label: '⟂ Normal to', title: 'Look straight at this face (Ctrl+8)', run: close(() => this.normalTo()) });
+    if (st.stage === 3 || st.stage === 4) {
+      for (const [t, l] of [['fixed', '+ Fixed'], ['roller', '+ Roller'], ['force', '+ Force'], ['pressure', '+ Pressure']])
+        barItems.push({ label: l, title: 'Add to the study on the selected faces', run: close(() => this.addStudy(t)) });
+    } else if (sel) {
+      if (sel.drag) barItems.push({ label: '✎ ' + (this.dragValue(st.selCad) || { label: 'dimension' }).label, title: 'Edit the value that drives this face',
+        run: () => { const b = st.ctxBar; this.openDimEdit({ face: st.selCad }, b ? b.x : 200, b ? b.y + 40 : 200); } });
+      if (sel.feat) barItems.push({ label: '⚙ ' + this.featLabel(this.feat(sel.feat)), title: 'Edit feature (PropertyManager)', run: () => this.editFeature(sel.feat) });
+      if (sel.plane) barItems.push({ label: '✎ Sketch', title: 'New sketch on this face', run: close(() => this.insertFeature('sketch')) },
+        { label: '⊙ Hole', title: 'Hole into this face', run: close(() => this.insertFeature('hole')) },
+        { label: '⬒ Extrude', title: 'Sketch on this face, then extrude', run: close(() => this.insertFeature('extrude')) });
+    }
+    const cmds = [['sketch', '✎ Sketch'], ['extrude', '⬒ Extrude'], ['cut', '⬓ Cut'], ['revolve', '◔ Revolve'], ['box', '▢ Box'], ['cylinder', '◯ Cylinder'],
+      ['sphere', '● Sphere'], ['hole', '⊙ Hole'], ['lpattern', '⋯ Pattern'], ['cpattern', '✲ Circular'], ['mirror', '⇋ Mirror'], ['stl', '⇪ STL']]
+      .map(([t, l]) => ({ label: l, title: { cut: 'Extruded cut', stl: 'Import an STL mesh' }[t] || 'Insert ' + t, fg: '#c9d2da', bg: 'transparent',
+        run: () => (t === 'stl' ? this.importSTL() : t === 'cut' ? this.insertFeature('extrude', { op: 'cut' }) : this.insertFeature(t)) }));
+    return {
+      hud: [
+        btn('⤢ Fit', 'Zoom to fit (F, double-middle-click)', () => this.zoomFit()),
+        btn('↶ View', 'Previous view (Ctrl+Shift+Z)', () => this.prevView()),
+        btn('▣ Views', 'View orientation (Space)', () => this.setState({ viewMenu: !st.viewMenu, ctxMenu: null }), st.viewMenu),
+        btn('⟂', 'Normal to the selected face (Ctrl+8)', () => this.normalTo()),
+        btn('◧ Section', 'Section view', () => this.setState({ cutOn: !st.cutOn, stage: Math.max(st.stage, 4) }), st.cutOn),
+        btn(st.shade === 'wire' ? '◫ Wire' : st.shade === 'nodes' ? '⁘ Nodes' : '◼ Shaded', 'Display style (cycles)',
+          () => this.setState({ shade: { shaded: 'wire', wire: 'nodes', nodes: 'shaded' }[st.shade] || 'shaded' })),
+        btn('⊞ Planes', 'Reference planes', () => this.setState({ planes: !st.planes }), st.planes),
+        btn('↶ ' + st.undoN, 'Undo model edit (Ctrl+Z)', () => this.undo()),
+        btn('↷ ' + st.redoN, 'Redo (Ctrl+Y)', () => this.redo())
+      ],
+      vo: { on: !!st.viewMenu, items: vo },
+      ctx: { on: !!st.ctxMenu, x: st.ctxMenu ? st.ctxMenu.x : 0, items: ctxItems,
+        y: st.ctxMenu ? Math.max(6, Math.min(st.ctxMenu.y, (this.h || 800) - 12 - ctxItems.reduce((a, i) => a + (i.isSep ? 9 : i.isTitle ? 22 : 26), 8))) : 0,
+        stop: e => e.preventDefault() },
+      bar: { on: !!(st.ctxBar && barItems.length && !st.dimEdit && !st.ctxMenu), x: st.ctxBar ? st.ctxBar.x : 0, y: st.ctxBar ? st.ctxBar.y : 0, items: barItems },
+      dimBox: { on: !!de, x: de ? de.x : 0, y: de ? de.y : 0, text: de ? de.text : '', unit: c[0],
+        name: de ? de.name : '', ref2: de ? de.ref : '', ref: this.refDim,
+        ok: () => this.dimOk(), cancel: () => this.dimCancel(),
+        inc: () => this.dimSpin(1), dec: () => this.dimSpin(-1),
+        onInput: e => this.dimType(e.target.value),
+        onKey: e => {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); this.dimOk(); }
+          else if (e.key === 'Escape') { e.preventDefault(); this.dimCancel(); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); this.dimSpin(1, e.shiftKey); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); this.dimSpin(-1, e.shiftKey); }
+        } },
+      pm: { on: !!st.featEdit, ok: () => this.featureOk(), cancel: () => this.featureCancel(), right: st.aiOpen ? 460 : 128 },
+      cmdbar: { on: st.stage === 1 && !this.sketchFeat(), items: cmds }
+    };
   }
   renderVals() {
     if (!this.mesh) this.syncModel();                    // first paint runs before didMount
@@ -2828,20 +4296,37 @@ class Component extends DCLogic {
           fg: on ? '#eaf1f6' : '#7b8794', num: on ? A : '#495563' };
       });
 
-    const g = this.geom(), cl = this.cv('len'), cs = this.cv('stress'), cf = this.cv('force');
+    const cl = this.cv('len'), cs = this.cv('stress'), cf = this.cv('force');
     const q = this.qual;
+    const part = st.part, FI = CADK.FEATURE_INFO;
+    const fmeta = f => f.type === 'extrude' ? 'D ' + sig(f.depth * cl[1]) : f.type === 'revolve' ? sig(f.angle) + '°'
+      : f.type === 'box' ? [f.sx, f.sy, f.sz].map(v => sig(v * cl[1])).join('×') : f.type === 'cylinder' ? 'R' + sig(f.r * cl[1])
+      : f.type === 'sphere' ? 'R' + sig(f.r * cl[1]) : f.type === 'hole' ? 'Ø' + sig(f.d * cl[1]) : f.type === 'lpattern' || f.type === 'cpattern' ? '×' + f.count
+      : f.type === 'mirror' ? f.plane : f.type === 'sketch' ? f.entities.length + ' ent' : f.type === 'stl' ? 'STL' : '';
+    const frow = (f, depth) => ['f:' + f.id, depth, this.featLabel(f) + (f.suppressed ? ' (suppressed)' : ''),
+      f.suppressed ? '#3c4650' : f.type === 'sketch' ? '#8b96a2' : (f.op === 'cut' || f.type === 'hole') ? '#ff8d9e' : '#5ecfe0', '2px',
+      f.suppressed ? 'italic 400 10.5px/1 IBM Plex Sans' : '400 10.5px/1 IBM Plex Sans', fmeta(f), 'geo'];
+    const featRows = [];
+    for (const f of part.features) {
+      if (f.type === 'sketch' && this.consumersOf(f.id).some(c => c.sketch === f.id)) continue;   // shown under its feature
+      featRows.push(frow(f, 2));
+      if (f.sketch) { const sk = this.feat(f.sketch); if (sk) featRows.push(frow(sk, 3)); }
+    }
+    const studyCol = { fixed: '#7ee787', roller: '#b9e37a', force: '#ff6b81', pressure: '#ffa23a' };
+    const studyRows = (part.studies || []).map(sd => ['s:' + sd.id, 2, sd.name + (sd.suppressed ? ' (suppressed)' : ''), sd.suppressed ? '#3c4650' : studyCol[sd.type] || '#ccc', '2px',
+      sd.suppressed ? 'italic 400 10.5px/1 IBM Plex Sans' : '400 10.5px/1 IBM Plex Sans',
+      sd.type === 'force' ? sig(Math.hypot(...sd.F) * cf[1]) + cf[0] : sd.type === 'pressure' ? sig(sd.P * cs[1]) + cs[0] : sd.type === 'fixed' ? 'U=0' : 'Un=0', 'load']);
+    void FI;
     const treeDef = [
-      ['root', 0, 'bracket_L', '#5ecfe0', '50%', '600 11px/1 IBM Plex Sans', 'L-bracket', 'geo'],
-      ['geo', 1, 'Geometry', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'implicit', 'geo'],
-      ['geo-b', 2, 'Body — extruded profile', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.W * cl[1]) + cl[0], 'geo'],
-      ['geo-w', 2, 'Wall thickness', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(g.t * cl[1]) + cl[0], 'geo'],
-      ['geo-f', 2, 'Fillet — re-entrant corner', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', 'r' + sig(g.r * cl[1]), 'geo'],
+      ['root', 0, part.name || 'part', '#5ecfe0', '50%', '600 11px/1 IBM Plex Sans', part.template ? 'template' : 'part', 'geo'],
+      ['geo', 1, 'Features', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', part.features.length + ' in history', 'geo'],
+      ['geo-o', 2, 'Origin · Front / Top / Right planes', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', st.planes ? 'shown' : 'hidden', 'geo'],
+      ...featRows,
       ['mat', 1, 'Materials', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'mat'],
       ['mat-1', 2, mat.name, '#ffa23a', '2px', '400 10.5px/1 IBM Plex Sans', sig(mat.E * this.cv('mod')[1]) + this.cv('mod')[0], 'mat'],
-      ['load', 1, 'Interactions', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', '', 'load'],
-      ['load-e', 2, 'fixed — base face', '#7ee787', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.enc ? 'U=0' : 'off', 'load'],
-      ['load-f', 2, 'load — arm tip', '#ff6b81', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.force ? sig(N.lForce * cf[1]) + cf[0] : 'off', 'load'],
-      ['load-p', 2, 'pressure — web outer', '#ff6b81', '2px', '400 10.5px/1 IBM Plex Sans', st.bcOn.press ? sig(N.lPress * cs[1]) + cs[0] : 'off', 'load'],
+      ['load', 1, 'Study · supports & loads', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', (part.studies || []).length + ' items', 'load'],
+      ...studyRows,
+      ['grav', 2, 'Gravity (−Y)', st.grav !== false ? '#38bdf8' : '#3c4650', '2px', '400 10.5px/1 IBM Plex Sans', st.grav !== false ? 'on' : 'off', 'load'],
       ['mesh', 1, 'Mesh', '#4d5866', '2px', '500 10.5px/1 IBM Plex Sans', 'HEX8', 'mesh'],
       ['mesh-s', 2, 'Element size', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', sig(M.dx * cl[1]) + cl[0], 'mesh'],
       ['mesh-n', 2, 'Elements', '#6b7783', '2px', '400 10.5px/1 IBM Plex Sans', grp(M.ne), 'mesh'],
@@ -2852,6 +4337,8 @@ class Component extends DCLogic {
       ['res-rf', 2, 'RF — Reactions', '#a78bfa', '2px', '400 10.5px/1 IBM Plex Sans', R && R.rfMag ? sig(R.rfMag * cf[1]) + cf[0] : '—', 'res']
     ];
     const stageOf = { geo: 1, mat: 2, load: 3, mesh: 4, solve: 5, res: 6 };
+    const featOfRow = {};
+    for (const f of part.features) featOfRow['f:' + f.id] = f.id;
     const tree = [];
     let hideBelow = -1;
     treeDef.forEach((t, i) => {
@@ -2871,8 +4358,25 @@ class Component extends DCLogic {
         click: () => {
           const next = { ...st.collapsed };
           if (kids) next[t[0]] = !next[t[0]];
-          this.setState({ sel: t[0], stage: stageOf[t[7]], collapsed: next });
+          const extra = t[0] === 'geo-o' ? { planes: !st.planes } : {};
+          if (t[0] === 'grav') { this.pushUndo(); extra.grav = st.grav === false; }
+          if (t[0].startsWith('s:')) {
+            const sd = part.studies.find(x => 's:' + x.id === t[0]);
+            if (sd) { extra.selSet = sd.faces.slice(); extra.selCad = sd.faces[0] || null; }
+            this.setState({ sel: t[0], stage: 3, collapsed: next, ctxBar: null, ...extra });
+            return;
+          }
+          this.setState({ sel: t[0], stage: stageOf[t[7]], collapsed: next, selCad: null, selSet: [], ctxBar: null, ...extra });
         },
+        dbl: () => { if (featOfRow[t[0]]) this.editFeature(featOfRow[t[0]]); },
+        ctx: e => {
+          e.preventDefault();
+          const f = featOfRow[t[0]], sd = t[0].startsWith('s:') ? t[0].slice(2) : null;
+          if (!f && !sd) return;
+          const vr = this.viewport ? this.viewport.getBoundingClientRect() : { left: 0, top: 0 };
+          this.setState({ sel: t[0], stage: f ? 1 : 3, ctxMenu: { x: 8, y: Math.max(8, e.clientY - vr.top), tree: f || null, study: sd }, viewMenu: false });
+        },
+        tip: featOfRow[t[0]] ? 'Double-click to edit · right-click for options' : '',
         toggle: e => {
           e.stopPropagation();
           if (!kids) return;
@@ -2901,49 +4405,41 @@ class Component extends DCLogic {
       });
 
     const panels = {
-      1: { title: 'Geometry', sub: 'implicit L-profile · extruded',
-        sections: [
-          { title: 'BOUNDING BOX', params: [this.p('gWidth', 'Width', '@len', 5, 20, 600, 0), this.p('gDepth', 'Depth', '@len', 5, 10, 400, 0), this.p('gHeight', 'Height', '@len', 5, 20, 800, 0)] },
-          { title: 'FEATURES', params: [this.p('gThk', 'Wall thickness', '@len', 2, 2, 200, 0), this.p('gFillet', 'Fillet radius', '@len', 2, 0, 120, 0)] }
-        ] },
+      1: this.geometryPanel(),
       2: { title: 'Material', sub: 'isotropic · Lamé from E and ν',
         sections: [{ title: 'CONDITIONS', params: [this.p('mTemp', 'Temperature', '°C', 5, -100, 400, 0), this.p('mScale', 'Density scale', '×', 0.05, 0.1, 3, 2)] }] },
-      3: { title: 'Loads & BCs', sub: 'consistent nodal loads',
-        sections: [{ title: 'MAGNITUDES', params: [this.p('lForce', 'Tip force', '@force', 100, 0, 400000, 0), this.p('lAngle', 'Direction θ', '°', 5, -180, 180, 0), this.p('lPress', 'Web pressure', '@stress', 0.1, 0, 50, 2)] }] },
+      3: this.studyPanel(),
       4: { title: 'Mesh', sub: 'structured hex8 voxel core',
-        sections: [{ title: 'CHARACTERISTIC LENGTH', params: [this.p('hSize', 'Size max', '@len', 0.5, 0.5, 40, 1), this.p('hThick', 'Elements across wall', '', 1, 1, 6, 0), this.p('hAspect', 'Depth ratio', '×', 0.25, 0.25, 4, 2), this.p('hBudget', 'Budget', 'k el', 2, 2, 60, 0)] }] },
+        sections: [{ title: 'CHARACTERISTIC LENGTH', params: [this.p('hSize', 'Size max', '@len', 0.5, 0.5, 40, 1), this.p('hSub', 'Samples per cell (n³)', '', 1, 1, 3, 0), this.p('hAspect', 'Depth ratio', '×', 0.25, 0.25, 4, 2), this.p('hBudget', 'Budget', 'k el', 2, 2, 60, 0)] }] },
       5: { title: 'Solve', sub: 'Jacobi-PCG · geometric cascade',
         sections: [{ title: 'KRYLOV OPTIONS', params: [this.p('sTol', 'rtol 1e−n', '', 1, 2, 12, 0), this.p('sIncr', 'Load increments', '', 1, 1, 60, 0), this.p('sMaxIt', 'ksp max it', '', 250, 250, 40000, 0)] }] },
       6: { title: 'Results', sub: st.solved ? 'nodal fields · averaged' : 'no current solution', sections: [] }
     };
 
+    for (const k of [2, 4, 5, 6]) panels[k].sections = panels[k].sections.map(x => this.section(x.title, x));
+    if (st.material === 'custom') {
+      const cm = MAT.custom, setM = (key, v) => { if (!this.inSession) this.pushUndo(); MAT.custom = { ...MAT.custom, [key]: v }; this.setState({ customMat: { ...MAT.custom } }); };
+      panels[2].sections.push(this.section('CUSTOM MATERIAL · ISOTROPIC LINEAR ELASTIC', { params: [
+        this.numField('cm:E', 'Young’s modulus E', '@mod', cm.E, 1000, 1, 1e7, v => setM('E', v)),
+        this.numField('cm:nu', 'Poisson ratio ν', '', cm.nu, 0.01, 0, 0.499, v => setM('nu', v)),
+        this.numField('cm:rho', 'Density ρ', '@dens', cm.rho, 50, 1, 1e5, v => setM('rho', v)),
+        this.numField('cm:sy', 'Yield / strength', '@stress', cm.sy, 5, 0.1, 1e5, v => setM('sy', v)),
+        this.numField('cm:a', 'Expansion α (1e−6/K)', '', cm.alpha * 1e6, 0.5, 0, 1000, v => setM('alpha', v * 1e-6))] }));
+    }
     const materials = MATS.map(m => {
       const on = st.material === m.id, s = sel(on);
       const MOD = this.cv('mod'), DENS = this.cv('dens');
       return { name: m.name, swatch: m.sw, tag: on ? 'ASSIGNED' : '', tagFg: A,
         spec: 'E ' + sig(m.E * MOD[1]) + ' ' + MOD[0] + ' · ν ' + m.nu + ' · ρ ' + sig(m.rho * DENS[1]) + ' ' + DENS[0],
-        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#aeb9c4', click: () => this.setState({ material: m.id }) };
+        bg: s.bg, bd: s.bd, fg: on ? '#eaf1f6' : '#aeb9c4', click: () => { if (st.material !== m.id) this.pushUndo(); this.setState({ material: m.id }); } };
     });
 
-    const bcs = [
-      ['enc', 'ENC', 'Encastre', 'face · base of leg', 'U=0', '#7ee787', 'rgba(126,231,135,.12)'],
-      ['force', 'F', 'Concentrated force', 'node set · arm tip', sig(N.lForce * cf[1]) + ' ' + cf[0], '#ff6b81', 'rgba(255,107,129,.12)'],
-      ['press', 'P', 'Pressure', 'face · web outer', sig(N.lPress * cs[1]) + ' ' + cs[0], '#ffa23a', 'rgba(255,162,58,.12)'],
-      ['sym', 'SYM', 'Symmetry Z', 'face · mid-plane', 'U3=0', '#38bdf8', 'rgba(56,189,248,.12)']
-    ].map(b => {
-      const on = st.bcOn[b[0]];
-      return { icon: b[1], name: b[2], target: b[3], val: on ? b[4] : 'suppressed',
-        valFg: on ? b[5] : '#4d5866', iconFg: on ? b[5] : '#5b6672', iconBg: on ? b[6] : '#161b21',
-        bg: on ? 'rgba(94,207,224,.07)' : '#13181e', bd: on ? 'rgba(94,207,224,.3)' : '#222a33',
-        fg: on ? '#c3ccd6' : '#6c7784',
-        click: () => this.setState({ bcOn: { ...st.bcOn, [b[0]]: !on } }) };
-    });
+    const bcs = [];
 
     const meshQuality = q ? [
       { label: 'Elements', val: grp(q.ne), pct: Math.min(100, 100 * q.ne / (N.hBudget * 1000)), fg: '#7ee787' },
       { label: 'Scaled Jacobian', val: '1.000', pct: 100, fg: '#7ee787' },
       { label: 'Aspect ratio', val: q.ar.toFixed(2) + ' max', pct: Math.max(6, Math.min(100, 100 / q.ar)), fg: q.ar > 3 ? '#e6c98a' : '#7ee787' },
-      { label: 'Elements across wall', val: String(q.span), pct: Math.min(100, q.span * 25), fg: q.span < 2 ? '#ff6b81' : '#7ee787' },
       { label: 'Single-span elements', val: grp(q.thin), pct: Math.min(100, 100 * q.thin / Math.max(1, q.ne)), fg: q.thin ? '#e6c98a' : '#7ee787' }
     ] : [{ label: 'Mesh', val: 'not generated', pct: 0, fg: '#5b6672' }];
 
@@ -3119,7 +4615,7 @@ class Component extends DCLogic {
 
     return {
       savedLabel: st.solving ? '· solving' : stale ? '· results stale' : st.savedAgo,
-      winTitle: 'bracket_L — Archimedes Workbench',
+      winTitle: (st.part.name || 'part') + ' — Archimedes Workbench',
       dpiLabel: grp(M.nn * 3) + ' DOF · hex8 · Jacobi-PCG',
       win: { isMax: st.maxed, isRestored: !st.maxed, maxTitle: st.maxed ? 'Restore Down' : 'Maximize',
         toggleMax: () => this.setState({ maxed: !st.maxed }) },
@@ -3143,17 +4639,26 @@ class Component extends DCLogic {
       engineNote, engineNoteFg: st.engine === 'local' ? '#4d5866' : live ? '#6f8f7a' : '#8a7c5c',
       leftW: st.focus ? 0 : st.leftW, rightW: st.focus ? 0 : st.rightW,
       viewportRef: this.refViewport, canvasRef: this.refCanvas,
-      vpCursor: st.vpDown ? 'grabbing' : 'grab',
       dragLeft: e => this.startDrag(e, 'leftW', 1),
       dragRight: e => this.startDrag(e, 'rightW', -1),
       viewPresets,
-      vpLine1: 'bracket_L · ' + grp(M.ne) + ' hex8 · ' + grp(M.nn * 3) + ' DOF',
-      vpLine2: st.stage === 4 ? 'HEX8 · size ' + sig(M.dx * cl[1]) + ' ' + cl[0]
-        + ' · ' + M.nx + '×' + M.ny + '×' + M.nz + ' core' : 'units ' + UNITS[st.units].label,
+      vpLine1: (st.part.name || 'part') + ' · ' + grp(M.ne) + ' hex8 · ' + grp(M.nn * 3) + ' DOF',
+      vpLine2: st.selSet.length > 1 ? 'selected: ' + st.selSet.length + ' faces'
+        : st.selCad && this.faceInfo(st.selCad) ? 'selected: ' + this.faceInfo(st.selCad).name
+          + (this.dragValue(st.selCad) ? ' → ' + this.dragValue(st.selCad).label + ' ' + sig(this.dragValue(st.selCad).value * cl[1]) + ' ' + cl[0] : '')
+        : st.stage === 4 ? 'HEX8 · size ' + sig(M.dx * cl[1]) + ' ' + cl[0]
+        + ' · ' + M.nx + '×' + M.ny + '×' + M.nz + ' core'
+        : st.stage === 1 ? 'units ' + UNITS[st.units].label + ' · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms'
+        : 'units ' + UNITS[st.units].label,
       vpLine3: st.solving ? 'solving — ' + (this.prog.note || PIPE[(st.solveStep || 1) - 1])
         : st.modal && modeInfo ? 'mode ' + st.mode + ' · ' + sig(modeInfo.hz) + ' Hz'
         : showResults ? F.label + ' · warp ×' + st.deform
-        : stale ? 'inputs changed — re-solve for results' : 'drag to orbit · scroll to zoom',
+        : stale ? 'inputs changed — re-solve for results'
+        : this.sketchFeat() ? 'sketching on the ' + (CADK.PLANES[this.sketchFeat().plane] || {}).name + ' plane · ' + st.sketchTool + ' · ✓ when done'
+        : S === 1 ? 'click a face · drag its arrow · double-click to edit · right-click for more'
+        : S === 3 ? 'click faces (Ctrl adds) · then + Fixed / Roller / Force / Pressure'
+        : st.mouseMode === 'catia' ? 'middle: pan · middle+left: rotate · Ctrl+middle: zoom · wheel: zoom at cursor'
+        : 'drag / middle: rotate · right or Ctrl+middle: pan · wheel: zoom at cursor · F fit · Space views',
       vpLine3Fg: st.solving ? A : stale ? '#e6c98a' : showResults ? '#7fd8e6' : '#4a5561',
       gest: { on: st.gestureOn, bg: st.gestureOn ? 'rgba(94,207,224,.12)' : '#161a1f',
         bd: st.gestureOn ? 'rgba(94,207,224,.45)' : '#242b33', fg: st.gestureOn ? '#dff3f7' : '#8b96a2',
@@ -3187,8 +4692,9 @@ class Component extends DCLogic {
         max: st.modal ? '1.00' : sig(F.max) + ' ' + F.unit,
         maxLoc: st.modal && modeInfo ? sig(modeInfo.hz) + ' Hz' : F.loc },
       probe: st.probe ? { on: true, ...st.probe } : { on: false, x: 0, y: 0, l1: '', l2: '', l3: '' },
-      panel: panels[S],
-      isMat: S === 2, isLoad: S === 3, isMesh: S === 4, isSolve: S === 5, isRes: S === 6,
+      panel: st.featEdit && S === 1 && this.feat(st.featEdit.id) ? this.featurePanel(this.feat(st.featEdit.id)) : panels[S],
+      ...this.cadVals(),
+      isMat: S === 2, isLoad: false, isMesh: S === 4, isSolve: S === 5, isRes: S === 6,
       materials, bcs, meshQuality, outputs, fields,
       shadeOpts, viewToggles,
       filters: [['thresh', 'THRESHOLD', 'Hide cells below a value', st.thresh],

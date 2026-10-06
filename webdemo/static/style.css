@@ -139,3 +139,28 @@ table.kv tr.em td:last-child { color: var(--arming); font-weight: 600; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; max-width: 520px; }
 .bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 10px 0; }
 #calib-bar, #prompt-bar { height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+#prompt-accept { margin: 8px 0 4px; padding: 6px 8px; border-radius: 8px; background: rgba(62,207,142,.12);
+  border: 1px solid rgba(62,207,142,.4); font-size: 13px; }
+#prompt-choices div { cursor: pointer; border-radius: 6px; padding: 3px 6px; }
+#prompt-choices div:hover { background: rgba(77,163,255,.15); }
+#nav { display: flex; gap: 4px; margin-bottom: 4px; }
+#nav a { flex: 1; text-align: center; font-size: 12px; padding: 5px 4px; white-space: nowrap; }
+#nav a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+#btn-console { position: absolute; left: 12px; bottom: 12px; font-size: 12px; background: rgba(22,26,32,.9); }
+#btn-console.on { display: none; }
+#console { position: absolute; left: 0; right: 0; bottom: 0; height: 42%; min-height: 200px; display: flex; flex-direction: column;
+  background: rgba(10,12,15,.97); border-top: 1px solid var(--accent); font: 12.5px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; z-index: 5; }
+#con-bar { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--line); font-family: system-ui, sans-serif; }
+#con-bar .grow { flex: 1; }
+#con-bar button { padding: 2px 8px; font-size: 12px; }
+#con-out { flex: 1; margin: 0; padding: 6px 10px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: #d7dde5; }
+#con-out .echo { color: #9fd0ff; }
+#con-out .err { color: var(--bad); }
+#con-out .note { color: var(--muted); }
+#con-row { display: flex; gap: 6px; align-items: center; padding: 4px 10px 8px; border-top: 1px solid var(--line); }
+#con-ps { color: var(--ok); }
+#console.busy #con-ps { color: var(--arming); }
+#con-in { flex: 1; background: transparent; border: 0; outline: 0; color: var(--text); font: inherit; padding: 2px 0; }
+#viewport.console-open #prompt { bottom: calc(42% + 10px); }
+#viewport.console-open #tip, #viewport.console-open #demo-caption { display: none; }

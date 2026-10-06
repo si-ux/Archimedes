@@ -54,9 +54,20 @@ class HandFrame:
     handedness: str = "Right"  # user's real hand
     score: float = 1.0  # detector handedness / presence confidence
     timestamp: float = 0.0  # seconds
+    # MediaPipe "world" landmarks: metric 3D around the hand centre, same axes as the
+    # image. Free of perspective, so finger shapes read the same whether the hand is
+    # near, far or tilted - used for pose and finger-state decisions when present.
+    world: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.landmarks = np.asarray(self.landmarks, dtype=float).reshape(21, 3)
+        if self.world is not None:
+            self.world = np.asarray(self.world, dtype=float).reshape(21, 3)
+
+    @property
+    def shape(self) -> np.ndarray:
+        """Landmarks to judge the hand's *shape* with (world if available)."""
+        return self.world if self.world is not None else self.landmarks
 
     @classmethod
     def from_raw(
@@ -67,14 +78,18 @@ class HandFrame:
         timestamp: float = 0.0,
         mirrored: bool = True,
         swap_handedness: bool = False,
+        world=None,
     ) -> "HandFrame":
         lm = np.asarray(landmarks, dtype=float).reshape(21, 3).copy()
+        w = None if world is None else np.asarray(world, dtype=float).reshape(21, 3).copy()
         if not mirrored:
             lm[:, 0] = 1.0 - lm[:, 0]
+            if w is not None:
+                w[:, 0] = -w[:, 0]
         hand = label.capitalize()
         if swap_handedness:
             hand = "Left" if hand == "Right" else "Right"
-        return cls(lm, hand, float(score), float(timestamp))
+        return cls(lm, hand, float(score), float(timestamp), w)
 
     # ---- cheap geometric summaries -------------------------------------
     @property
