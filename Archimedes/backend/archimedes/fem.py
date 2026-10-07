@@ -337,3 +337,127 @@ def solve(study: Study,
         "mesh": msh,
     }
     return out
+
+
+# ------------------------------------------------- any part: posted mesh --
+def mesh_arrays(payload: dict):
+    """Decode a posted mesh: nodes (nn, 3) mm, elems (ne, 8), fixed dofs, nodal forces (3 nn,) N.
+
+    Arrays arrive as JSON lists or base64 little-endian float32 / int32 (what the Workbench sends).
+    Local node order is n = a + 2b + 4c, which is DOLFINx's hexahedron vertex order.
+    """
+    import base64 as _b64
+
+    def arr(v, dtype, width=None):
+        if isinstance(v, str):
+            raw = _b64.b64decode(v)
+            a = np.frombuffer(raw, dtype="<i4" if np.issubdtype(dtype, np.integer) else "<f4").astype(dtype)
+        else:
+            a = np.asarray(v, dtype=dtype)
+        return a.reshape(-1, width) if width else a.ravel()
+
+    nodes = arr(payload["nodes"], float, 3)
+    elems = arr(payload["elems"], np.int64, 8)
+    fixed = arr(payload.get("fixed", []), np.int64)
+    f = arr(payload["f"], float)
+    if f.size != nodes.size:
+        raise ValueError(f"f must have 3*nn = {nodes.size} entries")
+    if elems.size and (elems.min() < 0 or elems.max() >= len(nodes)):
+        raise ValueError("element node index outside nodes")
+    return nodes, elems, fixed, f
+
+
+def solve_general(payload: dict, log: Reporter = _noop, progress: Progress = _noop) -> dict:
+    """Linear static solve of a posted hex8 mesh (any CAD part the Workbench meshed).
+
+    Supports are per-dof (fixed = 3·node + k, value 0); loads are nodal forces (surface loads and
+    self weight already lumped by the Workbench); dT adds the thermal strain. CG + GAMG with the
+    rigid-body near nullspace. Fields come back in the posted node order.
+    """
+    import ufl
+    from mpi4py import MPI
+    from petsc4py import PETSc
+    import basix.ufl
+    import dolfinx
+    from dolfinx import fem
+    from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
+    from dolfinx.mesh import create_mesh
+
+    t_all = time.perf_counter()
+    nodes, elems, fixed, f = mesh_arrays(payload)
+    m = payload.get("material") or {}
+    E, nu = float(m.get("E", 210000.0)), float(m.get("nu", 0.3))
+    alpha, dT = float(m.get("alpha", 0.0)), float(payload.get("dT", 0.0))
+    lam_v, mu_v = E * nu / ((1 + nu) * (1 - 2 * nu)), E / (2 * (1 + nu))
+    progress(1, 0.0, "mesh")
+    domain = ufl.Mesh(basix.ufl.element("Lagrange", "hexahedron", 1, shape=(3,)))
+    msh = create_mesh(MPI.COMM_WORLD, elems, domain, nodes)
+    perm = np.asarray(msh.geometry.input_global_indices, dtype=np.int64)   # geometry node -> posted node
+    log("mesh", f"posted mesh — {len(elems)} hex8 · {len(nodes)} nodes", "info")
+    V = fem.functionspace(msh, ("Lagrange", 1, (3,)))
+    # P1 dofs sit on the geometry nodes: map posted node -> dof block through the cell layouts
+    gdm, vdm = msh.geometry.dofmap, V.dofmap.list
+    block_of = np.full(len(nodes), -1, dtype=np.int64)
+    block_of[perm[gdm.ravel()]] = vdm.ravel()
+    lam, mu = fem.Constant(msh, PETSc.ScalarType(lam_v)), fem.Constant(msh, PETSc.ScalarType(mu_v))
+
+    def eps(w):
+        return ufl.sym(ufl.grad(w))
+
+    def sigma(w):
+        return 2.0 * mu * eps(w) + lam * ufl.tr(eps(w)) * ufl.Identity(3)
+
+    u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
+    a = fem.form(ufl.inner(sigma(u), eps(v)) * ufl.dx)
+    k_th = (3.0 * lam_v + 2.0 * mu_v) * alpha * dT
+    L = fem.form(fem.Constant(msh, PETSc.ScalarType(k_th)) * ufl.div(v) * ufl.dx)
+    bcs = []
+    for k in range(3):
+        nd = fixed[fixed % 3 == k] // 3
+        dofs = 3 * block_of[nd] + k
+        dofs = np.unique(dofs[dofs >= 0]).astype(np.int32)
+        bcs.append(fem.dirichletbc(PETSc.ScalarType(0.0), dofs, V.sub(k)))
+    if not len(fixed):
+        raise ValueError("no supports: the stiffness matrix is singular")
+    progress(3, 100.0, "loads")
+    A = assemble_matrix(a, bcs=bcs)
+    A.assemble()
+    b = assemble_vector(L)
+    arr = b.getArray()                                    # nodal forces into their dofs
+    for k in range(3):
+        ok = block_of >= 0
+        np.add.at(arr, 3 * block_of[ok] + k, f[3 * np.nonzero(ok)[0] + k])
+    apply_lifting(b, [a], bcs=[bcs])
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    set_bc(b, bcs)
+    A.setNearNullSpace(_rigid_body_nullspace(V))
+    ksp = PETSc.KSP().create(msh.comm)
+    ksp.setOperators(A)
+    ksp.setType("cg")
+    ksp.getPC().setType("gamg")
+    ksp.setTolerances(rtol=float(payload.get("rtol", 1e-8)), max_it=int(payload.get("maxit", 4000)))
+    uh = fem.Function(V)
+    progress(4, 0.0, "solving")
+    ksp.solve(b, uh.x.petsc_vec)
+    uh.x.scatter_forward()
+    its, reason = ksp.getIterationNumber(), ksp.getConvergedReason()
+    log("solve", f"CG + GAMG — {its} iterations" + ("" if reason > 0 else f" — DIVERGED ({reason})"),
+        "ok" if reason > 0 else "err")
+    # stresses: cellwise-constant projection is enough for display; nodal average
+    from .post import project, von_mises, max_principal
+    W = fem.functionspace(msh, ("Lagrange", 1, (3, 3)))
+    sh = project(sigma(uh) - k_th * ufl.Identity(3), W)
+    U = uh.x.array.reshape(-1, 3)[block_of]
+    S = sh.x.array.reshape(-1, 9)[block_of]
+    sx, sy, sz, txy, tyz, tzx = S[:, 0], S[:, 4], S[:, 8], S[:, 1], S[:, 5], S[:, 2]
+    vm = von_mises(sx, sy, sz, txy, tyz, tzx)
+    p1 = max_principal(sx, sy, sz, txy, tyz, tzx)
+    Au = A.createVecLeft()
+    A.mult(uh.x.petsc_vec, Au)
+    energy = 0.5 * float(uh.x.petsc_vec.dot(Au))
+    progress(5, 100.0, "recovered")
+    return {"engine": f"dolfinx {dolfinx.__version__}", "u": U, "umag": np.linalg.norm(U, axis=1), "vm": vm, "p1": p1,
+            "energy": energy,
+            "stats": {"elements": int(len(elems)), "nodes": int(len(nodes)), "dof": int(nodes.size),
+                      "iterations": int(its), "converged": bool(reason > 0),
+                      "time_s": round(time.perf_counter() - t_all, 3)}}

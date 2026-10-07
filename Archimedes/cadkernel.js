@@ -86,13 +86,23 @@
       const r = e.r > 0 ? e.r : 0;
       return polyLoop([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], [r, r, r, r], k);
     }
-    if (e.type === 'poly') return polyLoop(e.pts, e.fillets, k);
+    if (e.type === 'poly' && !e.open) return polyLoop(e.pts, e.fillets, k);
+    if (e.type === 'poly') return openPolySegs(e.pts, e.fillets, k);
     return [];
+  }
+  // an open polyline (a sweep path): interior corners may be filleted, no closing edge
+  function openPolySegs(pts, fillets, k) {
+    const n = pts.length;
+    if (n < 2) return [];
+    const fl = (fillets || []).slice(0, n).map((v, i) => (i === 0 || i === n - 1 ? 0 : v || 0));
+    if (n === 2) return [{ t: 'line', a: pts[0], b: pts[1], id: 'e' + k + '.l0', edge: 0 }];
+    return polyLoop(pts, fl, k).filter(sg => !(sg.t === 'line' && sg.edge === n - 1));
   }
   // discretise for inside tests; each edge remembers its source segment
   function compileProfile(entities) {
     const loops = [], segs = [];
     (entities || []).forEach((e, k) => {
+      if (e.type === 'poly' && e.open) return;             // paths are not regions
       const L = entityLoop(e, k);
       if (!L.length) return;
       const X = [], Y = [], S = [];
@@ -185,6 +195,11 @@
     for (const p of pts) for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p[i]); mx[i] = Math.max(mx[i], p[i]); }
     return [mn, mx];
   }
+  // a planar patch: unit normal, n·x = d, centre and extent corners (for edge blends)
+  function planeOf(normal, corners) {
+    const n = norm(normal), c = mul(corners.reduce((a, q) => add(a, q), [0, 0, 0]), 1 / corners.length);
+    return { normal: n, d: dot(n, c), center: c, corners };
+  }
   function extrudeRange(f) {
     const d = Math.abs(f.depth || 0);
     return f.dir === 'reverse' ? [-d, 0] : f.dir === 'mid' ? [-d / 2, d / 2] : [0, d];
@@ -196,12 +211,16 @@
       const pt = { id: f.id + '/' + s.id, name: 'side (' + segLabel(s) + ')', seg: s, drag: { kind: 'seg', sketch: sk.id, seg: s } };
       if (s.t === 'line') {                                // a straight edge sweeps a planar face
         const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], l = Math.hypot(dx, dy) || 1, n2 = [dy / l * s.out, -dx / l * s.out];
-        pt.plane = { normal: add(mul(F.P.u, n2[0]), mul(F.P.v, n2[1])) };
+        const corners = [F.toWorld(s.a[0], s.a[1], w0), F.toWorld(s.b[0], s.b[1], w0), F.toWorld(s.b[0], s.b[1], w1), F.toWorld(s.a[0], s.a[1], w1)];
+        pt.plane = planeOf(add(mul(F.P.u, n2[0]), mul(F.P.v, n2[1])), corners);
+      } else if (Math.abs(s.sw) > 1e-9) {                  // an arc sweeps a cylinder
+        pt.cyl = { c: F.toWorld(s.c[0], s.c[1], w0), a: F.P.w.slice(), r: s.r, h0: 0, h1: w1 - w0 };
       }
       return pt;
     });
-    const capA = { id: f.id + '/cap0', name: f.dir === 'reverse' ? 'end face' : 'start face', drag: f.dir === 'reverse' ? { kind: 'param', key: 'depth', axis: mul(F.P.w, -1), factor: 1 } : null, plane: { normal: mul(F.P.w, -1) } };
-    const capB = { id: f.id + '/cap1', name: f.dir === 'reverse' ? 'start face' : 'end face', drag: f.dir !== 'reverse' ? { kind: 'param', key: 'depth', axis: F.P.w.slice(), factor: f.dir === 'mid' ? 2 : 1 } : null, plane: { normal: F.P.w.slice() } };
+    const capCorners = wc => [F.toWorld(P.bb[0], P.bb[1], wc), F.toWorld(P.bb[2], P.bb[1], wc), F.toWorld(P.bb[2], P.bb[3], wc), F.toWorld(P.bb[0], P.bb[3], wc)];
+    const capA = { id: f.id + '/cap0', name: f.dir === 'reverse' ? 'end face' : 'start face', drag: f.dir === 'reverse' ? { kind: 'param', key: 'depth', axis: mul(F.P.w, -1), factor: 1 } : null, plane: planeOf(mul(F.P.w, -1), capCorners(w0)) };
+    const capB = { id: f.id + '/cap1', name: f.dir === 'reverse' ? 'start face' : 'end face', drag: f.dir !== 'reverse' ? { kind: 'param', key: 'depth', axis: F.P.w.slice(), factor: f.dir === 'mid' ? 2 : 1 } : null, plane: planeOf(F.P.w.slice(), capCorners(w1)) };
     if (f.dir === 'mid') capA.drag = { kind: 'param', key: 'depth', axis: mul(F.P.w, -1), factor: 2 };
     patches.push(capA, capB);
     const corners = [];
@@ -226,6 +245,19 @@
         }
         return [best, bi, bn];
       },
+      nearAll: p => {
+        const l = F.toLocal(p), dw = l[2] < w0 ? w0 - l[2] : l[2] > w1 ? l[2] - w1 : 0, out = [];
+        let bd2 = Infinity;
+        for (let i = 0; i < ns; i++) {
+          const r = segDist(P.segs[i], l[0], l[1]);
+          if (r[0] < bd2) bd2 = r[0];
+          out.push([Math.hypot(r[0], dw), i, add(mul(F.P.u, r[1]), mul(F.P.v, r[2]))]);
+        }
+        const inP = inside2D(P, l[0], l[1]);
+        out.push([inP ? Math.abs(l[2] - w0) : Math.hypot(l[2] - w0, bd2), ns, mul(F.P.w, -1)]);
+        out.push([inP ? Math.abs(l[2] - w1) : Math.hypot(l[2] - w1, bd2), ns + 1, F.P.w.slice()]);
+        return out;
+      },
       frame: F, profile: P, range: [w0, w1]
     };
   }
@@ -236,7 +268,21 @@
     // (rho, h): distance from the axis and position along it, both in the sketch's own coordinates
     const rh = l => axisV ? [Math.hypot(l[0], l[2]), l[1], Math.atan2(l[2], l[0])] : [Math.hypot(l[1], l[2]), l[0], Math.atan2(l[2], l[1])];
     const inProf = (r, h) => (axisV ? inside2D(P, r, h) || inside2D(P, -r, h) : inside2D(P, h, r) || inside2D(P, h, -r));
-    const patches = P.segs.map(s => ({ id: f.id + '/' + s.id, name: 'surface (' + segLabel(s) + ')', drag: { kind: 'seg', sketch: sk.id, seg: s } }));
+    const axDir = axisV ? F.P.v : F.P.u;
+    const patches = P.segs.map(s => {
+      const pt = { id: f.id + '/' + s.id, name: 'surface (' + segLabel(s) + ')', drag: { kind: 'seg', sketch: sk.id, seg: s } };
+      if (s.t === 'line' && full) {
+        const ra = axisV ? s.a[0] : s.a[1], rb = axisV ? s.b[0] : s.b[1], ha = axisV ? s.a[1] : s.a[0], hb = axisV ? s.b[1] : s.b[0];
+        if (Math.abs(ra - rb) < 1e-9 && Math.abs(ra) > 1e-9) pt.cyl = { c: F.toWorld(0, 0, 0), a: axDir.slice(), r: Math.abs(ra), h0: Math.min(ha, hb), h1: Math.max(ha, hb) };
+        else if (Math.abs(ha - hb) < 1e-9) {
+          const nh = axisV ? segDist(s, (s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2)[2] : segDist(s, (s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2)[1];
+          const R1 = Math.max(Math.abs(ra), Math.abs(rb)), cc = F.toWorld(axisV ? 0 : ha, axisV ? ha : 0, 0), e1 = axisV ? F.P.u : F.P.v;
+          pt.plane = planeOf(mul(axDir, Math.sign(nh) || 1), [add(cc, mul(e1, R1)), add(cc, mul(F.P.w, R1)), add(cc, mul(e1, -R1)), add(cc, mul(F.P.w, -R1))]);
+          pt.plane.center = cc; pt.plane.rho = [Math.min(Math.abs(ra), Math.abs(rb)), R1];
+        }
+      }
+      return pt;
+    });
     if (!full) patches.push({ id: f.id + '/end0', name: 'end face 1' }, { id: f.id + '/end1', name: 'end face 2' });
     const R = Math.max(Math.abs(P.bb[0]), Math.abs(P.bb[2]), axisV ? 0 : 0), H0 = axisV ? P.bb[1] : P.bb[0], H1 = axisV ? P.bb[3] : P.bb[2];
     const Rr = axisV ? Math.max(Math.abs(P.bb[0]), Math.abs(P.bb[2])) : Math.max(Math.abs(P.bb[1]), Math.abs(P.bb[3]));
@@ -269,6 +315,16 @@
           for (const [k, d] of gaps) if (d < best) { best = d; bi = k; bn = null; }
         }
         return [best, bi, bn];
+      },
+      nearAll: p => {
+        const l = F.toLocal(p), [r, h, phi] = rh(l), out = [];
+        const radial = axisV ? norm(add(mul(F.P.u, Math.cos(phi)), mul(F.P.w, Math.sin(phi)))) : norm(add(mul(F.P.v, Math.cos(phi)), mul(F.P.w, Math.sin(phi))));
+        for (let i = 0; i < ns; i++) {
+          const q = axisV ? segDist(P.segs[i], r, h) : segDist(P.segs[i], h, r);
+          const nr = axisV ? q[1] : q[2], nh = axisV ? q[2] : q[1];
+          out.push([q[0], i, norm(add(mul(radial, nr), mul(axisV ? F.P.v : F.P.u, nh)))]);
+        }
+        return out;
       }
     };
   }
@@ -278,7 +334,10 @@
     const names = ['−X face', '+X face', '−Y face', '+Y face', '−Z face', '+Z face'], keys = ['x', 'y', 'z'], sz = ['sx', 'sy', 'sz'];
     const patches = names.map((n, i) => {
       const ax = Math.floor(i / 2), hi = i % 2 === 1, axis = [0, 0, 0]; axis[ax] = hi ? 1 : -1;
-      return { id: f.id + '/' + (hi ? '+' : '-') + 'xyz'[ax], name: n, plane: { normal: axis },
+      const cs = [];
+      const o1 = (ax + 1) % 3, o2 = (ax + 2) % 3;
+      for (const [x1, x2] of [[0, 0], [1, 0], [1, 1], [0, 1]]) { const q = mn.slice(); q[ax] = hi ? mx[ax] : mn[ax]; q[o1] = x1 ? mx[o1] : mn[o1]; q[o2] = x2 ? mx[o2] : mn[o2]; cs.push(q); }
+      return { id: f.id + '/' + (hi ? '+' : '-') + 'xyz'[ax], name: n, plane: planeOf(axis, cs),
         drag: hi ? { kind: 'param', key: sz[ax], axis, factor: 1 } : { kind: 'param', key: sz[ax], axis, factor: 1, move: keys[ax] } };
     });
     return {
@@ -294,6 +353,17 @@
         }
         const n = [0, 0, 0]; n[Math.floor(bi / 2)] = bi % 2 ? 1 : -1;
         return [Math.sqrt(best), bi, n];
+      },
+      nearAll: p => {
+        const out = [];
+        for (let i = 0; i < 6; i++) {
+          const ax = Math.floor(i / 2), c = i % 2 ? mx[ax] : mn[ax];
+          let d2 = (p[ax] - c) ** 2;
+          for (let k = 0; k < 3; k++) if (k !== ax) { const o = p[k] < mn[k] ? mn[k] - p[k] : p[k] > mx[k] ? p[k] - mx[k] : 0; d2 += o * o; }
+          const n = [0, 0, 0]; n[ax] = i % 2 ? 1 : -1;
+          out.push([Math.sqrt(d2), i, n]);
+        }
+        return out;
       }
     };
   }
@@ -303,8 +373,11 @@
     const top = add(c, mul(a, h));
     const corners = [];
     for (const q of [c, top]) for (const s1 of [-r, r]) for (const s2 of [-r, r]) corners.push(add(q, add(mul(e1, s1), mul(e2, s2))));
-    const patches = [{ id: id + '/wall', name: labels[0], drag: drags[0] }, { id: id + '/cap0', name: labels[1], drag: drags[1], plane: { normal: mul(a, -1) } },
-      { id: id + '/cap1', name: labels[2], drag: drags[2], plane: { normal: a.slice() } }];
+    const sq = q => [add(q, add(mul(e1, r), mul(e2, r))), add(q, add(mul(e1, -r), mul(e2, r))), add(q, add(mul(e1, -r), mul(e2, -r))), add(q, add(mul(e1, r), mul(e2, -r)))];
+    const cap0 = planeOf(mul(a, -1), sq(c)), cap1 = planeOf(a.slice(), sq(top));
+    cap0.rho = [0, r]; cap1.rho = [0, r];
+    const patches = [{ id: id + '/wall', name: labels[0], drag: drags[0], cyl: { c, a, r, h0: 0, h1: h } }, { id: id + '/cap0', name: labels[1], drag: drags[1], plane: cap0 },
+      { id: id + '/cap1', name: labels[2], drag: drags[2], plane: cap1 }];
     return {
       bbox: bboxOfPoints(corners), patches,
       inside: p => { const q = sub(p, c), t = dot(q, a); if (t < 0 || t > h) return false; const rr = sub(q, mul(a, t)); return dot(rr, rr) <= r * r; },
@@ -314,6 +387,11 @@
         const dw = Math.hypot(rho - r, dt), d0 = Math.hypot(t, dr), d1 = Math.hypot(t - h, dr);
         if (dw <= d0 && dw <= d1) return [dw, 0, rho > 1e-9 ? mul(radv, 1 / rho) : e1];
         return d0 < d1 ? [d0, 1, mul(a, -1)] : [d1, 2, a.slice()];
+      },
+      nearAll: p => {
+        const q = sub(p, c), t = dot(q, a), radv = sub(q, mul(a, t)), rho = Math.hypot(radv[0], radv[1], radv[2]);
+        const dt = t < 0 ? -t : t > h ? t - h : 0, dr = rho > r ? rho - r : 0;
+        return [[Math.hypot(rho - r, dt), 0, rho > 1e-9 ? mul(radv, 1 / rho) : e1], [Math.hypot(t, dr), 1, mul(a, -1)], [Math.hypot(t - h, dr), 2, a.slice()]];
       }
     };
   }
@@ -338,6 +416,255 @@
       inside: p => { const q = sub(p, c); return dot(q, q) <= r * r; },
       near: p => { const q = sub(p, c), l = Math.hypot(q[0], q[1], q[2]); return [Math.abs(l - r), 0, l > 1e-9 ? mul(q, 1 / l) : [0, 1, 0]]; }
     };
+  }
+
+  // ---- loft: between two profiles on parallel planes ---------------------------
+  // The section at height w is the zero set of the signed 2D distance fields of
+  // the two profiles blended linearly: a smooth transition between any shapes.
+  function signedDist2D(P, x, y) { const d = boundaryDist(P, x, y); return inside2D(P, x, y) ? -d : d; }
+  function loftBody(f, s0, s1) {
+    if (!s0 || !s1 || s0.plane !== s1.plane) return null;
+    const F = sketchFrame(s0), P0 = compileProfile(s0.entities), P1 = compileProfile(s1.entities);
+    if (!P0.loops.length || !P1.loops.length) return null;
+    const H = (s1.offset || 0) - (s0.offset || 0);
+    if (Math.abs(H) < 1e-9) return null;
+    const lo = Math.min(0, H), hi = Math.max(0, H);
+    const field = (u, v, w) => { const t = Math.max(0, Math.min(1, w / H)); return (1 - t) * signedDist2D(P0, u, v) + t * signedDist2D(P1, u, v); };
+    const bb = [Math.min(P0.bb[0], P1.bb[0]), Math.min(P0.bb[1], P1.bb[1]), Math.max(P0.bb[2], P1.bb[2]), Math.max(P0.bb[3], P1.bb[3])];
+    const corners = [];
+    for (const u of [bb[0], bb[2]]) for (const v of [bb[1], bb[3]]) for (const w of [lo, hi]) corners.push(F.toWorld(u, v, w));
+    const patches = [{ id: f.id + '/side', name: 'lofted surface' },
+      { id: f.id + '/cap0', name: 'start face', plane: planeOf(mul(F.P.w, H > 0 ? -1 : 1), [F.toWorld(P0.bb[0], P0.bb[1], 0), F.toWorld(P0.bb[2], P0.bb[1], 0), F.toWorld(P0.bb[2], P0.bb[3], 0), F.toWorld(P0.bb[0], P0.bb[3], 0)]) },
+      { id: f.id + '/cap1', name: 'end face', plane: planeOf(mul(F.P.w, H > 0 ? 1 : -1), [F.toWorld(P1.bb[0], P1.bb[1], H), F.toWorld(P1.bb[2], P1.bb[1], H), F.toWorld(P1.bb[2], P1.bb[3], H), F.toWorld(P1.bb[0], P1.bb[3], H)]) }];
+    return {
+      bbox: bboxOfPoints(corners), patches,
+      inside: p => { const l = F.toLocal(p); return l[2] >= lo && l[2] <= hi && field(l[0], l[1], l[2]) <= 0; },
+      near: p => {
+        const l = F.toLocal(p), w = Math.max(lo, Math.min(hi, l[2])), dw = Math.abs(l[2] - w), fv = field(l[0], l[1], w);
+        const e = 1e-3 * Math.max(1, bb[2] - bb[0]);
+        const gu = (field(l[0] + e, l[1], w) - field(l[0] - e, l[1], w)) / (2 * e), gv = (field(l[0], l[1] + e, w) - field(l[0], l[1] - e, w)) / (2 * e);
+        const side = Math.hypot(fv, dw);
+        const ins = fv <= 0;
+        const d0 = ins ? Math.abs(l[2]) : Infinity, d1 = ins ? Math.abs(l[2] - H) : Infinity;
+        if (side <= d0 && side <= d1) return [side, 0, norm(add(mul(F.P.u, gu), mul(F.P.v, gv)))];
+        return d0 < d1 ? [d0, 1, mul(F.P.w, H > 0 ? -1 : 1)] : [d1, 2, mul(F.P.w, H > 0 ? 1 : -1)];
+      },
+      nearAll: p => {                                     // every surface, for points on the rims
+        const l = F.toLocal(p), w = Math.max(lo, Math.min(hi, l[2])), dw = Math.abs(l[2] - w), fv = field(l[0], l[1], w);
+        const e = 1e-3 * Math.max(1, bb[2] - bb[0]);
+        const gu = (field(l[0] + e, l[1], w) - field(l[0] - e, l[1], w)) / (2 * e), gv = (field(l[0], l[1] + e, w) - field(l[0], l[1] - e, w)) / (2 * e);
+        // the blend's slope along the loft tilts the side's normal; dividing by the
+        // full gradient turns the blended field into a distance
+        const ww = Math.max(lo + e, Math.min(hi - e, w)), gw = (field(l[0], l[1], ww + e) - field(l[0], l[1], ww - e)) / (2 * e);
+        const gl = Math.hypot(gu, gv, gw) || 1;
+        const s0 = signedDist2D(P0, l[0], l[1]), s1 = signedDist2D(P1, l[0], l[1]);
+        return [[Math.hypot(fv / gl, dw), 0, norm(add(add(mul(F.P.u, gu), mul(F.P.v, gv)), mul(F.P.w, gw)))],
+          [s0 <= 0 ? Math.abs(l[2]) : Math.hypot(l[2], s0), 1, mul(F.P.w, H > 0 ? -1 : 1)],
+          [s1 <= 0 ? Math.abs(l[2] - H) : Math.hypot(l[2] - H, s1), 2, mul(F.P.w, H > 0 ? 1 : -1)]];
+      }
+    };
+  }
+  // ---- sweep: a profile carried along a path ------------------------------------
+  // The path is the first open polyline of its sketch (corners may be filleted).
+  // Frames are parallel-transported along it, so the profile does not twist.
+  function pathPoints(sk) {
+    const F = sketchFrame(sk), k = (sk.entities || []).findIndex(e => e.type === 'poly' && e.open);
+    if (k < 0) return null;
+    const out = [];
+    for (const sg of openPolySegs(sk.entities[k].pts, sk.entities[k].fillets, k)) {
+      const pts = sg.t === 'line' ? [sg.a, sg.b] : Array.from({ length: Math.max(4, Math.ceil(Math.abs(sg.sw) / (Math.PI / 18))) + 1 },
+        (z, q, arr) => { const m = Math.max(4, Math.ceil(Math.abs(sg.sw) / (Math.PI / 18))), a = sg.a0 + sg.sw * q / m; return [sg.c[0] + sg.r * Math.cos(a), sg.c[1] + sg.r * Math.sin(a)]; });
+      for (const q of pts) { const w = F.toWorld(q[0], q[1], 0); const last = out[out.length - 1]; if (!last || Math.hypot(...sub(w, last)) > 1e-9) out.push(w); }
+    }
+    return out.length >= 2 ? out : null;
+  }
+  function sweepBody(f, prof, path) {
+    if (!prof || !path) return null;
+    const P = compileProfile(prof.entities), pts = pathPoints(path);
+    if (!P.loops.length || !pts) return null;
+    const PF = sketchFrame(prof);
+    // segment tangents and parallel-transported frames (double reflection)
+    const n = pts.length - 1, T = [], U = [], V = [], L = [], S0 = [];
+    let acc = 0;
+    for (let i = 0; i < n; i++) { const d = sub(pts[i + 1], pts[i]), l = Math.hypot(...d); T.push(mul(d, 1 / l)); L.push(l); S0.push(acc); acc += l; }
+    // start frame: the profile plane's axes, made perpendicular to the first tangent
+    let u0 = sub(PF.P.u, mul(T[0], dot(PF.P.u, T[0])));
+    if (Math.hypot(...u0) < 1e-6) u0 = sub(PF.P.v, mul(T[0], dot(PF.P.v, T[0])));
+    U.push(norm(u0)); V.push(cross(T[0], U[0]));
+    for (let i = 1; i < n; i++) {
+      const v1 = sub(pts[i], pts[i - 1]), c1 = dot(v1, v1) || 1;
+      const rL = sub(U[i - 1], mul(v1, 2 / c1 * dot(v1, U[i - 1]))), tL = sub(T[i - 1], mul(v1, 2 / c1 * dot(v1, T[i - 1])));
+      const v2 = sub(T[i], tL), c2 = dot(v2, v2) || 1;
+      const u = c2 < 1e-18 ? rL : sub(rL, mul(v2, 2 / c2 * dot(v2, rL)));
+      U.push(norm(u)); V.push(cross(T[i], U[i]));
+    }
+    // profile coordinates are measured from the path start, in the start frame mapped onto the profile plane
+    const P0 = pts[0], base = PF.toLocal(P0);
+    const fu = [dot(U[0], PF.P.u), dot(V[0], PF.P.u)], fv = [dot(U[0], PF.P.v), dot(V[0], PF.P.v)];
+    const local = p => {                                      // -> [u, v, s, endGap, segment]
+      let best = Infinity, bi = 0, bt = 0;
+      for (let i = 0; i < n; i++) {
+        const q = sub(p, pts[i]), t = Math.max(0, Math.min(L[i], dot(q, T[i]))), r = sub(q, mul(T[i], t)), d = dot(r, r);
+        if (d < best) { best = d; bi = i; bt = t; }
+      }
+      const q = sub(sub(p, pts[bi]), mul(T[bi], bt)), a = dot(q, U[bi]), b = dot(q, V[bi]);
+      const along = dot(sub(p, pts[bi]), T[bi]);
+      const gap = bi === 0 && along < 0 ? -along : bi === n - 1 && along > L[bi] ? along - L[bi] : 0;
+      // (a, b) in the moving frame -> profile-plane coordinates
+      return [base[0] + a * fu[0] + b * fu[1], base[1] + a * fv[0] + b * fv[1], S0[bi] + bt, gap, bi, a, b];
+    };
+    let R = 0;
+    for (const lp of P.loops) for (let i = 0; i < lp.X.length; i++) R = Math.max(R, Math.hypot(lp.X[i] - base[0], lp.Y[i] - base[1]));
+    const bb = bboxOfPoints(pts);
+    const patches = P.segs.map(sg => ({ id: f.id + '/' + sg.id, name: 'swept side (' + segLabel(sg) + ')' }));
+    patches.push({ id: f.id + '/cap0', name: 'start face' }, { id: f.id + '/cap1', name: 'end face' });
+    const ns = P.segs.length;
+    return {
+      bbox: [sub(bb[0], [R, R, R]), add(bb[1], [R, R, R])], patches,
+      inside: p => { const l = local(p); return l[3] <= 1e-9 && inside2D(P, l[0], l[1]); },
+      near: p => {
+        const l = local(p);
+        let best = Infinity, bi = 0, bn = null, bd2 = Infinity;
+        for (let i = 0; i < ns; i++) {
+          const r = segDist(P.segs[i], l[0], l[1]);
+          if (r[0] < bd2) bd2 = r[0];
+          const d = Math.hypot(r[0], l[3]);
+          if (d < best) {
+            best = d; bi = i;
+            // profile-plane normal -> moving frame
+            const nu = r[1] * fu[0] + r[2] * fv[0], nv = r[1] * fu[1] + r[2] * fv[1];
+            bn = norm(add(mul(U[l[4]], nu), mul(V[l[4]], nv)));
+          }
+        }
+        const s = l[2], inP = inside2D(P, l[0], l[1]);
+        const ds = inP ? s : Math.hypot(s, bd2), de = inP ? acc - s : Math.hypot(acc - s, bd2);
+        if (l[4] === 0 && ds < best) { best = ds; bi = ns; bn = mul(T[0], -1); }
+        if (l[4] === n - 1 && de < best) { best = de; bi = ns + 1; bn = T[n - 1]; }
+        return [best, bi, bn];
+      },
+      nearAll: p => {
+        const l = local(p), out = [];
+        let bd2 = Infinity;
+        for (let i = 0; i < ns; i++) {
+          const r = segDist(P.segs[i], l[0], l[1]);
+          if (r[0] < bd2) bd2 = r[0];
+          const nu = r[1] * fu[0] + r[2] * fv[0], nv = r[1] * fu[1] + r[2] * fv[1];
+          out.push([Math.hypot(r[0], l[3]), i, norm(add(mul(U[l[4]], nu), mul(V[l[4]], nv)))]);
+        }
+        const s = l[2], inP = inside2D(P, l[0], l[1]);
+        if (l[4] === 0) out.push([inP ? Math.abs(s) : Math.hypot(s, bd2), ns, mul(T[0], -1)]);
+        if (l[4] === n - 1) out.push([inP ? Math.abs(acc - s) : Math.hypot(acc - s, bd2), ns + 1, T[n - 1]]);
+        return out;
+      }
+    };
+  }
+  // ---- edge blends: fillet / chamfer an edge between two named faces ----------------
+  // Plane–plane edges (any dihedral angle) and plane–cylinder rims (cap or hole
+  // edges). Works in the cross-section across the edge: the corner wedge between
+  // the faces, cut by the chord through the tangent points, minus the fillet
+  // circle. A convex edge loses that region, a concave edge gains it.
+  function wedge2(u1, u2, r, kind) {
+    const c = Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])), phi = Math.acos(c);
+    if (phi < 1e-3 || phi > Math.PI - 1e-3) return null;
+    const bl = Math.hypot(u1[0] + u2[0], u1[1] + u2[1]), bis = [(u1[0] + u2[0]) / bl, (u1[1] + u2[1]) / bl];
+    const t = kind === 'chamfer' ? r : r / Math.tan(phi / 2), chord = t * Math.cos(phi / 2), cd = r / Math.sin(phi / 2);
+    const ctr = [bis[0] * cd, bis[1] * cd], sgn = u1[0] * u2[1] - u1[1] * u2[0] > 0 ? 1 : -1;
+    const inWedge = (x, y) => sgn * (u1[0] * y - u1[1] * x) >= 0 && sgn * (x * u2[1] - y * u2[0]) >= 0;
+    return {
+      region: (x, y) => {
+        if (x * bis[0] + y * bis[1] >= chord || !inWedge(x, y)) return false;
+        return kind === 'chamfer' ? true : (x - ctr[0]) ** 2 + (y - ctr[1]) ** 2 > r * r;
+      },
+      // distance to the blend surface and its normal pointing away from the corner's material (convex case)
+      near: (x, y) => {
+        if (!inWedge(x, y)) return null;
+        if (kind === 'chamfer') return [Math.abs(x * bis[0] + y * bis[1] - chord), -bis[0], -bis[1]];
+        const dx = x - ctr[0], dy = y - ctr[1], l = Math.hypot(dx, dy) || 1;
+        if (x * bis[0] + y * bis[1] > chord + r) return null;
+        return [Math.abs(l - r), dx / l, dy / l];
+      },
+      probe: [bis[0] * chord * 0.3, bis[1] * chord * 0.3]
+    };
+  }
+  function edgeBlend(A, B, r, kind, ins) {
+    if (A && B && A.plane && B.plane) {
+      const P1 = A.plane, P2 = B.plane, n1 = P1.normal, n2 = P2.normal;
+      let e = cross(n1, n2);
+      const le = Math.hypot(...e);
+      if (le < 1e-6) return null;
+      e = mul(e, 1 / le);
+      const m = mul(add(P1.center, P2.center), 0.5), k = dot(n1, n2), r1 = P1.d - dot(n1, m), r2 = P2.d - dot(n2, m), det = 1 - k * k;
+      const x0 = add(m, add(mul(n1, (r1 - k * r2) / det), mul(n2, (r2 - k * r1) / det)));
+      let u1 = norm(cross(e, n1)); if (dot(u1, sub(P1.center, x0)) < 0) u1 = mul(u1, -1);
+      let u2 = norm(cross(e, n2)); if (dot(u2, sub(P2.center, x0)) < 0) u2 = mul(u2, -1);
+      const b1 = u1, b2 = norm(cross(e, u1));             // cross-section basis
+      const W = wedge2([1, 0], [dot(u2, b1), dot(u2, b2)], r, kind);
+      if (!W) return null;
+      const ext = P => { let lo = Infinity, hi = -Infinity; for (const q of P.corners || []) { const t = dot(sub(q, x0), e); lo = Math.min(lo, t); hi = Math.max(hi, t); } return P.corners ? [lo, hi] : [-Infinity, Infinity]; };
+      const [a0, a1] = ext(P1), [c0, c1] = ext(P2), lo = Math.max(a0, c0), hi = Math.min(a1, c1);
+      if (!(hi > lo)) return null;
+      const xs = p => { const q = sub(p, x0), s = dot(q, e); return [dot(q, b1), dot(q, b2), s]; };
+      const mid = isFinite(lo + hi) ? (lo + hi) / 2 : 0;
+      return {
+        region: p => { const q = xs(p); return q[2] >= lo - 1e-9 && q[2] <= hi + 1e-9 && W.region(q[0], q[1]); },
+        near: p => { const q = xs(p); if (q[2] < lo || q[2] > hi) return null; const r2_ = W.near(q[0], q[1]); return r2_ && [r2_[0], add(mul(b1, r2_[1]), mul(b2, r2_[2]))]; },
+        probe: add(x0, add(add(mul(b1, W.probe[0]), mul(b2, W.probe[1])), mul(e, mid)))
+      };
+    }
+    const pl = A && A.plane ? A : B && B.plane ? B : null, cy = A && A.cyl ? A : B && B.cyl ? B : null;
+    if (pl && cy) {
+      const P = pl.plane, C = cy.cyl, a = norm(C.a);
+      if (Math.abs(dot(P.normal, a)) < 0.999) return null;
+      const hp = (P.d - dot(P.normal, C.c)) / dot(P.normal, a), R = C.r;
+      const rhoOf = q => { const v = sub(q, C.c), t = dot(v, a); return Math.hypot(...sub(v, mul(a, t))); };
+      const hmid = (C.h0 + C.h1) / 2, u2 = [0, hmid >= hp ? 1 : -1];
+      const ref0 = Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], ea = norm(cross(a, ref0)), dl = 1e-3 * Math.max(1, R);
+      // which side of the rim the planar face is on: probe the solid just under it, inside and outside the circle
+      let inner = P.rho ? P.rho[0] < R - 1e-6 && P.rho[1] <= R + 1e-6 : rhoOf(P.center) < R;
+      if (ins) {
+        const at = rho => ins(add(C.c, add(mul(a, hp + u2[1] * dl * 3), mul(ea, rho))));
+        const iIn = at(R - dl * 3), iOut = at(R + dl * 3);
+        if (iIn !== iOut) inner = iIn; else if (iIn && iOut) inner = false;
+      }
+      const u1 = [inner ? -1 : 1, 0];
+      const W = wedge2(u1, u2, r, kind);
+      if (!W) return null;
+      const ref = Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], e1 = norm(cross(a, ref));
+      const mh = p => { const v = sub(p, C.c), t = dot(v, a), rv = sub(v, mul(a, t)), rho = Math.hypot(...rv); return [rho - R, t - hp, rho > 1e-9 ? mul(rv, 1 / rho) : e1]; };
+      return {
+        region: p => { const q = mh(p); return W.region(q[0], q[1]); },
+        near: p => { const q = mh(p), r2_ = W.near(q[0], q[1]); return r2_ && [r2_[0], add(mul(q[2], r2_[1]), mul(a, r2_[2]))]; },
+        probe: add(C.c, add(mul(a, hp + W.probe[1]), mul(e1, R + W.probe[0])))
+      };
+    }
+    return null;
+  }
+  // exact 1D squared distance transform (Felzenszwalb & Huttenlocher), spacing h
+  function edt1(f, n, h) {
+    const d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+    let k = 0; v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+    for (let q = 1; q < n; q++) {
+      let sv;
+      while (true) {
+        const p = v[k];
+        sv = ((f[q] + (q * h) ** 2) - (f[p] + (p * h) ** 2)) / (2 * h * (q - p));
+        if (sv <= z[k] && k > 0) k--; else break;
+      }
+      if (sv <= z[k]) { v[0] = q; z[0] = -Infinity; z[1] = Infinity; k = 0; continue; }
+      k++; v[k] = q; z[k] = sv; z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < n; q++) { while (z[k + 1] < q * h) k++; d[q] = (q - v[k]) ** 2 * h * h + f[v[k]]; }
+    return d;
+  }
+  function edt3(seed, nx, ny, nz, dx, dy, dz) {           // seed: 1 = distance 0; returns squared distances
+    const N = nx * ny * nz, D = new Float64Array(N);
+    for (let i = 0; i < N; i++) D[i] = seed[i] ? 0 : 1e30;
+    const pass = (n, h, idx) => { const f = new Float64Array(n); for (let q = 0; q < n; q++) f[q] = D[idx(q)]; const d = edt1(f, n, h); for (let q = 0; q < n; q++) D[idx(q)] = d[q]; };
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) pass(nx, dx, i => (k * ny + j) * nx + i);
+    for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) pass(ny, dy, j => (k * ny + j) * nx + i);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) pass(nz, dz, k => (k * ny + j) * nx + i);
+    return D;
   }
 
   // ---- STL: ray-parity inside test, faces = facets grouped by normal --------
@@ -378,7 +705,8 @@
     let G = stlCache.get(key);
     if (!G) { G = prepareSTL(f); stlCache.set(key, G); if (stlCache.size > 8) stlCache.delete(stlCache.keys().next().value); }
     const patches = G.groups.map((g, i) => ({ id: f.id + '/f' + i, name: 'face ' + (i + 1) }));
-    return { bbox: G.bbox, patches, inside: G.inside, near: G.near };
+    return { bbox: G.bbox, patches, inside: G.inside, near: G.near,
+      warn: G.openEdges ? (f.name || f.id) + ': ' + G.openEdges + ' open edges (not watertight) — solid decided by three-ray voting' : null };
   }
   function prepareSTL(f) {
     const raw = f.data ? unb64(f.data) : new Float32Array(0), s = f.scale || 1, T = [f.tx || 0, f.ty || 0, f.tz || 0];
@@ -414,9 +742,19 @@
         }
       }
     }
-    // 2D bins over (y, z) for the +x parity ray, 3D bins for nearest facet
+    // open edges (used by one facet only): the mesh is not watertight
+    const ecount = new Map();
+    for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
+      const a = vkey(V[t * 9 + k * 3], V[t * 9 + k * 3 + 1], V[t * 9 + k * 3 + 2]), j = (k + 1) % 3;
+      const b = vkey(V[t * 9 + j * 3], V[t * 9 + j * 3 + 1], V[t * 9 + j * 3 + 2]), key = a < b ? a + '|' + b : b + '|' + a;
+      ecount.set(key, (ecount.get(key) || 0) + 1);
+    }
+    let openEdges = 0;
+    for (const c of ecount.values()) if (c === 1) openEdges++;
+    // per axis: 2D bins over the other two coordinates for a parity ray along it; 3D bins for nearest facet
     const B = Math.max(4, Math.min(64, Math.round(Math.sqrt(nt / 2)))), ext = sub(mx, mn).map(v => v || 1);
-    const bins = Array.from({ length: B * B }, () => []);
+    const binsA = [0, 1, 2].map(() => Array.from({ length: B * B }, () => []));
+    const bins = binsA[0];
     const bin3 = new Map(), C = Math.max(ext[0], ext[1], ext[2]) / Math.max(4, Math.min(48, Math.round(Math.cbrt(nt)))) || 1;
     for (let t = 0; t < nt; t++) {
       let y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -426,31 +764,40 @@
         y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
         for (let q = 0; q < 3; q++) { lo[q] = Math.min(lo[q], V[t * 9 + k * 3 + q]); hi[q] = Math.max(hi[q], V[t * 9 + k * 3 + q]); }
       }
-      const by0 = Math.max(0, Math.floor((y0 - mn[1]) / ext[1] * B)), by1 = Math.min(B - 1, Math.floor((y1 - mn[1]) / ext[1] * B));
-      const bz0 = Math.max(0, Math.floor((z0 - mn[2]) / ext[2] * B)), bz1 = Math.min(B - 1, Math.floor((z1 - mn[2]) / ext[2] * B));
-      for (let a = by0; a <= by1; a++) for (let b = bz0; b <= bz1; b++) bins[a * B + b].push(t);
+      void y0; void y1; void z0; void z1;
+      for (let ax = 0; ax < 3; ax++) {
+        const o1 = (ax + 1) % 3, o2 = (ax + 2) % 3;
+        const a0 = Math.max(0, Math.floor((lo[o1] - mn[o1]) / ext[o1] * B)), a1 = Math.min(B - 1, Math.floor((hi[o1] - mn[o1]) / ext[o1] * B));
+        const c0 = Math.max(0, Math.floor((lo[o2] - mn[o2]) / ext[o2] * B)), c1 = Math.min(B - 1, Math.floor((hi[o2] - mn[o2]) / ext[o2] * B));
+        for (let a = a0; a <= a1; a++) for (let b = c0; b <= c1; b++) binsA[ax][a * B + b].push(t);
+      }
       for (let i = Math.floor(lo[0] / C); i <= Math.floor(hi[0] / C); i++) for (let j = Math.floor(lo[1] / C); j <= Math.floor(hi[1] / C); j++)
         for (let k = Math.floor(lo[2] / C); k <= Math.floor(hi[2] / C); k++) {
           const kk = i + ',' + j + ',' + k; let l = bin3.get(kk); if (!l) bin3.set(kk, l = []); l.push(t);
         }
     }
-    const inside = p => {
-      if (!nt || p[0] < mn[0] || p[0] > mx[0] || p[1] < mn[1] || p[1] > mx[1] || p[2] < mn[2] || p[2] > mx[2]) return false;
-      const by = Math.min(B - 1, Math.max(0, Math.floor((p[1] - mn[1]) / ext[1] * B))), bz = Math.min(B - 1, Math.max(0, Math.floor((p[2] - mn[2]) / ext[2] * B)));
-      // jitter keeps the ray off shared edges
-      const y = p[1] + 1.3e-7 * ext[1], z = p[2] + 2.1e-7 * ext[2];
+    // parity of crossings of a ray from p along +axis
+    const parity = (p, ax) => {
+      const o1 = (ax + 1) % 3, o2 = (ax + 2) % 3;
+      const ba = Math.min(B - 1, Math.max(0, Math.floor((p[o1] - mn[o1]) / ext[o1] * B))), bb = Math.min(B - 1, Math.max(0, Math.floor((p[o2] - mn[o2]) / ext[o2] * B)));
+      const y = p[o1] + 1.3e-7 * ext[o1], z = p[o2] + 2.1e-7 * ext[o2];   // jitter keeps the ray off shared edges
       let cnt = 0;
-      for (const t of bins[by * B + bz]) {
+      for (const t of binsA[ax][ba * B + bb]) {
         const o = t * 9;
-        const ay = V[o + 1], az = V[o + 2], by_ = V[o + 4], bz_ = V[o + 5], cy = V[o + 7], cz = V[o + 8];
+        const ay = V[o + o1], az = V[o + o2], by_ = V[o + 3 + o1], bz_ = V[o + 3 + o2], cy = V[o + 6 + o1], cz = V[o + 6 + o2];
         const d = (by_ - ay) * (cz - az) - (cy - ay) * (bz_ - az);
         if (Math.abs(d) < 1e-18) continue;
         const l1 = ((by_ - y) * (cz - z) - (cy - y) * (bz_ - z)) / d, l2 = ((cy - y) * (az - z) - (ay - y) * (cz - z)) / d, l3 = 1 - l1 - l2;
         if (l1 < 0 || l2 < 0 || l3 < 0) continue;
-        const x = l1 * V[o] + l2 * V[o + 3] + l3 * V[o + 6];
-        if (x > p[0]) cnt++;
+        if (l1 * V[o + ax] + l2 * V[o + 3 + ax] + l3 * V[o + 6 + ax] > p[ax]) cnt++;
       }
       return (cnt & 1) === 1;
+    };
+    // watertight: one ray decides; with holes or flipped facets, three axis rays vote
+    const inside = p => {
+      if (!nt || p[0] < mn[0] || p[0] > mx[0] || p[1] < mn[1] || p[1] > mx[1] || p[2] < mn[2] || p[2] > mx[2]) return false;
+      if (!openEdges) return parity(p, 0);
+      return (parity(p, 0) ? 1 : 0) + (parity(p, 1) ? 1 : 0) + (parity(p, 2) ? 1 : 0) >= 2;
     };
     const near = p => {
       const ci = Math.floor(p[0] / C), cj = Math.floor(p[1] / C), ck = Math.floor(p[2] / C);
@@ -465,7 +812,7 @@
       if (bt < 0) return [Infinity, 0, null];
       return [best, grp[bt], [N[bt * 3], N[bt * 3 + 1], N[bt * 3 + 2]]];
     };
-    return { bbox: [mn, mx], groups, inside, near, nt };
+    return { bbox: [mn, mx], groups, inside, near, nt, openEdges };
   }
   function triDist(p, V, o) {                            // point-triangle distance (Ericson)
     const a = [V[o], V[o + 1], V[o + 2]], b = [V[o + 3], V[o + 4], V[o + 5]], c = [V[o + 6], V[o + 7], V[o + 8]];
@@ -504,7 +851,8 @@
       bbox: bboxOfPoints(cornersOf(body.bbox).map(fwd)),
       patches: body.patches.map(p => ({ id: id + '/' + p.id, name: label + ' · ' + p.name, plane: p.plane ? { normal: rotN(p.plane.normal) } : null })),
       inside: p => body.inside(inv(p)),
-      near: p => { const r = body.near(inv(p)); return [r[0], r[1], r[2] ? rotN(r[2]) : null]; }
+      near: p => { const r = body.near(inv(p)); return [r[0], r[1], r[2] ? rotN(r[2]) : null]; },
+      nearAll: p => (body.nearAll ? body.nearAll(inv(p)) : [body.near(inv(p))]).map(r => [r[0], r[1], r[2] ? rotN(r[2]) : null])
     };
   }
   function cornersOf(bb) {
@@ -530,7 +878,12 @@
     lpattern: { label: 'LPattern', solid: true },
     cpattern: { label: 'CirPattern', solid: true },
     mirror: { label: 'Mirror', solid: true },
-    stl: { label: 'Imported', solid: true }
+    stl: { label: 'Imported', solid: true },
+    loft: { label: 'Loft', solid: true },
+    sweep: { label: 'Sweep', solid: true },
+    fillet: { label: 'Fillet', solid: true, modifier: true },
+    chamfer: { label: 'Chamfer', solid: true, modifier: true },
+    shell: { label: 'Shell', solid: true, modifier: true }
   };
   function modelExtent(model) {
     let e = 100;
@@ -559,6 +912,8 @@
       case 'sphere': body = sphereBody(f); break;
       case 'hole': body = holeBody(f, model); break;
       case 'stl': body = stlBody(f); break;
+      case 'loft': { const a = byId[f.sketch], b = byId[f.sketch2]; body = a && b && !a.suppressed && !b.suppressed ? loftBody(f, a, b) : null; break; }
+      case 'sweep': { const a = byId[f.sketch], b = byId[f.path]; body = a && b && !a.suppressed && !b.suppressed ? sweepBody(f, a, b) : null; break; }
       case 'lpattern': case 'cpattern': case 'mirror': {
         const src = byId[f.src], sb = src && bodyOf(src, model, byId, (depth || 0) + 1);
         if (!sb) return null;
@@ -591,46 +946,128 @@
     for (const p of body.patches) p.feat = f.id;
     return { op, bodies: [body] };
   }
+  function applyStep(st, p, s) {
+    if (st.op === 'boss') return s || st.body.inside(p);
+    if (st.op === 'cut') return s && !st.body.inside(p);
+    if (st.op === 'blend') return st.mode === 'remove' ? s && !st.region(p) : s || st.region(p);
+    return s;                                                // shell: grid only
+  }
   // evaluate the whole feature list once; returns the compiled part
   function compile(model) {
     const feats = model.features || [], byId = {};
     for (const f of feats) byId[f.id] = f;
-    const steps = [], faces = {};
+    const steps = [], faces = {}, geom = {}, warnings = [];
     let bb = null;
+    const insideUpTo = (p, n) => {
+      let s = false;
+      for (let i = 0; i < n; i++) s = applyStep(steps[i], p, s);
+      return s;
+    };
     for (const f of feats) {
-      if (!FEATURE_INFO[f.type] || !FEATURE_INFO[f.type].solid) continue;
+      if (!FEATURE_INFO[f.type] || !FEATURE_INFO[f.type].solid || f.suppressed) continue;
+      if (f.type === 'fillet' || f.type === 'chamfer') {
+        const r = Math.abs(f.r || 1), patches = [];
+        (f.edges || []).forEach((pair, i) => {
+          const B = edgeBlend(geom[pair[0]], geom[pair[1]], r, f.type, p => insideUpTo(p, steps.length));
+          if (!B) { warnings.push((f.name || f.id) + ': edge ' + (i + 1) + ' is not between two planes or a plane and a cylinder rim — skipped'); return; }
+          const mode = insideUpTo(B.probe, steps.length) ? 'remove' : 'add', pid = f.id + '/e' + i;
+          const body = { patches: [{ id: pid, name: (f.type === 'fillet' ? 'fillet face ' : 'chamfer face ') + (i + 1) }],
+            near: p => { const q = B.near(p); return q ? [q[0], 0, mode === 'remove' ? q[1] : mul(q[1], -1)] : [Infinity, 0, null]; } };
+          steps.push({ op: 'blend', mode, region: B.region, body, feat: f.id });
+          faces[pid] = { id: pid, feat: f.id, op: 'boss', name: (f.name || f.id) + ' · ' + body.patches[0].name, drag: null, plane: null };
+          patches.push(pid);
+        });
+        continue;
+      }
+      if (f.type === 'shell') {
+        steps.push({ op: 'shell', t: Math.abs(f.t || 2), open: new Set(f.open || []), feat: f.id });
+        faces[f.id + '/inner'] = { id: f.id + '/inner', feat: f.id, op: 'cut', name: (f.name || f.id) + ' · inner faces', drag: null, plane: null };
+        continue;
+      }
       const r = bodyOf(f, model, byId, 0);
       if (!r) continue;
       for (const b of r.bodies) {
         steps.push({ op: r.op, body: b, feat: f.id });
-        for (const p of b.patches) faces[p.id] = { id: p.id, feat: f.id, op: r.op, name: (f.name || f.id) + ' · ' + p.name, drag: p.drag || null, plane: p.plane || null };
+        if (b.warn) warnings.push(b.warn);
+        for (const p of b.patches) {
+          faces[p.id] = { id: p.id, feat: f.id, op: r.op, name: (f.name || f.id) + ' · ' + p.name, drag: p.drag || null, plane: p.plane || null };
+          if (p.plane || p.cyl) geom[p.id] = { plane: p.plane && p.plane.corners ? p.plane : null, cyl: p.cyl || null };
+        }
         if (r.op === 'boss') bb = bb ? [[Math.min(bb[0][0], b.bbox[0][0]), Math.min(bb[0][1], b.bbox[0][1]), Math.min(bb[0][2], b.bbox[0][2])],
           [Math.max(bb[1][0], b.bbox[1][0]), Math.max(bb[1][1], b.bbox[1][1]), Math.max(bb[1][2], b.bbox[1][2])]] : [b.bbox[0].slice(), b.bbox[1].slice()];
       }
     }
-    const inside = p => {
-      let s = false;
-      for (const st of steps) {
-        if (st.op === 'boss') { if (!s && st.body.inside(p)) s = true; }
-        else if (s && st.body.inside(p)) s = false;
-      }
-      return s;
-    };
+    // point queries treat a shell as a no-op: shells act on the voxel grid (see voxelize)
+    const inside = p => insideUpTo(p, steps.length);
     // nearest named face to a point on the voxel skin. n is the skin's outward
     // normal; a patch whose own outward side disagrees is penalised (a cut's
     // surface faces the other way: the part's outside is the cut's inside).
     const faceAt = (p, n, h) => {
       let best = Infinity, id = null;
       for (const st of steps) {
+        if (!st.body) continue;
         const r = st.body.near(p);
         if (!(r[0] < Infinity)) continue;
         let d = r[0];
         if (n && r[2]) { const c = dot(n, r[2]) * (st.op === 'cut' ? -1 : 1); if (c < -0.3) d += (h || 1); }
         if (d < best - 1e-9) { best = d; id = st.body.patches[r[1]] ? st.body.patches[r[1]].id : null; }
       }
+      // skin a shell opened up, far from every feature surface
+      if (shellIds.length && best > Math.max(1.5 * (h || 1), 1e-9)) return shellIds[shellIds.length - 1] + '/inner';
       return id;
     };
-    return { model, steps, faces, inside, faceAt, bbox: bb || [[0, 0, 0], [100, 100, 100]], empty: !bb, byId };
+    const shellIds = steps.filter(st => st.op === 'shell').map(st => st.feat);
+    // Move a point of the voxel skin onto the part's real surface (body-fitted
+    // mesh). n is the skin's outward normal there. Projections onto every surface
+    // within reach are repeated, which settles points on edges and corners;
+    // surfaces facing away (the far side of a thin wall) are ignored. Returns
+    // null when the result would not lie on the part's skin.
+    const project = (p, n, h, info) => {
+      const tol = 0.9 * h, maxMove = 0.85 * h;
+      let q = p.slice(), moved = false;
+      const near = (st, x) => st.body.nearAll ? st.body.nearAll(x) : [st.body.near(x)];
+      for (let it = 0; it < 6; it++) {
+        let any = false;
+        const cand = [];
+        let aligned = false;
+        for (const st of steps) {
+          if (!st.body) continue;
+          for (const r of near(st, q)) {
+            if (!(r[0] < tol) || !r[2]) continue;
+            const out = st.op === 'cut' ? mul(r[2], -1) : r[2], c = dot(out, n);
+            if (c >= 0.3) aligned = true;                   // also when the point already lies on it
+            if (c >= -0.2 && r[0] >= 1e-7 * h) cand.push([st, r, out, c]);
+          }
+        }
+        // A surface across the skin normal is either the side wall at a rim (then a
+        // surface facing along the skin is in reach too: the cap) or a gently sloping
+        // wall seen as a staircase (nothing else in reach). At a rim it only pulls in
+        // points that stick out past it, never drags cap points onto it.
+        for (const [st, r, out, c] of cand) {
+          const d = near(st, q).find(b => b[1] === r[1]);
+          if (!d || !(d[0] > 1e-7 * h)) continue;           // already settled on it this pass
+          const ins = inside(q);
+          if (c < 0.3 && aligned && ins) continue;
+          // a step is kept only if it really lands on the surface (the distance to a
+          // cap from beyond its edge is not measured along its normal)
+          const q2 = add(q, mul(out, ins ? d[0] : -d[0])), back = near(st, q2).find(b => b[1] === r[1]);
+          if (!back || !(back[0] < 0.25 * d[0])) continue;
+          q = q2; any = moved = true;
+        }
+        if (!any) break;
+      }
+      if (!moved) return null;
+      if (Math.hypot(...sub(q, p)) > maxMove) return null;
+      const e = 0.06 * h;                                 // clear of the polygonised arcs inside() tests against
+      if (inside(add(q, mul(n, e))) || !inside(sub(q, mul(n, e)))) return null;
+      if (info) {                                         // which surfaces the point settled on
+        const ids = [];
+        steps.forEach((st, si) => { if (st.body) for (const r of near(st, q)) if (r[0] < 1e-3 * h && r[2]) ids.push(si + ':' + r[1]); });
+        info.key = ids.sort().join(',');
+      }
+      return q;
+    };
+    return { model, steps, faces, inside, faceAt, insideUpTo, project, bbox: bb || [[0, 0, 0], [100, 100, 100]], empty: !bb, byId, geom, warnings };
   }
 
   // ------------------------------------------------------------- meshing
@@ -652,17 +1089,265 @@
     if (!o.noBudget) while (d[0] * d[1] * d[2] * frac > budget && guard++ < 400) { h *= 1.06; d = dims(h); clamped = true; }
     const [nx, ny, nz] = d, dx = ext[0] / nx, dy = ext[1] / ny, dz = ext[2] / nz;
     const solid = new Uint8Array(nx * ny * nz), need = Math.ceil(subS * subS * subS / 2);
-    let ne = 0;
-    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      let c = 0;
-      if (subS === 1) c = cm.inside([bb[0][0] + (i + 0.5) * dx, bb[0][1] + (j + 0.5) * dy, bb[0][2] + (k + 0.5) * dz]) ? 1 : 0;
-      else {
-        for (let a = 0; a < subS && c < need; a++) for (let b = 0; b < subS; b++) for (let e = 0; e < subS; e++)
-          if (cm.inside([bb[0][0] + (i + (a + 0.5) / subS) * dx, bb[0][1] + (j + (b + 0.5) / subS) * dy, bb[0][2] + (k + (e + 0.5) / subS) * dz])) c++;
+    const steps = cm.steps || [], cuts = [];
+    steps.forEach((st, i) => { if (st.op === 'shell') cuts.push(i); });
+    const ranges = [];
+    let from = 0;
+    for (const c of cuts) { ranges.push([from, c]); from = c + 1; }
+    ranges.push([from, steps.length]);
+    // evaluate steps [i0, i1) on every cell, starting from the cell's current state
+    const stage = (i0, i1, first) => {
+      for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const ci = (k * ny + j) * nx + i, s0 = first ? false : solid[ci] === 1;
+        const run = p => { let st_ = s0; for (let q = i0; q < i1; q++) st_ = applyStep(steps[q], p, st_); return st_; };
+        let c = 0;
+        if (subS === 1) c = run([bb[0][0] + (i + 0.5) * dx, bb[0][1] + (j + 0.5) * dy, bb[0][2] + (k + 0.5) * dz]) ? 1 : 0;
+        else for (let a = 0; a < subS && c < need; a++) for (let b = 0; b < subS; b++) for (let e = 0; e < subS; e++)
+          if (run([bb[0][0] + (i + (a + 0.5) / subS) * dx, bb[0][1] + (j + (b + 0.5) / subS) * dy, bb[0][2] + (k + (e + 0.5) / subS) * dz])) c++;
+        solid[ci] = c >= (subS === 1 ? 1 : need) ? 1 : 0;
       }
-      if (c >= (subS === 1 ? 1 : need)) { solid[(k * ny + j) * nx + i] = 1; ne++; }
-    }
+    };
+    if (!steps.length && cm.inside) { stage(0, 0, true); }
+    ranges.forEach((rg, n) => {
+      stage(rg[0], rg[1], n === 0);
+      if (n < cuts.length) shellGrid(cm, steps[cuts[n]], solid, nx, ny, nz, dx, dy, dz, bb[0]);
+    });
+    let ne = 0;
+    for (let q = 0; q < solid.length; q++) ne += solid[q];
     return { nx, ny, nz, dx, dy, dz, solid, ne, org: bb[0].slice(), h, clamped, frac };
+  }
+
+  // Shell on the grid: cells farther than t from the part's skin are removed. Skin
+  // on the open faces does not count, so the cavity breaks out through them.
+  function shellGrid(cm, st, solid, nx, ny, nz, dx, dy, dz, org) {
+    const seed = new Uint8Array(solid.length), h = Math.min(dx, dy, dz);
+    const D6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const ci = (k * ny + j) * nx + i;
+      if (!solid[ci]) continue;
+      for (const D of D6) {
+        const a = i + D[0], b = j + D[1], c = k + D[2];
+        if (a >= 0 && b >= 0 && c >= 0 && a < nx && b < ny && c < nz && solid[(c * ny + b) * nx + a]) continue;
+        if (st.open.size) {
+          const p = [org[0] + (i + 0.5 + D[0] * 0.5) * dx, org[1] + (j + 0.5 + D[1] * 0.5) * dy, org[2] + (k + 0.5 + D[2] * 0.5) * dz];
+          if (st.open.has(cm.faceAt(p, D, h))) continue;   // an opening: not a wall
+        }
+        seed[ci] = 1; break;
+      }
+    }
+    const D2 = edt3(seed, nx, ny, nz, dx, dy, dz), lim = (st.t - 0.5 * h) ** 2;
+    for (let q = 0; q < solid.length; q++) if (solid[q] && D2[q] > lim + 1e-9) solid[q] = 0;
+  }
+
+  // ------------------------------------------------- sketch constraints
+  // A 2D geometric constraint solver, like a CAD sketcher's. The unknowns are the
+  // entities' own numbers (polyline vertices, rectangle x, y, w, h, circle
+  // centre and radius); constraints are residuals that must vanish; driving
+  // dimensions are constraints with a value. Solved by damped Gauss–Newton
+  // (Levenberg–Marquardt) from the current geometry, so unconstrained parts move
+  // as little as possible. The rank of the Jacobian gives the remaining degrees
+  // of freedom (0 = fully defined).
+  //
+  // References: point { e, p } (poly vertex p, rect corner 0..3, 'c' circle centre)
+  // or { origin: true }; line { e, l } (poly edge l, rect edge 0..3); circle { e }.
+  const CONSTRAINTS = {
+    fix: { label: 'Fix', refs: ['point'] },
+    coincident: { label: 'Coincident', refs: ['point', 'point'] },
+    horizontal: { label: 'Horizontal', refs: ['line'] },
+    vertical: { label: 'Vertical', refs: ['line'] },
+    parallel: { label: 'Parallel', refs: ['line', 'line'] },
+    perpendicular: { label: 'Perpendicular', refs: ['line', 'line'] },
+    equal: { label: 'Equal', refs: ['line|circle', 'line|circle'] },
+    tangent: { label: 'Tangent', refs: ['line', 'circle'] },
+    onLine: { label: 'On line', refs: ['point', 'line'] },
+    length: { label: 'Length', refs: ['line'], dim: true },
+    distance: { label: 'Distance', refs: ['point', 'point'], dim: true },
+    hdist: { label: 'Horizontal distance', refs: ['point', 'point'], dim: true },
+    vdist: { label: 'Vertical distance', refs: ['point', 'point'], dim: true },
+    radius: { label: 'Radius', refs: ['circle'], dim: true },
+    diameter: { label: 'Diameter', refs: ['circle'], dim: true },
+    angle: { label: 'Angle', refs: ['line', 'line'], dim: true, unit: '°' }
+  };
+  function sketchModel(ents) {
+    const idx = [], x0 = [];
+    ents.forEach(e => {
+      idx.push(x0.length);
+      if (e.type === 'poly') for (const q of e.pts) x0.push(q[0], q[1]);
+      else if (e.type === 'rect') x0.push(e.x, e.y, e.w, e.h);
+      else if (e.type === 'circle') x0.push(e.cx, e.cy, e.r);
+    });
+    const ok = r => r && (r.origin || (ents[r.e] && (r.p === undefined || ents[r.e].type !== 'poly' || r.p < ents[r.e].pts.length)));
+    const pt = (X, r) => {
+      if (r.origin) return [0, 0];
+      const e = ents[r.e], o = idx[r.e];
+      if (e.type === 'poly') return [X[o + 2 * r.p], X[o + 2 * r.p + 1]];
+      if (e.type === 'circle') return [X[o], X[o + 1]];
+      const x = X[o], y = X[o + 1], w = X[o + 2], h = X[o + 3];
+      return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]][r.p || 0];
+    };
+    const line = (X, r) => {
+      const e = ents[r.e], n = e.type === 'poly' ? e.pts.length : 4;
+      return [pt(X, { e: r.e, p: r.l }), pt(X, { e: r.e, p: (r.l + 1) % n })];
+    };
+    const rad = (X, r) => X[idx[r.e] + 2];
+    const write = X0 => { const X = X0.map(v => Math.round(v * 1e9) / 1e9); return ents.map((e, k) => {
+      const o = idx[k];
+      if (e.type === 'poly') return { ...e, pts: e.pts.map((q, i) => [X[o + 2 * i], X[o + 2 * i + 1]]) };
+      if (e.type === 'rect') return { ...e, x: X[o], y: X[o + 1], w: X[o + 2], h: X[o + 3] };
+      if (e.type === 'circle') return { ...e, cx: X[o], cy: X[o + 1], r: Math.abs(X[o + 2]) };
+      return e;
+    }); };
+    return { x0, pt, line, rad, write, ok, n: x0.length };
+  }
+  // the current value of a dimension (what a new dimension would be set to)
+  function measure(M, X, c) {
+    const P = r => M.pt(X, r), Ln = r => M.line(X, r);
+    switch (c.type) {
+      case 'length': { const [a, b] = Ln(c.a); return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+      case 'distance': { const a = P(c.a), b = P(c.b); return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+      case 'hdist': return Math.abs(P(c.b)[0] - P(c.a)[0]);
+      case 'vdist': return Math.abs(P(c.b)[1] - P(c.a)[1]);
+      case 'radius': return M.rad(X, c.a);
+      case 'diameter': return 2 * M.rad(X, c.a);
+      case 'angle': { const [a, b] = Ln(c.a), [p, q] = Ln(c.b); const u = [b[0] - a[0], b[1] - a[1]], v = [q[0] - p[0], q[1] - p[1]];
+        return Math.abs(Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1])) * 180 / Math.PI; }
+    }
+    return 0;
+  }
+  function residuals(M, X, cons, Lc) {
+    const out = [], P = r => M.pt(X, r), Ln = r => M.line(X, r);
+    const dir = r => { const [a, b] = Ln(r); return [b[0] - a[0], b[1] - a[1]]; };
+    const len = r => { const d = dir(r); return Math.hypot(d[0], d[1]) || 1e-12; };
+    const size = r => (r.l !== undefined ? len(r) : M.rad(X, r));
+    for (const c of cons) {
+      if (!M.ok(c.a) || (c.b && !M.ok(c.b))) continue;
+      switch (c.type) {
+        case 'fix': { const a = P(c.a); out.push(a[0] - c.value[0], a[1] - c.value[1]); break; }
+        case 'drag': { const a = P(c.a); out.push((a[0] - c.value[0]) * 0.5, (a[1] - c.value[1]) * 0.5); break; }
+        case 'coincident': { const a = P(c.a), b = P(c.b); out.push(a[0] - b[0], a[1] - b[1]); break; }
+        case 'horizontal': { const [a, b] = Ln(c.a); out.push(a[1] - b[1]); break; }
+        case 'vertical': { const [a, b] = Ln(c.a); out.push(a[0] - b[0]); break; }
+        case 'parallel': { const u = dir(c.a), v = dir(c.b); out.push((u[0] * v[1] - u[1] * v[0]) / (len(c.a) * len(c.b)) * Lc); break; }
+        case 'perpendicular': { const u = dir(c.a), v = dir(c.b); out.push((u[0] * v[0] + u[1] * v[1]) / (len(c.a) * len(c.b)) * Lc); break; }
+        case 'equal': out.push(size(c.a) - size(c.b)); break;
+        case 'tangent': {
+          const [a, b] = Ln(c.a), C = P({ e: c.b.e, p: 'c' }), d = dir(c.a), l = len(c.a);
+          out.push(Math.abs((C[0] - a[0]) * d[1] - (C[1] - a[1]) * d[0]) / l - M.rad(X, c.b)); void b; break;
+        }
+        case 'onLine': { const q = P(c.a), [a] = Ln(c.b), d = dir(c.b); out.push(((q[0] - a[0]) * d[1] - (q[1] - a[1]) * d[0]) / len(c.b)); break; }
+        case 'length': case 'distance': case 'radius': case 'diameter': out.push(measure(M, X, c) - c.value); break;
+        case 'hdist': case 'vdist': {
+          const a = P(c.a), b = P(c.b), k = c.type === 'hdist' ? 0 : 1, sgn = c.sign || Math.sign(b[k] - a[k]) || 1;
+          out.push((b[k] - a[k]) * sgn - c.value); break;
+        }
+        case 'angle': {
+          const u = dir(c.a), v = dir(c.b), ang = Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]);
+          const want = c.value * Math.PI / 180 * (c.sign || Math.sign(ang) || 1);
+          let d = ang - want; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+          out.push(d * Lc); break;
+        }
+      }
+    }
+    return out;
+  }
+  function rankOf(J, m, n, tol) {
+    const A = J.map(r => r.slice());
+    let rank = 0;
+    for (let col = 0; col < n && rank < m; col++) {
+      let piv = rank, best = Math.abs(A[rank] ? A[rank][col] : 0);
+      for (let r = rank + 1; r < m; r++) if (Math.abs(A[r][col]) > best) { best = Math.abs(A[r][col]); piv = r; }
+      if (best < tol) continue;
+      [A[rank], A[piv]] = [A[piv], A[rank]];
+      for (let r = rank + 1; r < m; r++) { const f = A[r][col] / A[rank][col]; if (f) for (let c = col; c < n; c++) A[r][c] -= f * A[rank][c]; }
+      rank++;
+    }
+    return rank;
+  }
+  function solveLinear(A, b) {                             // dense Gaussian elimination with partial pivoting
+    const n = b.length, M = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let piv = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      const d = M[c][c] || 1e-30;
+      for (let r = c + 1; r < n; r++) { const f = M[r][c] / d; if (f) for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) { let v = M[r][n]; for (let k = r + 1; k < n; k++) v -= M[r][k] * x[k]; x[r] = v / (M[r][r] || 1e-30); }
+    return x;
+  }
+  // solve a sketch's constraints; opt.drag = { ref, to: [u, v] } pulls a point while solving
+  function solveSketch(sk, opt) {
+    const o = opt || {}, ents = sk.entities || [], M = sketchModel(ents);
+    const cons = (sk.constraints || []).slice();
+    if (o.drag) cons.push({ type: 'drag', a: o.drag.ref, value: o.drag.to });
+    let X = M.x0.slice();
+    const n = M.n;
+    let span = 1;
+    for (let i = 0; i < n; i++) span = Math.max(span, Math.abs(X[i]));
+    const Lc = Math.max(10, span), F = Y => residuals(M, Y, cons, Lc);
+    const jac = (Y, r0) => {
+      const J = r0.map(() => new Array(n).fill(0));
+      for (let j = 0; j < n; j++) {
+        const h = 1e-6 * Math.max(1, Math.abs(Y[j])), Yp = Y.slice(); Yp[j] += h;
+        const r = F(Yp);
+        for (let i = 0; i < r0.length; i++) J[i][j] = (r[i] - r0[i]) / h;
+      }
+      return J;
+    };
+    let r = F(X), nr = Math.hypot(...r, 0), lam = 1e-3, it = 0;
+    while (nr > 1e-10 && it++ < 100 && n) {
+      const J = jac(X, r), A = [], g = [];
+      for (let a = 0; a < n; a++) {
+        A.push(new Array(n).fill(0)); let s_ = 0;
+        for (let i = 0; i < r.length; i++) s_ += J[i][a] * r[i];
+        g.push(-s_);
+        for (let b = 0; b <= a; b++) { let t = 0; for (let i = 0; i < r.length; i++) t += J[i][a] * J[i][b]; A[a][b] = A[b][a] = t; }
+      }
+      let improved = false;
+      for (let tries = 0; tries < 8 && !improved; tries++) {
+        const Al = A.map((row, i) => row.map((v, j) => (i === j ? v * (1 + lam) + lam * 1e-6 : v)));
+        const d = solveLinear(Al, g), Y = X.map((v, i) => v + d[i]), rY = F(Y), nY = Math.hypot(...rY, 0);
+        if (nY < nr) { X = Y; r = rY; nr = nY; lam = Math.max(1e-9, lam / 4); improved = true; } else lam *= 6;
+      }
+      if (!improved) break;
+    }
+    // degrees of freedom left, from the real constraints only (not the drag)
+    const real = (sk.constraints || []);
+    const rr = residuals(M, X, real, Lc);
+    let dof = n;
+    if (rr.length) { const J = (() => { const Jt = rr.map(() => new Array(n).fill(0)); for (let j = 0; j < n; j++) { const h = 1e-6 * Math.max(1, Math.abs(X[j])), Yp = X.slice(); Yp[j] += h; const r2 = residuals(M, Yp, real, Lc); for (let i = 0; i < rr.length; i++) Jt[i][j] = (r2[i] - rr[i]) / h; } return Jt; })();
+      dof = n - rankOf(J, rr.length, n, 1e-7); }
+    const res = Math.hypot(...rr, 0);
+    return { entities: M.write(X), residual: res, ok: res < 1e-6 * Lc, dof, conflict: res >= 1e-6 * Lc };
+  }
+  // the value a new dimension constraint starts from
+  function measureConstraint(sk, c) { const M = sketchModel(sk.entities || []); return measure(M, M.x0, c); }
+  // what to call a reference, for lists
+  function refLabel(sk, r) {
+    if (!r) return '?';
+    if (r.origin) return 'origin';
+    const e = (sk.entities || [])[r.e], nm = e ? ({ poly: e.open ? 'Path' : 'Polyline', rect: 'Rectangle', circle: 'Circle' }[e.type] || e.type) + ' ' + (r.e + 1) : '?';
+    if (r.l !== undefined) return nm + ' edge ' + (r.l + 1);
+    if (r.p !== undefined) return nm + (r.p === 'c' ? ' centre' : e && e.type === 'rect' ? ' corner ' + (r.p + 1) : ' point ' + (r.p + 1));
+    return nm;
+  }
+  // constraints left after deleting entity k (references above k shift down)
+  function dropEntityConstraints(cons, k) {
+    const touch = r => r && !r.origin && r.e === k, shift = r => (r && !r.origin && r.e > k ? { ...r, e: r.e - 1 } : r);
+    return (cons || []).filter(c => !touch(c.a) && !touch(c.b)).map(c => ({ ...c, a: shift(c.a), b: shift(c.b) }));
+  }
+  // SolidWorks-style inference while drawing: nearly horizontal / vertical edges get H / V
+  function inferHV(e, k, tolDeg) {
+    const out = [], tol = Math.tan((tolDeg || 3) * Math.PI / 180);
+    if (e.type !== 'poly') return out;
+    const n = e.pts.length, m = e.open ? n - 1 : n;
+    for (let i = 0; i < m; i++) {
+      const a = e.pts[i], b = e.pts[(i + 1) % n], dx = Math.abs(b[0] - a[0]), dy = Math.abs(b[1] - a[1]);
+      if (dx > 1e-9 && dy <= tol * dx) out.push({ type: 'horizontal', a: { e: k, l: i } });
+      else if (dy > 1e-9 && dx <= tol * dy) out.push({ type: 'vertical', a: { e: k, l: i } });
+    }
+    return out;
   }
 
   // ----------------------------------------------------------- editing
@@ -675,7 +1360,8 @@
   }
   function defaultName(model, type) {
     const base = { sketch: 'Sketch', extrude: 'Extrude', revolve: 'Revolve', box: 'Box', cylinder: 'Cylinder', sphere: 'Sphere',
-      hole: 'Hole', lpattern: 'LPattern', cpattern: 'CirPattern', mirror: 'Mirror', stl: 'Imported' }[type] || type;
+      hole: 'Hole', lpattern: 'LPattern', cpattern: 'CirPattern', mirror: 'Mirror', stl: 'Imported', loft: 'Loft', sweep: 'Sweep',
+      fillet: 'Fillet', chamfer: 'Chamfer', shell: 'Shell' }[type] || type;
     const n = (model.features || []).filter(f => f.type === type).length + 1;
     return base + n;
   }
@@ -730,6 +1416,11 @@
       case 'lpattern': return { id, type, name, src: c.src || (lastSolid && lastSolid.id), dir: '+x', count: 3, spacing: 30 };
       case 'cpattern': return { id, type, name, src: c.src || (lastSolid && lastSolid.id), axis: '+y', cx: mid[0], cy: mid[1], cz: mid[2], count: 4, angle: 360 };
       case 'mirror': return { id, type, name, src: c.src || (lastSolid && lastSolid.id), plane: 'YZ', offset: bb[0][0] };
+      case 'fillet': return { id, type, name, r: 5, edges: c.edges || [] };
+      case 'chamfer': return { id, type, name, r: 3, edges: c.edges || [] };
+      case 'shell': return { id, type, name, t: 3, open: c.open || [] };
+      case 'loft': return { id, type, name, op: c.op || 'boss', sketch: c.sketch, sketch2: c.sketch2 };
+      case 'sweep': return { id, type, name, op: c.op || 'boss', sketch: c.sketch, path: c.path };
       default: return { id, type, name };
     }
   }
@@ -753,6 +1444,11 @@
         N('count', 'Instances', 1, 2, 360, ''), N('angle', 'Total angle', 15, 1, 360, '°')];
       case 'mirror': return [{ kind: 'feature', key: 'src', label: 'Feature' }, C('plane', 'Mirror plane', [['YZ', 'x = offset'], ['XZ', 'y = offset'], ['XY', 'z = offset']]), N('offset', 'Offset', 5)];
       case 'stl': return [op, N('scale', 'Scale', 0.1, 0.0001, 1e4, '×'), N('tx', 'Move x', 5), N('ty', 'Move y', 5), N('tz', 'Move z', 5)];
+      case 'fillet': return [N('r', 'Radius', 1, 0.01), { kind: 'edges', key: 'edges', label: 'Edges' }];
+      case 'chamfer': return [N('r', 'Distance', 1, 0.01), { kind: 'edges', key: 'edges', label: 'Edges' }];
+      case 'shell': return [N('t', 'Wall thickness', 0.5, 0.01), { kind: 'faces', key: 'open', label: 'Faces to remove (openings)' }];
+      case 'loft': return [op, { kind: 'sketch', key: 'sketch', label: 'From profile' }, { kind: 'sketch', key: 'sketch2', label: 'To profile' }];
+      case 'sweep': return [op, { kind: 'sketch', key: 'sketch', label: 'Profile' }, { kind: 'sketch', key: 'path', label: 'Path (open polyline)' }];
       default: return [];
     }
   }
@@ -775,6 +1471,7 @@
     if (f.type === 'sphere') out.push({ key: 'r', label: 'R ' + fmt(f.r), at: [f.x, f.y + f.r, f.z] });
     if (f.type === 'hole') out.push({ key: 'd', label: 'Ø' + fmt(f.d), at: [f.x, f.y, f.z] });
     if (f.type === 'lpattern') out.push({ key: 'spacing', label: fmt(f.spacing) + ' × ' + f.count, at: null });
+
     return out;
   }
   const fmt = v => String(+(+v).toFixed(3));
@@ -832,7 +1529,8 @@
     blank: { label: 'Blank part', make: () => ({ name: 'part1', features: [], studies: [] }) }
   };
 
-  const api = { PLANES, AXES, FEATURE_INFO, TEMPLATES, compile, voxelize, compileProfile, inside2D, segDist, entityLoop,
+  const api = { PLANES, AXES, FEATURE_INFO, TEMPLATES, compile, voxelize, compileProfile, inside2D, segDist, entityLoop, pathPoints, edgeBlend, edt3,
+    CONSTRAINTS, solveSketch, measureConstraint, refLabel, dropEntityConstraints, inferHV, sketchModel,
     parseSTL, b64, unb64, moveSegment, segValue, featureDefaults, featureFields, featureDims, nextId, defaultName, dirVec,
     sketchFrame, bracket, modelExtent };
   void seq;
