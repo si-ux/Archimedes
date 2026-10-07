@@ -906,6 +906,176 @@ function buildLevel(vox) {
   return { nx, ny, nz, dx, dy, dz, NX, NY, NZ, solid, nid, ni, nj, nk, px, py, pz, en, ecell, ne, nn, geff,
     org: vox.org.slice(), clamped: vox.clamped };
 }
+// ---- body-fitted mesh: general (isoparametric) hex8 where skin nodes moved -------
+// reference derivatives of the 8 trilinear shape functions at (xi, eta, zeta)
+function dShape(xi, et, ze, out) {
+  for (let n = 0; n < 8; n++) {
+    const a = CORN[n][0] * 2 - 1, b = CORN[n][1] * 2 - 1, c = CORN[n][2] * 2 - 1;
+    out[n*3] = 0.125 * a * (1 + b * et) * (1 + c * ze);
+    out[n*3 + 1] = 0.125 * b * (1 + a * xi) * (1 + c * ze);
+    out[n*3 + 2] = 0.125 * c * (1 + a * xi) * (1 + b * et);
+  }
+}
+// physical shape-function gradients g (24) of element coordinates X (24) at a point; returns det J
+function physGrad(X, xi, et, ze, dN, g) {
+  dShape(xi, et, ze, dN);
+  let j00 = 0, j01 = 0, j02 = 0, j10 = 0, j11 = 0, j12 = 0, j20 = 0, j21 = 0, j22 = 0;
+  for (let n = 0; n < 8; n++) {
+    const a = dN[n*3], b = dN[n*3 + 1], c = dN[n*3 + 2], x = X[n*3], y = X[n*3 + 1], z = X[n*3 + 2];
+    j00 += a * x; j01 += a * y; j02 += a * z; j10 += b * x; j11 += b * y; j12 += b * z; j20 += c * x; j21 += c * y; j22 += c * z;
+  }
+  const det = j00 * (j11 * j22 - j12 * j21) - j01 * (j10 * j22 - j12 * j20) + j02 * (j10 * j21 - j11 * j20);
+  const id = 1 / det;
+  const i00 = (j11 * j22 - j12 * j21) * id, i01 = (j02 * j21 - j01 * j22) * id, i02 = (j01 * j12 - j02 * j11) * id;
+  const i10 = (j12 * j20 - j10 * j22) * id, i11 = (j00 * j22 - j02 * j20) * id, i12 = (j02 * j10 - j00 * j12) * id;
+  const i20 = (j10 * j21 - j11 * j20) * id, i21 = (j01 * j20 - j00 * j21) * id, i22 = (j00 * j11 - j01 * j10) * id;
+  for (let n = 0; n < 8; n++) {
+    const a = dN[n*3], b = dN[n*3 + 1], c = dN[n*3 + 2];
+    g[n*3] = i00 * a + i01 * b + i02 * c;
+    g[n*3 + 1] = i10 * a + i11 * b + i12 * c;
+    g[n*3 + 2] = i20 * a + i21 * b + i22 * c;
+  }
+  return det;
+}
+function elemCoords(L, e, X) {
+  for (let a = 0; a < 8; a++) { const n = L.en[e*8 + a]; X[a*3] = L.px[n]; X[a*3 + 1] = L.py[n]; X[a*3 + 2] = L.pz[n]; }
+}
+// stiffness of a general hex (2x2x2 Gauss) into Ke at offset off
+function hexKeGeneral(X, lam, mu, Ke, off) {
+  const dN = new Float64Array(24), gr = new Float64Array(24);
+  for (const xi of [-GP, GP]) for (const et of [-GP, GP]) for (const ze of [-GP, GP]) {
+    const det = physGrad(X, xi, et, ze, dN, gr);
+    for (let i = 0; i < 8; i++) {
+      const ix = gr[i*3], iy = gr[i*3+1], iz = gr[i*3+2];
+      for (let j = 0; j < 8; j++) {
+        const jx = gr[j*3], jy = gr[j*3+1], jz = gr[j*3+2], dot = ix*jx + iy*jy + iz*jz, r0 = off + (i*3) * 24 + j*3;
+        Ke[r0]      += ((lam + mu) * ix*jx + mu * dot) * det;
+        Ke[r0 + 1]  += (lam * ix*jy + mu * iy*jx) * det;
+        Ke[r0 + 2]  += (lam * ix*jz + mu * iz*jx) * det;
+        Ke[r0 + 24] += (lam * iy*jx + mu * ix*jy) * det;
+        Ke[r0 + 25] += ((lam + mu) * iy*jy + mu * dot) * det;
+        Ke[r0 + 26] += (lam * iy*jz + mu * iz*jy) * det;
+        Ke[r0 + 48] += (lam * iz*jx + mu * ix*jz) * det;
+        Ke[r0 + 49] += (lam * iz*jy + mu * iy*jz) * det;
+        Ke[r0 + 50] += ((lam + mu) * iz*jz + mu * dot) * det;
+      }
+    }
+  }
+}
+// Snap the voxel skin onto the CAD surfaces (cadkernel project()), so curved and
+// oblique faces are smooth instead of stepped. Elements that would invert or
+// collapse keep their voxel nodes. Moved elements become general hexes: their
+// volume and ∫∇N dV are stored here; their stiffness at solve time.
+function fitMesh(L, cm) {
+  const bf = meshBoundary(L, cm), nn = L.nn, h = Math.max(L.dx, L.dy, L.dz), o = L.org;
+  const N = new Float64Array(nn * 3), skin = new Uint8Array(nn);
+  for (const b of bf) { const D = HEX_DIRS[b.d]; for (const n of b.nodes) { N[3*n] += D[0]; N[3*n+1] += D[1]; N[3*n+2] += D[2]; skin[n] = 1; } }
+  const ox = Float64Array.from(L.px), oy = Float64Array.from(L.py), oz = Float64Array.from(L.pz), moved = new Uint8Array(nn), key = [];
+  for (let n = 0; n < nn; n++) {
+    if (!skin[n]) continue;
+    const l = Math.hypot(N[3*n], N[3*n+1], N[3*n+2]);
+    if (l < 1e-9) continue;
+    N[3*n] /= l; N[3*n+1] /= l; N[3*n+2] /= l;
+    const info = {}, q = cm.project([L.px[n] + o[0], L.py[n] + o[1], L.pz[n] + o[2]], [N[3*n], N[3*n+1], N[3*n+2]], h, info);
+    if (!q) continue;
+    L.px[n] = q[0] - o[0]; L.py[n] = q[1] - o[1]; L.pz[n] = q[2] - o[2]; moved[n] = 1; key[n] = info.key;
+  }
+  let nProj = 0, nSkin = 0; for (let n = 0; n < nn; n++) { nProj += moved[n]; nSkin += skin[n]; }
+  // Even out the snapped nodes along their surface: a staircase lands on a curve
+  // in clumps. Each node moves toward the mean of its skin neighbours on the same
+  // surface (or the same edge, for nodes on two), and is projected back.
+  const nb = new Map();
+  for (const b of bf) for (let m = 0; m < 4; m++) {
+    const a = b.nodes[m], c = b.nodes[(m + 1) % 4];
+    if (!moved[a] || !moved[c] || key[a] !== key[c]) continue;
+    (nb.get(a) || nb.set(a, new Set()).get(a)).add(c); (nb.get(c) || nb.set(c, new Set()).get(c)).add(a);
+  }
+  for (let it = 0; it < 4; it++) {
+    for (const [n, set] of nb) {
+      if (set.size < 2 || key[n].includes(',') && set.size > 2) continue;
+      let x = 0, y = 0, z = 0;
+      for (const m of set) { x += L.px[m]; y += L.py[m]; z += L.pz[m]; }
+      const k = 0.5 / set.size, t = [L.px[n] * 0.5 + x * k + o[0], L.py[n] * 0.5 + y * k + o[1], L.pz[n] * 0.5 + z * k + o[2]];
+      const info = {}, q = cm.project(t, [N[3*n], N[3*n+1], N[3*n+2]], h, info);
+      if (!q || info.key !== key[n] || Math.hypot(q[0] - o[0] - ox[n], q[1] - o[1] - oy[n], q[2] - o[2] - oz[n]) > 0.85 * h) continue;
+      L.px[n] = q[0] - o[0]; L.py[n] = q[1] - o[1]; L.pz[n] = q[2] - o[2];
+    }
+  }
+  const X = new Float64Array(24), dN = new Float64Array(24), g = new Float64Array(24), V0 = L.dx * L.dy * L.dz;
+  const touched = e => { for (let a = 0; a < 8; a++) if (moved[L.en[e*8 + a]]) return true; return false; };
+  // An element is acceptable when every Gauss point has a healthy Jacobian and no
+  // corner is inverted: a stair corner snapped onto a curve flattens into a
+  // collapsed (wedge-like) hex, which 2x2x2 integration handles fine. Offending
+  // nodes are pulled back halfway toward the voxel lattice, then reverted.
+  const pull = new Uint8Array(nn), GPS = [-GP, GP];
+  // bit k set: corner k (or the Gauss point next to it) is unhealthy
+  const faults = e => {
+    elemCoords(L, e, X);
+    let m = 0;
+    CORN.forEach((c, k) => {
+      const a = c[0] * 2 - 1, b = c[1] * 2 - 1, d = c[2] * 2 - 1;
+      if (physGrad(X, a, b, d, dN, g) < -0.02 * V0 / 8 || physGrad(X, a * GP, b * GP, d * GP, dN, g) < 0.15 * V0 / 8) m |= 1 << k;
+    });
+    return m;
+  };
+  const back = (n, full) => {
+    if (full || ++pull[n] >= 3) { L.px[n] = ox[n]; L.py[n] = oy[n]; L.pz[n] = oz[n]; moved[n] = 0; return; }
+    L.px[n] = (L.px[n] + ox[n]) / 2; L.py[n] = (L.py[n] + oy[n]) / 2; L.pz[n] = (L.pz[n] + oz[n]) / 2;
+  };
+  // relax only the nodes at the failing corners (all moved nodes when those did not move),
+  // then, if anything is still unhealthy, revert those elements outright
+  for (let pass = 0; pass < 16; pass++) {
+    let bad = 0;
+    const full = pass >= 12;
+    for (let e = 0; e < L.ne; e++) {
+      if (!touched(e)) continue;
+      const m = faults(e);
+      if (!m) continue;
+      bad++;
+      let hit = false;
+      if (!full) for (let k = 0; k < 8; k++) if (m & (1 << k) && moved[L.en[e*8 + k]]) { back(L.en[e*8 + k], false); hit = true; }
+      if (!hit) for (let k = 0; k < 8; k++) { const n = L.en[e*8 + k]; if (moved[n]) back(n, full); }
+    }
+    if (!bad) break;
+  }
+  const distIdx = new Int32Array(L.ne).fill(-1), vol = new Float64Array(L.ne).fill(V0), list = [];
+  let minSJ = 1;
+  for (let e = 0; e < L.ne; e++) if (touched(e)) { distIdx[e] = list.length; list.push(e); }
+  const gint = new Float64Array(list.length * 24);
+  list.forEach((e, k) => {
+    elemCoords(L, e, X);
+    let V = 0;
+    for (const xi of [-GP, GP]) for (const et of [-GP, GP]) for (const ze of [-GP, GP]) {
+      const det = physGrad(X, xi, et, ze, dN, g);
+      V += det;
+      for (let i = 0; i < 24; i++) gint[k * 24 + i] += g[i] * det;
+    }
+    vol[e] = V;
+    for (const xi of GPS) for (const et of GPS) for (const ze of GPS)   // scaled Jacobian at the Gauss points
+      minSJ = Math.min(minSJ, physGrad(X, xi, et, ze, dN, g) / (V0 / 8));
+  });
+  // skin faces: true centres, areas and outward normals
+  for (const b of bf) {
+    const P = b.nodes.map(n => [L.px[n], L.py[n], L.pz[n]]), D = HEX_DIRS[b.d];
+    b.c = [0, 1, 2].map(i => (P[0][i] + P[1][i] + P[2][i] + P[3][i]) / 4);
+    const d1 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]], d2 = [P[3][0] - P[1][0], P[3][1] - P[1][1], P[3][2] - P[1][2]];
+    let an = [0.5 * (d1[1] * d2[2] - d1[2] * d2[1]), 0.5 * (d1[2] * d2[0] - d1[0] * d2[2]), 0.5 * (d1[0] * d2[1] - d1[1] * d2[0])];
+    if (an[0] * D[0] + an[1] * D[1] + an[2] * D[2] < 0) an = an.map(v => -v);
+    b.an = an; b.area = Math.hypot(an[0], an[1], an[2]);
+  }
+  let nm = 0; for (let n = 0; n < nn; n++) nm += moved[n];
+  L.fitStats = { skin: nSkin, projected: nProj, kept: nm };
+  Object.assign(L, { distIdx: list.length ? distIdx : null, distList: list, vol, gint, fitted: nm, minSJ: list.length ? minSJ : 1, keFor: null });
+  return L;
+}
+// stiffness of the moved elements for a material (cached on the mesh)
+function prepareElements(L, E, nu) {
+  if (!L.distIdx || L.keFor === E + '|' + nu) return;
+  const { lam, mu } = lame(E, nu), X = new Float64Array(24), store = new Float64Array(L.distList.length * 576);
+  L.distList.forEach((e, k) => { elemCoords(L, e, X); hexKeGeneral(X, lam, mu, store, k * 576); });
+  L.keStore = store; L.keFor = E + '|' + nu;
+}
+
 // The exposed element faces of a mesh, each named by the CAD kernel (the
 // nearest feature surface): what supports, loads and selection work on.
 // Cached on the mesh; `cm` is the compiled part the mesh was built from.
@@ -972,7 +1142,7 @@ function buildLoads(L, cm, studies, p, mat) {
   const nd = L.nn * 3;
   const free = new Uint8Array(nd).fill(1);
   const f = new Float64Array(nd);
-  const tag = { fixed: 0, faces: {}, loaded: 0 };
+  const tag = { fixed: 0, faces: {}, loaded: 0, contact: 0 };
   const bf = meshBoundary(L, cm);
   for (const s of studies || []) {
     if (s.suppressed) continue;
@@ -985,7 +1155,12 @@ function buildLoads(L, cm, studies, p, mat) {
         free[3*n] = free[3*n + 1] = free[3*n + 2] = 0;
       }
     } else if (s.type === 'roller') {                    // normal displacement held, free to slide
-      for (const b of faces) { const ax = b.d >> 1; for (const n of b.nodes) { if (free[3*n + ax]) tag.fixed++; free[3*n + ax] = 0; } }
+      for (const b of faces) {                           // the dominant direction of the face's real normal
+        const an = b.an || HEX_DIRS[b.d], ax = Math.abs(an[0]) >= Math.abs(an[1]) && Math.abs(an[0]) >= Math.abs(an[2]) ? 0 : Math.abs(an[1]) >= Math.abs(an[2]) ? 1 : 2;
+        for (const n of b.nodes) { if (free[3*n + ax]) tag.fixed++; free[3*n + ax] = 0; }
+      }
+    } else if (s.type === 'contact') {                   // compression only: the Python core handles it
+      tag.contact += faces.length;
     } else if (s.type === 'force') {                     // total force, shared by area
       const F = s.F || [0, 0, 0];
       let A = 0; for (const b of faces) A += b.area;
@@ -997,24 +1172,31 @@ function buildLoads(L, cm, studies, p, mat) {
     } else if (s.type === 'pressure') {                  // normal pressure, positive pushes into the part
       const P = s.P || 0;
       for (const b of faces) {
-        const D = HEX_DIRS[b.d], q = P * b.area / 4;
-        for (const n of b.nodes) { f[3*n] -= D[0] * q; f[3*n + 1] -= D[1] * q; f[3*n + 2] -= D[2] * q; }
+        const an = b.an || HEX_DIRS[b.d].map(v => v * b.area), q = P / 4;   // area vector: |A| along the outward normal
+        for (const n of b.nodes) { f[3*n] -= an[0] * q; f[3*n + 1] -= an[1] * q; f[3*n + 2] -= an[2] * q; }
       }
       tag.loaded += faces.length;
     }
   }
   // self weight (−y)
   if (p.grav) {
-    const wn = mat.rho * p.mScale * 1e-12 * GRAV * L.dx * L.dy * L.dz / 8;
-    for (let e = 0; e < L.ne; e++)
+    const w0 = mat.rho * p.mScale * 1e-12 * GRAV / 8;
+    for (let e = 0; e < L.ne; e++) {
+      const wn = w0 * (L.vol ? L.vol[e] : L.dx * L.dy * L.dz);
       for (let m = 0; m < 8; m++) f[3 * L.en[e*8 + m] + 1] -= wn;
+    }
   }
   // uniform temperature offset from the stress-free reference
   if (p.therm && p.dT !== 0) {
-    const fth = hexThermal(L.dx, L.dy, L.dz, mat.E, mat.nu, mat.alpha, p.dT);
-    for (let e = 0; e < L.ne; e++) for (let m = 0; m < 8; m++) {
-      const n3 = L.en[e*8 + m] * 3;
-      f[n3] += fth[m*3]; f[n3 + 1] += fth[m*3 + 1]; f[n3 + 2] += fth[m*3 + 2];
+    const fth = hexThermal(L.dx, L.dy, L.dz, mat.E, mat.nu, mat.alpha, p.dT), lm = lame(mat.E, mat.nu);
+    const kth = (3 * lm.lam + 2 * lm.mu) * mat.alpha * p.dT;
+    for (let e = 0; e < L.ne; e++) {
+      const k = L.distIdx ? L.distIdx[e] : -1;
+      for (let m = 0; m < 8; m++) {
+        const n3 = L.en[e*8 + m] * 3;
+        if (k >= 0) { f[n3] += kth * L.gint[k*24 + m*3]; f[n3 + 1] += kth * L.gint[k*24 + m*3 + 1]; f[n3 + 2] += kth * L.gint[k*24 + m*3 + 2]; }
+        else { f[n3] += fth[m*3]; f[n3 + 1] += fth[m*3 + 1]; f[n3 + 2] += fth[m*3 + 2]; }
+      }
     }
   }
   const fext = Float64Array.from(f);
@@ -1025,7 +1207,7 @@ function buildLoads(L, cm, studies, p, mat) {
 // matrix-free K·u restricted to the free subspace
 function applyK(L, Ke, free, u, out) {
   out.fill(0);
-  const en = L.en, ne = L.ne;
+  const en = L.en, ne = L.ne, di = L.distIdx, store = L.keStore;
   const ue = new Float64Array(24), fe = new Float64Array(24);
   for (let e = 0; e < ne; e++) {
     const o = e * 8;
@@ -1033,9 +1215,10 @@ function applyK(L, Ke, free, u, out) {
       const n3 = en[o + a] * 3, a3 = a * 3;
       ue[a3] = u[n3]; ue[a3 + 1] = u[n3 + 1]; ue[a3 + 2] = u[n3 + 2];
     }
+    const k = di ? di[e] : -1, A = k >= 0 ? store : Ke, off = k >= 0 ? k * 576 : 0;
     for (let i = 0; i < 24; i++) {
-      let s = 0; const r = i * 24;
-      for (let j = 0; j < 24; j++) s += Ke[r + j] * ue[j];
+      let s = 0; const r = off + i * 24;
+      for (let j = 0; j < 24; j++) s += A[r + j] * ue[j];
       fe[i] = s;
     }
     for (let a = 0; a < 8; a++) {
@@ -1046,12 +1229,15 @@ function applyK(L, Ke, free, u, out) {
   if (free) for (let i = 0; i < out.length; i++) if (!free[i]) out[i] = 0;
 }
 function diagOf(L, Ke, free) {
-  const d = new Float64Array(L.nn * 3);
-  for (let e = 0; e < L.ne; e++) for (let a = 0; a < 8; a++) {
-    const n3 = L.en[e*8 + a] * 3, a3 = a * 3;
-    d[n3]     += Ke[(a3) * 24 + a3];
-    d[n3 + 1] += Ke[(a3 + 1) * 24 + a3 + 1];
-    d[n3 + 2] += Ke[(a3 + 2) * 24 + a3 + 2];
+  const d = new Float64Array(L.nn * 3), di = L.distIdx;
+  for (let e = 0; e < L.ne; e++) {
+    const k = di ? di[e] : -1, A = k >= 0 ? L.keStore : Ke, off = k >= 0 ? k * 576 : 0;
+    for (let a = 0; a < 8; a++) {
+      const n3 = L.en[e*8 + a] * 3, a3 = a * 3;
+      d[n3]     += A[off + (a3) * 24 + a3];
+      d[n3 + 1] += A[off + (a3 + 1) * 24 + a3 + 1];
+      d[n3 + 2] += A[off + (a3 + 2) * 24 + a3 + 2];
+    }
   }
   for (let i = 0; i < d.length; i++) if (!free[i] || d[i] <= 0) d[i] = 1;
   return d;
@@ -1122,6 +1308,8 @@ function recover(L, u, mat, dT, want) {
   const V = L.dx * L.dy * L.dz;
   for (let n = 0; n < nn; n++)
     umag[n] = Math.hypot(u[3*n], u[3*n + 1], u[3*n + 2]);
+  const Xe = new Float64Array(24), dNe = new Float64Array(24);
+  const grD = Array.from({ length: 8 }, () => new Float64Array(24)), ggD = Array.from({ length: 8 }, () => new Float64Array(24)), detD = new Float64Array(8);
   if (want.s || want.e) {
     for (let e = 0; e < L.ne; e++) {
       const o = e * 8;
@@ -1129,8 +1317,18 @@ function recover(L, u, mat, dT, want) {
         const n3 = L.en[o + a] * 3, a3 = a * 3;
         ue[a3] = u[n3]; ue[a3 + 1] = u[n3 + 1]; ue[a3 + 2] = u[n3 + 2];
       }
+      const moved = L.distIdx && L.distIdx[e] >= 0;
+      if (moved) {                                       // a body-fitted element: its own gradients
+        elemCoords(L, e, Xe);
+        for (let c = 0; c < 8; c++) {
+          const a_ = CORN[c][0]*2 - 1, b_ = CORN[c][1]*2 - 1, d_ = CORN[c][2]*2 - 1;
+          const dc = physGrad(Xe, a_, b_, d_, dNe, grD[c]);
+          detD[c] = physGrad(Xe, a_*GP, b_*GP, d_*GP, dNe, ggD[c]);
+          if (dc < 0.25 * V / 8) grD[c].set(ggD[c]);     // a collapsed corner: sample its Gauss point instead
+        }
+      }
       for (let c = 0; c < 8; c++) {
-        const G = gr[c];
+        const G = moved ? grD[c] : gr[c];
         let ex = 0, ey = 0, ez = 0, gxy = 0, gyz = 0, gzx = 0;
         for (let a = 0; a < 8; a++) {
           const ax = G[a*3], ay = G[a*3 + 1], az = G[a*3 + 2];
@@ -1154,7 +1352,7 @@ function recover(L, u, mat, dT, want) {
       // corner sampling over-integrates a quadratic density, so the reported
       // total comes off the 2x2x2 rule, which is exact for this element
       for (let q = 0; q < 8; q++) {
-        const G = gg[q];
+        const G = moved ? ggD[q] : gg[q], wq = moved ? detD[q] : V / 8;
         let ex = 0, ey = 0, ez = 0, gxy = 0, gyz = 0, gzx = 0;
         for (let a = 0; a < 8; a++) {
           const ax = G[a*3], ay = G[a*3 + 1], az = G[a*3 + 2];
@@ -1164,7 +1362,7 @@ function recover(L, u, mat, dT, want) {
         }
         const mx = ex - eth, my = ey - eth, mz = ez - eth, tr = mx + my + mz;
         seTot += 0.5 * ((lam*tr + 2*mu*mx)*mx + (lam*tr + 2*mu*my)*my + (lam*tr + 2*mu*mz)*mz
-          + mu * (gxy*gxy + gyz*gyz + gzx*gzx)) * V / 8;
+          + mu * (gxy*gxy + gyz*gyz + gzx*gzx)) * wq;
       }
     }
     for (let n = 0; n < nn; n++) {
@@ -1189,10 +1387,13 @@ function recover(L, u, mat, dT, want) {
 function* eigenModes(L, Ke, free, mat, mScale, nModes, tol, report) {
   const nd = L.nn * 3;
   const M = new Float64Array(nd);
-  const mn = mat.rho * mScale * 1e-12 * L.dx * L.dy * L.dz / 8;
-  for (let e = 0; e < L.ne; e++) for (let a = 0; a < 8; a++) {
-    const n3 = L.en[e*8 + a] * 3;
-    M[n3] += mn; M[n3 + 1] += mn; M[n3 + 2] += mn;
+  const m0 = mat.rho * mScale * 1e-12 / 8;
+  for (let e = 0; e < L.ne; e++) {
+    const mn = m0 * (L.vol ? L.vol[e] : L.dx * L.dy * L.dz);
+    for (let a = 0; a < 8; a++) {
+      const n3 = L.en[e*8 + a] * 3;
+      M[n3] += mn; M[n3 + 1] += mn; M[n3 + 2] += mn;
+    }
   }
   for (let i = 0; i < nd; i++) if (!free[i]) M[i] = 0;
   const modes = [], rhs = new Float64Array(nd), kx = new Float64Array(nd);
@@ -1302,14 +1503,14 @@ class Component extends DCLogic {
     stats: null, quality: null, times: null, wall: 0, modes: null,
     // CAD interaction: face selection, Modify box, PropertyManager, menus
     selCad: null, selSet: [], dimEdit: null, featEdit: null, ctxMenu: null, viewMenu: false, ctxBar: null,
-    mouseMode: 'solidworks', undoN: 0, redoN: 0, grav: true, customMat: null,
+    mouseMode: 'solidworks', undoN: 0, redoN: 0, grav: true, customMat: null, meshFit: true, analysis: 'static', pyCore: null,
     // the part: an ordered feature list (cadkernel.js) and its study (supports and loads on named faces)
     part: CADK.TEMPLATES.bracket.make(),
-    sketchTool: 'select', sketchGrid: 5, sketchFillet: 5, sketchSel: null, insertOpen: false,
+    sketchTool: 'select', sketchGrid: 5, sketchFillet: 5, sketchSel: null, insertOpen: false, skRefs: [], skCon: null,
     nums: {
       mTemp: 22, mScale: 1,
       hSize: 6, hSub: 2, hAspect: 1, hBudget: 24,
-      sTol: 6, sIncr: 12, sMaxIt: 4000
+      sTol: 6, sIncr: 12, sMaxIt: 4000, nModes: 3
     }
   };
 
@@ -1334,7 +1535,9 @@ class Component extends DCLogic {
   componentDidMount() {
     this.frames = 0; this.fpsT = performance.now(); this.lastProbe = 0;
     window.__workbench = this;                         // handle for scripted checks
+    try { if (localStorage.getItem('archimedes-grid') === '0') this.setState({ gridOn: false }); } catch (e) { /* private mode */ }
     this.syncModel();
+    this.probePyCore();
     if (/[?&]tour\b/.test(location.search)) this.setState({ gestureOn: true });   // camera-free gesture tour
     // served by the gesture modeller: a way back to it. Both pages open in named
     // tabs, so switching keeps each one's state instead of reloading it.
@@ -1365,7 +1568,11 @@ class Component extends DCLogic {
       if (e.button === 1) e.preventDefault();            // no autoscroll
       if (this.state.ctxMenu || this.state.viewMenu) this.setState({ ctxMenu: null, viewMenu: false });
       if (e.button === 0 && this.gizmoClick(mx, my)) return;   // view cube swallows the press
-      if (e.button === 0 && this.sketchFeat() && !e.altKey) { this.sketchDown(mx, my, e); this.setCursor(); return; }
+      if (e.button === 0 && this.sketchFeat() && !e.altKey) {
+        const hit = (this.skDimHits || []).find(h => mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h);
+        if (hit) { this.setState({ skCon: hit.i }); this.openDimEdit({ skdim: hit.i }, mx, my); return; }
+        this.sketchDown(mx, my, e); this.setCursor(); return;
+      }
       if (e.button === 0 && this.state.stage === 1 && this.handleAt(mx, my)) { this.beginHandleDrag(mx, my); this.setCursor(); return; }
       if (e.button === 0 && this.overDim) { this.openDimEdit(this.overDim.target, mx, my); return; }
       if (e.button === 0 && this.state.shade === 'nodes') {
@@ -1420,7 +1627,7 @@ class Component extends DCLogic {
     this.onCtx = e => e.preventDefault();               // our own menu replaces the browser's
     this.onDbl = e => {
       const r = c.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      if (this.sketchFeat()) { if (this.state.sketchTool === 'line') this.finishPoly(); return; }
+      if (this.sketchFeat()) { if (this.state.sketchTool === 'line' || this.state.sketchTool === 'path') this.finishPoly(); return; }
       const f = this.pickFace(mx, my), F = f && this.faceInfo(f.cad);
       if (F && F.drag) { this.setState({ selCad: f.cad, selSet: [f.cad] }); this.openDimEdit({ face: f.cad }, mx, my); }
       else if (F && F.feat) this.editFeature(F.feat);
@@ -1446,6 +1653,7 @@ class Component extends DCLogic {
       if (mod && k === 'k') { e.preventDefault(); this.setState({ palOpen: !this.state.palOpen, palQuery: '', palIdx: 0, menu: null }); return; }
       if (e.key === 'Escape') {
         if (this.skPts) { this.skPts = null; return; }
+        if (this.sketchFeat() && (this.state.skRefs.length || this.state.skCon !== null)) { this.setState({ skRefs: [], skCon: null }); return; }
         if (this.sketchFeat() && this.state.sketchTool !== 'select') { this.setState({ sketchTool: 'select' }); return; }
         if (this.state.dimEdit) this.dimCancel();
         else if (this.state.featEdit) this.featureCancel();
@@ -1472,7 +1680,7 @@ class Component extends DCLogic {
       if (mod && e.key === '8') { e.preventDefault(); this.normalTo(); return; }
       if (e.key === ' ' && !mod) { e.preventDefault(); this.setState({ viewMenu: !this.state.viewMenu, ctxMenu: null }); return; }
       if (k === 'f' && !mod) { this.zoomFit(); return; }
-      if (e.key === 'Enter' && this.skPts && this.state.sketchTool === 'line') { this.finishPoly(); return; }
+      if (e.key === 'Enter' && this.skPts && (this.state.sketchTool === 'line' || this.state.sketchTool === 'path')) { this.finishPoly(); return; }
       if (e.key === 'Enter' && this.state.featEdit) { this.featureOk(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.sketchFeat()) { this.sketchDelete(); return; }
@@ -1481,7 +1689,7 @@ class Component extends DCLogic {
         if (sl && sl.startsWith('s:')) { this.deleteStudy(sl.slice(2)); return; }
       }
       if (this.sketchFeat() && !mod) {
-        const tool = { s: 'select', l: 'line', r: 'rect', c: 'circle' }[k];
+        const tool = { s: 'select', l: 'line', r: 'rect', c: 'circle', p: 'path' }[k];
         if (tool) { this.skPts = null; this.setState({ sketchTool: tool }); return; }
       }
       if (e.key.startsWith('Arrow')) {
@@ -1565,13 +1773,13 @@ class Component extends DCLogic {
   modelSig() {
     const s = this.state, n = s.nums;
     if (s.part.features !== this._fref) { this._fref = s.part.features; this._fver = (this._fver || 0) + 1; }
-    return [this._fver, n.hSize, n.hAspect, n.hBudget, n.hSub, this.cadDrag ? 'fast' : ''].join('|');
+    return [this._fver, n.hSize, n.hAspect, n.hBudget, n.hSub, s.meshFit, this.cadDrag ? 'fast' : ''].join('|');
   }
   inputSig() {
     const n = this.state.nums, s = this.state;
     if (s.part.studies !== this._sref) { this._sref = s.part.studies; this._sver = (this._sver || 0) + 1; }
     return [this.modelSig().replace(/\|fast$/, '|'), s.material, JSON.stringify(s.customMat), n.mTemp, n.mScale, s.grav, this._sver,
-      n.sTol, n.sMaxIt, JSON.stringify(s.outputs)].join('|');
+      n.sTol, n.sMaxIt, JSON.stringify(s.outputs), s.analysis, s.analysis === 'static' ? '' : n.nModes + ',' + n.sIncr].join('|');
   }
   // rebuild the display mesh when the part changes; invalidate stale results
   syncModel() {
@@ -1582,6 +1790,7 @@ class Component extends DCLogic {
       const prevOrg = this.mesh && this.mesh.org;
       this.mesh = buildLevel(CADK.voxelize(cm, this.meshOpts(!!this.cadDrag)));
       meshBoundary(this.mesh, cm);
+      if (this.state.meshFit && !this.cadDrag) fitMesh(this.mesh, cm);
       this.rebuildMs = performance.now() - t0;
       // drawing works in the mesh's local frame (origin at the part's bounding-box
       // corner); when that corner moves, shift the view centre with it so nothing jumps
@@ -1672,6 +1881,21 @@ class Component extends DCLogic {
     if (vox.clamped) this.pushLog('geom', 'element size raised to ' + sig(vox.dx)
       + ' mm to stay inside the ' + n.hBudget + 'k element budget', 'warn');
     const F = buildLevel(vox);
+    const hasContact = (part.studies || []).some(x => x.type === 'contact' && !x.suppressed);
+    const needPy = st.analysis === 'nonlinear' || st.analysis === 'buckling' || hasContact;
+    const where = this.route(), meshDx = where === 'dolfinx-mesh', usePy = where === 'python';
+    if (needPy && !usePy) {
+      this.pushLog('core', (st.analysis !== 'static' ? st.analysis + ' analysis needs' : 'contact supports need') + ' the Python FE core — '
+        + (st.pyCore ? 'set ENGINE to AUTO or PYTHON (stage 05)' : 'open the Workbench from the webdemo server (make demo)'), 'err');
+      this.job = null; this.setState({ solving: false, stage: 5 }); return;
+    }
+    if (st.engine === 'python' && !st.pyCore) this.pushLog('core', 'Python FE core not reachable — solving in this tab', 'warn');
+    if (st.engine === 'dolfinx' && !meshDx && !needPy) this.pushLog('core', 'DOLFINx core not attached (or no posted-mesh support) — solving ' + (st.pyCore ? 'on the Python core' : 'in this tab'), 'warn');
+    if (st.meshFit) {
+      fitMesh(F, cm);
+      this.pushLog('mesh', 'body-fitted: ' + grp(F.fitted) + ' skin nodes on the CAD surfaces · ' + grp(F.distList.length)
+        + ' general elements · min scaled Jacobian ' + F.minSJ.toFixed(2), 'info');
+    }
     const g = F.geff;
     this.prog.pct = 100; yield;
     if (F.ne === 0) { this.pushLog('geom', 'no solid material — add a boss feature (Insert ▸ Extrude, Box…)', 'err'); this.job = null; this.setState({ solving: false }); return; }
@@ -1683,19 +1907,20 @@ class Component extends DCLogic {
     this.pushLog('mat', mat.name + ' — E ' + sig(mat.E / 1000) + ' GPa · ν ' + mat.nu
       + ' · λ ' + sig(lam / 1000) + ' GPa · μ ' + sig(mu / 1000) + ' GPa', 'info');
     const Kf = hexKe(F.dx, F.dy, F.dz, mat.E, mat.nu);
+    prepareElements(F, mat.E, mat.nu);
     yield;
     mark(1);
 
     // 3 · loads --------------------------------------------------------------
     this.prog = { step: 3, pct: 0 };
-    const p = { grav: st.grav !== false, therm: true, dT: n.mTemp - 22, mScale: n.mScale };
+    const p = { grav: st.grav !== false, therm: !usePy && !meshDx, dT: n.mTemp - 22, mScale: n.mScale };   // the Python core applies ΔT itself
     const S = buildLoads(F, cm, part.studies, p, mat);
     for (const sd of part.studies || []) {
       if (sd.suppressed) continue;
       const k = S.tag.faces[sd.id] || 0;
       this.pushLog('load', sd.name + ' — ' + (k ? grp(k) + ' element faces' : 'no faces: its face no longer exists, reselect it'), k ? 'info' : 'warn');
     }
-    if (S.tag.fixed === 0) {
+    if (S.tag.fixed === 0 && !S.tag.contact) {
       this.pushLog('load', 'no support — add a Fixed or Roller support on a face (stage 03) or the system is singular', 'err');
       this.job = null; this.setState({ solving: false, stage: 3 }); return;
     }
@@ -1713,6 +1938,7 @@ class Component extends DCLogic {
       + 'use a smaller element size (stage 04) for bending accuracy', 'warn');
     yield;
     mark(3);
+    if (usePy || meshDx) { yield* this.serverSolve(F, S, mat, p, times, mark, g, meshDx ? 'dolfinx' : 'python'); return; }
 
     // 5 · solve --------------------------------------------------------------
     this.prog = { step: 5, pct: 0 };
@@ -1749,14 +1975,16 @@ class Component extends DCLogic {
 
     // 7 · optional modal -----------------------------------------------------
     let modes = null;
-    if (want.mode) {
+    if (want.mode || st.analysis === 'modal') {
       // eigen extraction is many solves deep, so it runs on a ~500 element
       // reduction of the same geometry and is prolongated back for display
       const cf = F.ne > 900 ? Math.cbrt(F.ne / 500) : 1;
       const C = cf > 1.05 ? buildLevel(CADK.voxelize(cm, { h: F.dx * cf, aspect: F.dz / F.dx, noBudget: true, sub: n.hSub })) : F;
+      if (C !== F && st.meshFit) { meshBoundary(C, cm); fitMesh(C, cm); }
       const KeC = C === F ? Kf : hexKe(C.dx, C.dy, C.dz, mat.E, mat.nu);
+      prepareElements(C, mat.E, mat.nu);
       const SC = C === F ? S : buildLoads(C, cm, part.studies, p, mat);
-      const nModes = 3;
+      const nModes = st.analysis === 'modal' ? Math.max(1, Math.round(n.nModes || 3)) : 3;
       this.pushLog('modal', 'inverse iteration on ' + grp(C.ne) + ' elements · lumped mass', 'info');
       const hz = [];
       const raw = yield* eigenModes(C, KeC, SC.free, mat, n.mScale, nModes, 1e-5,
@@ -1783,8 +2011,123 @@ class Component extends DCLogic {
     this.recordSolve('in-browser hex8', { elements: F.ne, dof: F.nn * 3, it: kr.it }, R, wall);
     this.setState({
       solving: false, solved: true, solvePct: 100, stagePct: 100, solveStep: 6, stage: 6,
-      times, wall, modes, deform: Math.max(1, Math.min(100, dspl)),
+      times, wall, modes, deform: Math.max(1, Math.min(100, dspl)), timeStep: this.state.nums.sIncr,
       stats: { ne: F.ne, nn: F.nn, dof: F.nn * 3, it: kr.it, res: kr.res, hx: F.dx }
+    });
+  }
+  modeLabel(m) { return m.buckling ? 'λ ' + sig(m.hz) + ' × load' : sig(m.hz) + ' Hz'; }
+  async probePyCore() {
+    if (!/^https?:$/.test(location.protocol)) { this.setState({ pyCore: false }); return; }
+    try {
+      const r = await fetch('/api/fe/info', { cache: 'no-store' });
+      const j = r.ok ? await r.json() : null;
+      this.setState({ pyCore: j && j.ok ? j : false });
+    } catch (e) { this.setState({ pyCore: false }); }
+  }
+  // Solve the body-fitted mesh on the server's Python FE core (archimedes_fe.meshsolver):
+  // sparse direct / AMG, incompatible-mode hex8, plasticity, contact, modal, buckling.
+  *serverSolve(F, S, mat, p, times, mark, g, via) {
+    const st = this.state, n = st.nums, an = st.analysis, part = st.part;
+    this.prog = { step: 5, pct: 0 };
+    const b64 = a => {
+      const u8 = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+      let s = '';
+      for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+      return btoa(s);
+    };
+    const dec = s => { const bin = atob(s), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); };
+    const nodes = new Float32Array(F.nn * 3);
+    for (let q = 0; q < F.nn; q++) { nodes[3*q] = F.px[q]; nodes[3*q+1] = F.py[q]; nodes[3*q+2] = F.pz[q]; }
+    const fixed = [];
+    for (let i = 0; i < S.free.length; i++) if (!S.free[i]) fixed.push(i);
+    // contact: every node of the contact faces with its mean outward normal, grouped by normal
+    const groups = new Map(), bf = F.bf || [], nrm = new Map();
+    for (const sd of part.studies || []) {
+      if (sd.type !== 'contact' || sd.suppressed) continue;
+      const set = new Set(sd.faces || []);
+      for (const b of bf) if (set.has(b.id)) {
+        const an_ = b.an || HEX_DIRS[b.d];
+        for (const q of b.nodes) { const v = nrm.get(q) || [0, 0, 0]; v[0] += an_[0]; v[1] += an_[1]; v[2] += an_[2]; nrm.set(q, v); }
+      }
+    }
+    for (const [q, v] of nrm) {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1, k = v.map(x => (x / l).toFixed(3)).join(',');
+      (groups.get(k) || groups.set(k, []).get(k)).push(q);
+    }
+    const contact = [...groups].map(([k, list]) => ({ nodes: list, normal: k.split(',').map(Number) }));
+    const body = { nodes: b64(nodes), elems: b64(Int32Array.from(F.en.subarray(0, F.ne * 8))), fixed: b64(Int32Array.from(fixed)),
+      f: b64(Float32Array.from(S.fext)), contact, analysis: an, n_modes: Math.max(1, Math.round(n.nModes || 3)), dT: p.dT, steps: Math.max(1, Math.round(n.sIncr)),
+      material: { E: mat.E, nu: mat.nu, rho: mat.rho * p.mScale, alpha: mat.alpha, sy: mat.sy, H: mat.H || mat.E / 100 } };
+    this.pushLog('solve', (via === 'dolfinx' ? 'DOLFINx core (posted mesh)' : 'Python FE core') + ' · ' + an + ' · ' + grp(F.ne) + ' hex8 · ' + grp(F.nn * 3) + ' DOF'
+      + (contact.length ? ' · ' + grp(nrm.size) + ' contact nodes' : ''), 'info');
+    const job = { done: false, res: null, err: null, id: 'mesh-' + Date.now() }, t0 = performance.now();
+    if (via === 'dolfinx') { this.meshJob = job; this.ws.send(JSON.stringify({ op: 'solve_mesh', id: job.id, mesh: body })); }
+    else fetch('/api/fe/solve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(r => r.json().then(j => { if (!r.ok || j.error) job.err = j.error || ('HTTP ' + r.status); else job.res = j; }))
+      .catch(e => { job.err = 'Python FE core unreachable — ' + (e && e.message || e); })
+      .finally(() => { job.done = true; });
+    while (!job.done) {
+      const el = (performance.now() - t0) / 1000;
+      this.prog.pct = 95 * (1 - Math.exp(-el / Math.max(1, F.ne / 4000)));
+      this.prog.note = 'server · ' + el.toFixed(1) + ' s';
+      yield 'wait';                                       // hand the frame back until the reply lands
+    }
+    this.meshJob = null;
+    if (job.err) {
+      this.pushLog('solve', job.err, 'err');
+      this.job = null; this.setState({ solving: false, solved: false, stage: /support/.test(job.err) ? 3 : 5 }); return;
+    }
+    const j = job.res, sx = j.stats || {};
+    this.pushLog('solve', (sx.solver || 'solved') + ' · ' + (sx.element || 'hex8') + ' · ' + sig(sx.time_s || 0) + ' s on the server', 'ok');
+    if (sx.newton_iterations !== undefined) this.pushLog('solve', 'Newton ' + sx.newton_iterations + ' iterations over ' + sx.steps + ' increments'
+      + (sx.step_cuts ? ' · ' + sx.step_cuts + ' step cuts' : ''), 'info');
+    if (j.contact) this.pushLog('solve', 'contact · ' + j.contact.active + ' nodes bearing · ' + j.contact.released + ' lifted off · '
+      + j.contact.iterations + ' active-set solves', 'info');
+    mark(4);
+    this.prog = { step: 6, pct: 0 };
+    yield;
+    const R = { u: Float64Array.from(dec(j.u)), umag: dec(j.umag), vm: dec(j.vm), p1: dec(j.p1), se: j.sed ? dec(j.sed) : null, seTot: j.energy || 0,
+      peq: j.peq ? dec(j.peq) : null, level: F, mat, max: {}, argmax: {}, nonlinear: an === 'nonlinear', solverName: sx.solver || '', engine: via === 'dolfinx' ? j.engine || 'dolfinx' : 'python' };
+    if (j.reaction) { R.rf = j.reaction; R.rfMag = Math.hypot(j.reaction[0], j.reaction[1], j.reaction[2]); }
+    for (const k of ['umag', 'vm', 'p1', 'se', 'peq']) {
+      const a = R[k];
+      if (!a) continue;
+      let mx = 0, am = 0;
+      for (let i = 0; i < a.length; i++) if (a[i] > mx) { mx = a[i]; am = i; }
+      R.max[k] = mx; R.argmax[k] = am;
+    }
+    if (R.rf) this.pushLog('post', 'reaction resultant ' + sig(R.rfMag / 1000) + ' kN at the supports', 'info');
+    this.pushLog('post', 'σ_vm max ' + sig(R.max.vm) + ' MPa · yield ' + mat.sy + ' MPa · SF ' + (R.max.vm > 0 ? sig(mat.sy / R.max.vm) : '∞'), R.max.vm > mat.sy ? 'warn' : 'ok');
+    if (R.peq) this.pushLog('post', 'equivalent plastic strain max ' + sig(R.max.peq || 0) + (R.max.peq > 0 ? '' : ' — stays elastic'), R.max.peq > 0 ? 'warn' : 'ok');
+    this.pushLog('post', '|U| max ' + sig(R.max.umag) + ' mm · strain energy ' + sig(R.seTot) + ' mJ', 'info');
+    const toModes = (list, buckling) => (list || []).map(m => {
+      const phi = Float64Array.from(dec(m.shape));
+      let mx = 0;
+      for (let q = 0; q < F.nn; q++) mx = Math.max(mx, Math.hypot(phi[3*q], phi[3*q+1], phi[3*q+2]));
+      return { phi, hz: buckling ? m.factor : m.f, amp: mx > 0 ? 1 / mx : 1, max: mx, buckling, server: true };
+    });
+    let modes = an === 'buckling' ? toModes(j.buckling, true) : toModes(j.modes, false);
+    modes.forEach((m, i) => this.pushLog(an === 'buckling' ? 'buckle' : 'modal', 'mode ' + (i + 1) + ' — ' + this.modeLabel(m)
+      + (m.buckling ? ' (buckles at ' + sig(m.hz) + '× the applied loads)' : ''), 'ok'));
+    if (!modes.length) modes = null;
+    mark(5);
+    const wall = performance.now() - this.solveT0;
+    this.res = R;
+    this.isig = this.inputSig();
+    this.msig = this.modelSig();
+    this.mesh = F;
+    this.sx = new Float32Array(F.nn); this.sy = new Float32Array(F.nn); this.sz = new Float32Array(F.nn);
+    this.fsig = null;
+    this.job = null;
+    const diag = Math.hypot(g.W, g.H, g.D);
+    const dspl = R.max.umag > 0 ? Math.round(0.06 * diag / R.max.umag) : 12;
+    this.pushLog('core', 'complete in ' + (wall / 1000).toFixed(2) + ' s', 'ok');
+    this.recordSolve(via === 'dolfinx' ? (j.engine || 'dolfinx') + ' mesh' : 'python ' + an, { elements: F.ne, dof: F.nn * 3, it: sx.newton_iterations || 0 }, R, wall);
+    this.setState({
+      solving: false, solved: true, solvePct: 100, stagePct: 100, solveStep: 6, stage: 6,
+      times, wall, modes, deform: Math.max(1, Math.min(100, dspl)), timeStep: this.state.nums.sIncr, modal: !!modes && (an === 'modal' || an === 'buckling'), mode: 1,
+      field: R.peq && R.max.peq > 0 ? 'peq' : st.field,
+      stats: { ne: F.ne, nn: F.nn, dof: F.nn * 3, it: sx.newton_iterations || 0, res: 0, hx: F.dx }
     });
   }
   quality(L, g) {
@@ -1805,7 +2148,28 @@ class Component extends DCLogic {
   }
 
   // ---------- derived display data ----------
-  lf() { return this.state.modal ? (this.modalAmp === undefined ? 1 : this.modalAmp) : this.state.timeStep / Math.max(1, this.state.nums.sIncr); }
+  lf() {
+    if (this.state.modal) return this.modalAmp === undefined ? 1 : this.modalAmp;
+    if (this.res && this.res.nonlinear) return 1;          // a plastic result does not scale with the load
+    const N = Math.max(1, this.state.nums.sIncr);
+    return Math.min(this.state.timeStep, N) / N;
+  }
+  // where the next solve runs: 'dolfinx' (parametric bracket), 'dolfinx-mesh' (posted mesh), 'python' or 'local'
+  route() {
+    const st = this.state;
+    if (this.useRemote()) return 'dolfinx';
+    const hasContact = (st.part.studies || []).some(x => x.type === 'contact' && !x.suppressed);
+    if (st.bridge === 'live' && (st.bridgeCaps || []).includes('solve_mesh') && this.ws && this.ws.readyState === 1
+      && st.analysis === 'static' && !hasContact && (st.engine === 'dolfinx' || (st.engine === 'auto' && !st.pyCore))) return 'dolfinx-mesh';
+    if (st.pyCore && st.engine !== 'local' && st.engine !== 'dolfinx') return 'python';
+    return 'local';
+  }
+  solverLabel() {
+    const R = this.state.solved && this.res;
+    const e = R ? (R.remote ? 'dolfinx' : R.engine === 'python' ? 'python' : R.engine && R.engine !== 'python' ? 'dolfinx-mesh' : 'local') : this.route();
+    if (e === 'python') return R && R.solverName ? (/SuperLU/.test(R.solverName) ? 'SuperLU direct' : /pyamg/.test(R.solverName) ? 'AMG · CG' : 'Python core') : 'Python core';
+    return e === 'local' ? 'PCG · Jacobi' : 'CG · GAMG';
+  }
   activeMode() {
     const m = this.state.modes;
     return m && m.length ? m[Math.min(m.length - 1, this.state.mode - 1)] : null;
@@ -1813,7 +2177,7 @@ class Component extends DCLogic {
   fieldArray() {
     const R = this.res;
     if (!R) return null;
-    const k = { vm: 'vm', u: 'umag', p1: 'p1', en: 'se' }[this.state.field] || 'vm';
+    const k = { vm: 'vm', u: 'umag', p1: 'p1', en: 'se', peq: 'peq' }[this.state.field] || 'vm';
     return R[k] ? { arr: R[k], max: R.max[k], am: R.argmax[k], key: k } : null;
   }
   // per-node normalised colour value for the current field / step
@@ -2018,7 +2382,7 @@ class Component extends DCLogic {
       this.frames = 0; this.fpsT = now;
       if (fps !== this.state.fps) this.setState({ fps });
     }
-    this.tickSolve(now);
+    this.tickSolve(28);                                 // ms of solver work per frame
     this.tickModal(now);
     this.tickGesture(now);
     const c = this.cam, t = this.tgt, k = 0.14;
@@ -2038,7 +2402,7 @@ class Component extends DCLogic {
     const ms = budget || 9;
     let r;
     try {
-      do { r = this.job.next(); } while (!r.done && performance.now() - t0 < ms);
+      do { r = this.job.next(); } while (!r.done && r.value !== 'wait' && performance.now() - t0 < ms);
     } catch (err) {
       console.error(err);
       this.job = null;
@@ -2241,21 +2605,52 @@ class Component extends DCLogic {
     sg.addColorStop(0, 'rgba(0,0,0,.6)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.284); ctx.fill(); ctx.restore();
   }
+  // Ground grid on the plane under the part (its lowest y), centred on its
+  // footprint and aligned to whole world millimetres, fading towards the edge.
+  // Lines are clipped at the camera's near plane, so nothing behind the eye is
+  // projected (that is what produced stray diagonal lines).
   drawGrid(ctx, st) {
-    const g = this.g, S = Math.max(g.W, g.D);
-    const step = niceStep(S / 5), k = st.arOn ? 1.5 : 1;
-    const lo = -Math.ceil(S * 0.7 / step) * step, hi = Math.ceil((S + S * 0.7) / step) * step;
+    const g = this.g, o = this.mesh ? this.mesh.org : [0, 0, 0];
+    const R = Math.max(g.W, g.D, g.H * 0.5) * 0.9 + 1;
+    const step = niceStep(R / 6), k = st.arOn ? 1.5 : 1, near = 2.5;
+    const cx = g.W / 2, cz = g.D / 2;                     // footprint centre, local
+    const wx0 = Math.floor((o[0] + cx - R) / step) * step, wx1 = Math.ceil((o[0] + cx + R) / step) * step;
+    const wz0 = Math.floor((o[2] + cz - R) / step) * step, wz1 = Math.ceil((o[2] + cz + R) / step) * step;
+    const col = st.arOn ? '230,201,138' : '140,175,200';
     ctx.lineWidth = 1;
-    const line = (a, b, alpha) => {
-      ctx.strokeStyle = st.arOn ? 'rgba(230,201,138,' + alpha * k + ')' : 'rgba(140,175,200,' + alpha * k + ')';
-      const p = this.proj(a), q = this.proj(b);
+    const seg = (a, b, alpha, rgb) => {
+      let p = this.proj(a), q = this.proj(b);
+      if (p[2] < near && q[2] < near) return;
+      if (p[2] < near || q[2] < near) {                    // depth is affine along the line: cut it at the near plane
+        const t = (near - p[2]) / (q[2] - p[2]), m = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        if (p[2] < near) p = this.proj(m); else q = this.proj(m);
+      }
+      ctx.strokeStyle = 'rgba(' + (rgb || col) + ',' + alpha * k + ')';
       ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
     };
-    for (let v = lo, i = 0; v <= hi + 1e-6; v += step, i++) {
-      const alpha = Math.abs(v) < 1e-6 ? 0.26 : i % 5 === 0 ? 0.10 : 0.04;
-      line([v, 0, lo], [v, 0, hi], alpha);
-      line([lo, 0, v], [hi, 0, v], alpha);
-    }
+    // each line is drawn in pieces so its alpha can fall off with distance from the centre
+    const PIECES = 8;
+    const run = (fixed, axis, a0, a1, base, rgb) => {
+      for (let i = 0; i < PIECES; i++) {
+        const u0 = a0 + (a1 - a0) * i / PIECES, u1 = a0 + (a1 - a0) * (i + 1) / PIECES, um = (u0 + u1) / 2;
+        const P = axis === 'x' ? [um - o[0], 0, fixed - o[2]] : [fixed - o[0], 0, um - o[2]];
+        const r = Math.hypot(P[0] - cx, P[2] - cz) / R, fade = Math.max(0, 1 - r * r);
+        if (fade <= 0.02) continue;
+        const A = axis === 'x' ? [u0 - o[0], 0, fixed - o[2]] : [fixed - o[0], 0, u0 - o[2]];
+        const B = axis === 'x' ? [u1 - o[0], 0, fixed - o[2]] : [fixed - o[0], 0, u1 - o[2]];
+        seg(A, B, base * fade, rgb);
+      }
+    };
+    const major = v => Math.abs(Math.round(v / step) % 5) === 0;
+    for (let z = wz0; z <= wz1 + 1e-6; z += step)
+      run(z, 'x', wx0, wx1, Math.abs(z) < 1e-6 ? 0.45 : major(z) ? 0.13 : 0.055, Math.abs(z) < 1e-6 ? '255,107,129' : null);   // world x axis in red
+    for (let x = wx0; x <= wx1 + 1e-6; x += step)
+      run(x, 'z', wz0, wz1, Math.abs(x) < 1e-6 ? 0.45 : major(x) ? 0.13 : 0.055, Math.abs(x) < 1e-6 ? '94,207,224' : null);   // world z axis in cyan
+  }
+  toggleGrid() {
+    const on = this.state.gridOn === false;
+    try { localStorage.setItem('archimedes-grid', on ? '1' : '0'); } catch (e) { /* private mode */ }
+    this.setState({ gridOn: on, ctxMenu: null });
   }
   drawAxes(ctx, W, H) {
     const o = [W - 54, H - 52], L = 24;
@@ -2452,7 +2847,7 @@ class Component extends DCLogic {
     const L = this.mesh, bf = L && L.bf, studies = this.state.part.studies || [];
     if (!bf) return;
     const g = this.g, len = 0.09 * Math.max(g.W, g.H, g.D), cf = this.cv('force'), cs = this.cv('stress');
-    const col = { fixed: '#7ee787', roller: '#b9e37a', force: '#ff6b81', pressure: '#ffa23a' };
+    const col = { fixed: '#7ee787', roller: '#b9e37a', contact: '#c4a7ff', force: '#ff6b81', pressure: '#ffa23a' };
     ctx.font = "500 10px 'IBM Plex Mono'";
     for (const s of studies) {
       if (s.suppressed) continue;
@@ -2463,10 +2858,11 @@ class Component extends DCLogic {
       const Fn = s.F ? Math.hypot(s.F[0], s.F[1], s.F[2]) : 0;
       for (let i = 0; i < faces.length; i += stride) {
         const b = faces[i], D = HEX_DIRS[b.d], c = b.c;
-        if (s.type === 'fixed' || s.type === 'roller') {
+        if (s.type === 'fixed' || s.type === 'roller' || s.type === 'contact') {
           const a = this.proj(c), q = this.proj([c[0] + D[0] * len * 0.35, c[1] + D[1] * len * 0.35, c[2] + D[2] * len * 0.35]);
           ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
           if (s.type === 'roller') { ctx.beginPath(); ctx.arc(q[0], q[1], 2.5, 0, 6.284); ctx.stroke(); }
+          else if (s.type === 'contact') { ctx.beginPath(); ctx.moveTo(q[0] - 4, q[1]); ctx.lineTo(q[0] + 4, q[1]); ctx.moveTo(q[0] - 3, q[1] + 3); ctx.lineTo(q[0] + 3, q[1] + 3); ctx.stroke(); }
           else { ctx.beginPath(); ctx.moveTo(q[0] - 3, q[1] - 3); ctx.lineTo(q[0] + 3, q[1] + 3); ctx.stroke(); }
         } else {
           const dir = s.type === 'force' ? (Fn > 0 ? s.F.map(v => v / Fn) : [0, 0, 0]) : D.map(v => -v * Math.sign(s.P || 1));
@@ -2548,7 +2944,8 @@ class Component extends DCLogic {
       vm: { label: 'Von Mises stress', short: 'σ_vm', key: 'vm',   unit: s[0], conv: s[1], need: 's' },
       u:  { label: 'Displacement mag.', short: '|U|', key: 'umag', unit: c[0], conv: c[1], need: 'u' },
       p1: { label: 'Max principal',     short: 'σ₁',  key: 'p1',   unit: s[0], conv: s[1], need: 's' },
-      en: { label: 'Strain energy dens.', short: 'SED', key: 'se', unit: 'mJ/mm³', conv: 1, need: 'e' }
+      en: { label: 'Strain energy dens.', short: 'SED', key: 'se', unit: 'mJ/mm³', conv: 1, need: 'e' },
+      peq: { label: 'Equivalent plastic strain', short: 'PEEQ', key: 'peq', unit: '—', conv: 1, need: 's' }
     };
     const out = {};
     for (const k in raw) {
@@ -2585,7 +2982,7 @@ class Component extends DCLogic {
   }
   feat(id) { return this.state.part.features.find(f => f.id === id) || null; }
   featLabel(f) { return f ? (f.name || f.id) : ''; }
-  consumersOf(id) { return this.state.part.features.filter(f => f.sketch === id || f.src === id); }
+  consumersOf(id) { return this.state.part.features.filter(f => f.sketch === id || f.sketch2 === id || f.path === id || f.src === id); }
   // faces lit because their feature is selected in the tree (or being edited)
   featureFaces() {
     const st = this.state;
@@ -2602,7 +2999,7 @@ class Component extends DCLogic {
   studyTints() {
     const studies = this.state.part.studies;
     if (this._tintFor === studies) return this._tints;
-    const col = { fixed: [80, 200, 120], roller: [150, 220, 120], force: [255, 107, 129], pressure: [255, 162, 58] }, m = new Map();
+    const col = { fixed: [80, 200, 120], roller: [150, 220, 120], contact: [196, 167, 255], force: [255, 107, 129], pressure: [255, 162, 58] }, m = new Map();
     for (const s of studies || []) if (!s.suppressed) for (const id of s.faces || []) m.set(id, col[s.type] || [200, 200, 200]);
     this._tintFor = studies; this._tints = m;
     return m;
@@ -2769,6 +3166,16 @@ class Component extends DCLogic {
   // ---- Modify box -------------------------------------------------------------
   // target: { face } (the face's driving value) or { feat, key } (a feature parameter)
   modifyTarget(t) {
+    if (t.skdim !== undefined) {
+      const sk = this.sketchFeat(), c = sk && (sk.constraints || [])[t.skdim];
+      if (!c) return null;
+      return { name: (CADK.CONSTRAINTS[c.type] || {}).label.toUpperCase(), ref: this.featLabel(sk) + ' · ' + CADK.refLabel(sk, c.a), value: c.value,
+        apply: (part, v) => {
+          const sk0 = part.features.find(f => f.id === sk.id), cons = sk0.constraints.map((x, j) => (j === t.skdim ? { ...x, value: v } : x));
+          const sol = CADK.solveSketch({ ...sk0, constraints: cons });
+          return this.withFeature(part, sk.id, f => ({ ...f, constraints: cons, entities: sol.entities }));
+        } };
+    }
     if (t.face) {
       const dv = this.dragValue(t.face);
       return dv ? { name: dv.label.toUpperCase(), ref: dv.ref, value: dv.value, apply: (p, v) => dv.apply(p, v) } : null;
@@ -2907,7 +3314,22 @@ class Component extends DCLogic {
       if (free) o.sketch = free.id;
       else { this.insertFeature('sketch', { pending: type, op: o.op }); return; }
     }
-    const ctx = { bbox: cm.empty ? [[0, 0, 0], [100, 100, 100]] : cm.bbox, sketch: o.sketch, op: o.op,
+    const freeSketches = part.features.filter(f => f.type === 'sketch' && !this.consumersOf(f.id).length);
+    if (type === 'fillet' || type === 'chamfer') o.edges = this.edgesFromSelection();
+    if (type === 'shell') o.open = st.selSet.length ? st.selSet.slice() : st.selCad ? [st.selCad] : [];
+    if (type === 'loft') {
+      const closed = freeSketches.filter(f => f.entities.some(e => !e.open));
+      const pair = closed.slice(-2);
+      if (pair.length === 2) { o.sketch = pair[0].id; o.sketch2 = pair[1].id; }
+      else this.pushLog('geom', 'a loft needs two sketches on parallel planes (e.g. Front at two offsets) — pick them in the panel', 'warn');
+    }
+    if (type === 'sweep') {
+      const path = freeSketches.filter(f => f.entities.some(e => e.open)).slice(-1)[0];
+      const prof = freeSketches.filter(f => f !== path && f.entities.some(e => !e.open)).slice(-1)[0];
+      if (path) o.path = path.id; if (prof) o.sketch = prof.id;
+      if (!path || !prof) this.pushLog('geom', 'a sweep needs a profile sketch and a path sketch (Path tool) — pick them in the panel', 'warn');
+    }
+    const ctx = { bbox: cm.empty ? [[0, 0, 0], [100, 100, 100]] : cm.bbox, sketch: o.sketch, sketch2: o.sketch2, path: o.path, op: o.op, edges: o.edges, open: o.open,
       plane: selPlane ? selPlane.plane : 'XY', offset: selPlane ? selPlane.offset : 0,
       src: selFeat && CADK.FEATURE_INFO[selFeat.type].solid ? selFeat.id : undefined };
     const f = CADK.featureDefaults(type, part, ctx);
@@ -3019,7 +3441,7 @@ class Component extends DCLogic {
     const st = this.state, faces = st.selSet.length ? st.selSet.slice() : st.selCad ? [st.selCad] : [];
     if (!faces.length) { this.pushLog('load', 'select one or more faces first (click, Ctrl+click to add)', 'warn'); return; }
     const studies = st.part.studies || [], n = studies.filter(s => s.type === type).length + 1;
-    const label = { fixed: 'Fixed', roller: 'Roller', force: 'Force', pressure: 'Pressure' }[type];
+    const label = { fixed: 'Fixed', roller: 'Roller', contact: 'Contact', force: 'Force', pressure: 'Pressure' }[type];
     const first = this.faceInfo(faces[0]);
     const s = { id: type + Date.now().toString(36), type, name: label + '-' + n + (first ? ' · ' + first.name.split(' · ').slice(-1)[0] : ''), faces };
     if (type === 'force') {
@@ -3041,6 +3463,9 @@ class Component extends DCLogic {
   }
 
   // ---- sketcher -----------------------------------------------------------------
+  // Tools draw entities; Select picks points, edges and circles (Shift adds) and
+  // drags points through the constraint solver; relations and driving dimensions
+  // come from the selection. Every change re-solves the sketch.
   sketchFeat() {
     const e = this.state.featEdit;
     const f = e && this.feat(e.id);
@@ -3076,60 +3501,92 @@ class Component extends DCLogic {
     }
     return best;
   }
-  // draggable points: poly vertices, rectangle corners, circle centres and radius points
+  // points with their constraint reference: poly vertices, rectangle corners, circle centres (+ radius handles)
   sketchPoints(sk) {
     const out = [];
     sk.entities.forEach((e, k) => {
-      if (e.type === 'poly') e.pts.forEach((p, i) => out.push({ k, kind: 'v', i, u: p[0], v: p[1] }));
-      if (e.type === 'rect') [[e.x, e.y], [e.x + e.w, e.y], [e.x + e.w, e.y + e.h], [e.x, e.y + e.h]].forEach((p, i) => out.push({ k, kind: 'c', i, u: p[0], v: p[1] }));
-      if (e.type === 'circle') { out.push({ k, kind: 'o', u: e.cx, v: e.cy }); out.push({ k, kind: 'r', u: e.cx + e.r, v: e.cy }); }
+      if (e.type === 'poly') e.pts.forEach((p, i) => out.push({ k, kind: 'v', i, u: p[0], v: p[1], ref: { e: k, p: i } }));
+      if (e.type === 'rect') [[e.x, e.y], [e.x + e.w, e.y], [e.x + e.w, e.y + e.h], [e.x, e.y + e.h]].forEach((p, i) => out.push({ k, kind: 'c', i, u: p[0], v: p[1], ref: { e: k, p: i } }));
+      if (e.type === 'circle') { out.push({ k, kind: 'o', u: e.cx, v: e.cy, ref: { e: k, p: 'c' } }); out.push({ k, kind: 'r', u: e.cx + e.r, v: e.cy, ref: null }); }
     });
     return out;
   }
-  setSketch(sk, entities) {
-    this.setState({ part: this.withFeature(this.state.part, sk.id, f => ({ ...f, entities })) });
+  // apply entities (and constraints), solving the constraints first
+  setSketch(sk, entities, constraints, drag) {
+    const cons = constraints || sk.constraints || [];
+    const sol = cons.length || drag ? CADK.solveSketch({ ...sk, entities, constraints: cons }, drag ? { drag } : undefined) : null;
+    const ents = sol ? sol.entities : entities;
+    this.skStatus = sol ? sol : { dof: null, ok: true };
+    this.setState({ part: this.withFeature(this.state.part, sk.id, f => ({ ...f, entities: ents, constraints: cons })) });
+  }
+  sketchRefAt(sk, mx, my) {
+    for (const p of this.sketchPoints(sk)) {
+      if (!p.ref) continue;
+      const s = this.sketchToScreen(sk, p.u, p.v);
+      if ((s[0] - mx) ** 2 + (s[1] - my) ** 2 < 81) return p.ref;
+    }
+    let best = null, bd = 49;
+    sk.entities.forEach((e, k) => {
+      for (const seg of CADK.entityLoop(e, k)) {
+        const pts = this.segPoints(seg).map(p => this.sketchToScreen(sk, p[0], p[1]));
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy || 1;
+          const t = Math.max(0, Math.min(1, ((mx - a[0]) * vx + (my - a[1]) * vy) / l2));
+          const d = (a[0] + vx * t - mx) ** 2 + (a[1] + vy * t - my) ** 2;
+          if (d < bd) { bd = d; best = e.type === 'circle' ? { e: k } : seg.t === 'line' ? { e: k, l: seg.edge } : null; }
+        }
+      }
+    });
+    return best;
   }
   sketchDown(mx, my, e) {
     const sk = this.sketchFeat(), st = this.state, uvRaw = this.screenToSketch(mx, my, sk);
     if (!uvRaw) return;
     const uv = this.sketchSnap(sk, uvRaw, mx, my), tool = st.sketchTool, ents = sk.entities;
-    if (tool === 'select' || tool === 'fillet') {
+    if (tool === 'select') {
+      const ref = this.sketchRefAt(sk, mx, my);
+      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      let refs = e.shiftKey || e.ctrlKey ? st.skRefs.slice() : [];
+      if (ref) { const i = refs.findIndex(r => same(r, ref)); if (i >= 0 && (e.shiftKey || e.ctrlKey)) refs.splice(i, 1); else if (i < 0) refs.push(ref); }
+      this.setState({ skRefs: refs, sketchSel: ref ? ref.e : null, skCon: null });
+      // grab a point (or a circle's radius handle) to drag it
       let hit = null, bd = 100;
       for (const p of this.sketchPoints(sk)) {
         const s = this.sketchToScreen(sk, p.u, p.v), d = (s[0] - mx) ** 2 + (s[1] - my) ** 2;
         if (d < bd) { bd = d; hit = p; }
       }
-      if (tool === 'fillet') {
-        const r = st.sketchFillet;
-        if (hit && hit.kind === 'v') {
-          const en = ents[hit.k], fl = (en.fillets || en.pts.map(() => 0)).slice();
-          fl[hit.i] = fl[hit.i] === r ? 0 : r;
-          this.setSketch(sk, ents.map((x, i) => (i === hit.k ? { ...x, fillets: fl } : x)));
-        } else {
-          const k = hit ? hit.k : this.sketchEntityAt(sk, mx, my);
-          if (k !== null && ents[k].type === 'rect') this.setSketch(sk, ents.map((x, i) => (i === k ? { ...x, r: x.r === r ? 0 : r } : x)));
-        }
-        return;
-      }
-      if (hit) { this.skDrag = { ...hit }; this.setState({ sketchSel: hit.k }); return; }
-      this.setState({ sketchSel: this.sketchEntityAt(sk, mx, my) });
+      if (hit) this.skDrag = { ...hit };
       return;
     }
-    if (tool === 'line') {
+    if (tool === 'fillet') {
+      const r = st.sketchFillet;
+      let hit = null, bd = 100;
+      for (const p of this.sketchPoints(sk)) { const s = this.sketchToScreen(sk, p.u, p.v), d = (s[0] - mx) ** 2 + (s[1] - my) ** 2; if (d < bd) { bd = d; hit = p; } }
+      if (hit && hit.kind === 'v') {
+        const en = ents[hit.k], fl = (en.fillets || en.pts.map(() => 0)).slice();
+        fl[hit.i] = fl[hit.i] === r ? 0 : r;
+        this.pushUndo(); this.setSketch(sk, ents.map((x, i) => (i === hit.k ? { ...x, fillets: fl } : x)));
+      } else {
+        const ref = this.sketchRefAt(sk, mx, my), k = hit ? hit.k : ref ? ref.e : null;
+        if (k !== null && ents[k].type === 'rect') { this.pushUndo(); this.setSketch(sk, ents.map((x, i) => (i === k ? { ...x, r: x.r === r ? 0 : r } : x))); }
+      }
+      return;
+    }
+    if (tool === 'line' || tool === 'path') {
       const pts = this.skPts || [];
-      if (pts.length >= 3) {
+      if (tool === 'line' && pts.length >= 3) {
         const s0 = this.sketchToScreen(sk, pts[0][0], pts[0][1]);
         if ((s0[0] - mx) ** 2 + (s0[1] - my) ** 2 < 100) { this.finishPoly(); return; }
       }
       const last = pts[pts.length - 1];
       if (!last || last[0] !== uv[0] || last[1] !== uv[1]) this.skPts = pts.concat([uv]);
-      this.forceUpdate && this.forceUpdate();
       return;
     }
     if (tool === 'rect' || tool === 'circle') {
       if (!this.skPts) { this.skPts = [uv]; return; }
       const a = this.skPts[0];
       this.skPts = null;
+      this.pushUndo();
       if (tool === 'rect') {
         if (a[0] === uv[0] || a[1] === uv[1]) return;
         this.setSketch(sk, ents.concat([{ type: 'rect', x: Math.min(a[0], uv[0]), y: Math.min(a[1], uv[1]), w: Math.abs(uv[0] - a[0]), h: Math.abs(uv[1] - a[1]), r: 0 }]));
@@ -3141,12 +3598,17 @@ class Component extends DCLogic {
       this.setState({ sketchSel: ents.length });
     }
   }
+  // close the polyline (Line tool) or end the open path (Path tool); infers H / V on near-axis edges
   finishPoly() {
-    const sk = this.sketchFeat(), pts = this.skPts;
+    const sk = this.sketchFeat(), pts = this.skPts, open = this.state.sketchTool === 'path';
     this.skPts = null;
-    if (!sk || !pts || pts.length < 3) return false;
-    this.setSketch(sk, sk.entities.concat([{ type: 'poly', pts, fillets: pts.map(() => 0) }]));
-    this.setState({ sketchSel: sk.entities.length });
+    if (!sk || !pts || pts.length < (open ? 2 : 3)) return false;
+    const e = { type: 'poly', pts, fillets: pts.map(() => 0) };
+    if (open) e.open = true;
+    const k = sk.entities.length, inf = CADK.inferHV(e, k, 3);
+    this.pushUndo();
+    this.setSketch(sk, sk.entities.concat([e]), (sk.constraints || []).concat(inf));
+    this.setState({ sketchSel: k });
     return true;
   }
   sketchMove(mx, my) {
@@ -3155,19 +3617,13 @@ class Component extends DCLogic {
     this.skCursor = uvRaw ? this.sketchSnap(sk, uvRaw, mx, my) : null;
     const d = this.skDrag;
     if (d && this.skCursor) {
-      const [u, v] = this.skCursor, ents = sk.entities.map(x => ({ ...x }));
-      const e = ents[d.k];
-      if (d.kind === 'v') { e.pts = e.pts.slice(); e.pts[d.i] = [u, v]; }
-      else if (d.kind === 'o') { e.cx = u; e.cy = v; }
-      else if (d.kind === 'r') e.r = Math.max(0.01, Math.hypot(u - e.cx, v - e.cy));
-      else if (d.kind === 'c') {
-        const xs = [e.x, e.x + e.w], ys = [e.y, e.y + e.h];
-        const fx = d.i === 0 || d.i === 3 ? 1 : 0, fy = d.i <= 1 ? 1 : 0;   // the opposite corner stays
-        const ox = xs[fx], oy = ys[fy];
-        e.x = Math.min(ox, u); e.y = Math.min(oy, v); e.w = Math.abs(u - ox); e.h = Math.abs(v - oy);
-      }
+      const [u, v] = this.skCursor;
       if (!d.moved) { d.moved = true; d.snap = this.snapshot(); }
-      this.setSketch(sk, ents);
+      if (d.ref) this.setSketch(sk, sk.entities, sk.constraints || [], { ref: d.ref, to: [u, v] });
+      else {                                               // a circle's radius handle
+        const ents = sk.entities.map((x, i) => (i === d.k ? { ...x, r: Math.max(0.01, Math.hypot(u - x.cx, v - x.cy)) } : x));
+        this.setSketch(sk, ents);
+      }
     }
     let hov = false;
     if (!d && this.state.sketchTool === 'select')
@@ -3176,21 +3632,7 @@ class Component extends DCLogic {
     this.setCursor();
   }
   sketchUp() { this.skDrag = null; }
-  sketchEntityAt(sk, mx, my) {
-    let best = null, bd = 64;
-    sk.entities.forEach((e, k) => {
-      for (const seg of CADK.entityLoop(e, k)) {
-        const pts = this.segPoints(seg).map(p => this.sketchToScreen(sk, p[0], p[1]));
-        for (let i = 1; i < pts.length; i++) {
-          const a = pts[i - 1], b = pts[i], vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy || 1;
-          const t = Math.max(0, Math.min(1, ((mx - a[0]) * vx + (my - a[1]) * vy) / l2));
-          const d = (a[0] + vx * t - mx) ** 2 + (a[1] + vy * t - my) ** 2;
-          if (d < bd) { bd = d; best = k; }
-        }
-      }
-    });
-    return best;
-  }
+  sketchEntityAt(sk, mx, my) { const r = this.sketchRefAt(sk, mx, my); return r && !r.origin ? r.e : null; }
   segPoints(seg) {
     if (seg.t === 'line') return [seg.a, seg.b];
     const m = Math.max(4, Math.ceil(Math.abs(seg.sw) / (Math.PI / 24))), out = [];
@@ -3198,10 +3640,61 @@ class Component extends DCLogic {
     return out;
   }
   sketchDelete() {
-    const sk = this.sketchFeat(), k = this.state.sketchSel;
-    if (!sk || k === null || k === undefined || !sk.entities[k]) return;
-    this.setSketch(sk, sk.entities.filter((e, i) => i !== k));
-    this.setState({ sketchSel: null });
+    const sk = this.sketchFeat(), st = this.state;
+    if (!sk) return;
+    if (st.skCon !== null && st.skCon !== undefined && (sk.constraints || [])[st.skCon]) {
+      this.pushUndo();
+      this.setSketch(sk, sk.entities, sk.constraints.filter((c, i) => i !== st.skCon));
+      this.setState({ skCon: null });
+      return;
+    }
+    const k = st.sketchSel;
+    if (k === null || k === undefined || !sk.entities[k]) return;
+    this.pushUndo();
+    this.setSketch(sk, sk.entities.filter((e, i) => i !== k), CADK.dropEntityConstraints(sk.constraints, k));
+    this.setState({ sketchSel: null, skRefs: [] });
+  }
+  // relations and dimensions that fit the selection
+  refKind(r) { if (!r) return null; if (r.origin || r.p !== undefined) return 'point'; return r.l !== undefined ? 'line' : 'circle'; }
+  applicableConstraints(refs) {
+    const kinds = refs.map(r => this.refKind(r)), out = [];
+    for (const type in CADK.CONSTRAINTS) {
+      const want = CADK.CONSTRAINTS[type].refs;
+      if (want.length !== kinds.length) continue;
+      const fits = (order) => order.every((k, i) => want[i].split('|').includes(k));
+      if (fits(kinds)) out.push({ type, refs });
+      else if (kinds.length === 2 && fits([kinds[1], kinds[0]])) out.push({ type, refs: [refs[1], refs[0]] });
+    }
+    return out;
+  }
+  addConstraint(type, refs) {
+    const sk = this.sketchFeat(); if (!sk) return;
+    const c = { type, a: refs[0] };
+    if (refs[1]) c.b = refs[1];
+    if (type === 'fix') { const M = CADK.sketchModel(sk.entities); c.value = M.pt(M.x0, refs[0]); }
+    if (CADK.CONSTRAINTS[type].dim) {
+      c.value = +CADK.measureConstraint(sk, c).toFixed(4);
+      if (type === 'hdist' || type === 'vdist') { const M = CADK.sketchModel(sk.entities), a = M.pt(M.x0, c.a), b = M.pt(M.x0, c.b), k = type === 'hdist' ? 0 : 1; c.sign = Math.sign(b[k] - a[k]) || 1; }
+      if (type === 'angle') {
+        const M = CADK.sketchModel(sk.entities), [a, b] = M.line(M.x0, c.a), [p, q] = M.line(M.x0, c.b);
+        const u = [b[0] - a[0], b[1] - a[1]], v = [q[0] - p[0], q[1] - p[1]]; c.sign = Math.sign(u[0] * v[1] - u[1] * v[0]) || 1;
+      }
+    }
+    this.pushUndo();
+    this.setSketch(sk, sk.entities, (sk.constraints || []).concat([c]));
+    this.setState({ skRefs: [], skCon: (sk.constraints || []).length });
+  }
+  setConstraintValue(i, v) {
+    const sk = this.sketchFeat(); if (!sk) return;
+    if (!this.inSession) this.pushUndo();
+    this.setSketch(sk, sk.entities, sk.constraints.map((c, j) => (j === i ? { ...c, value: v } : c)));
+  }
+  dimText(c) {
+    const cl = this.cv('len');
+    if (c.type === 'angle') return sig(c.value) + '°';
+    if (c.type === 'radius') return 'R' + sig(c.value * cl[1]);
+    if (c.type === 'diameter') return 'Ø' + sig(c.value * cl[1]);
+    return sig(c.value * cl[1]);
   }
   drawSketch(ctx) {
     const sk = this.sketchFeat(); if (!sk) return;
@@ -3220,20 +3713,51 @@ class Component extends DCLogic {
     ctx.lineWidth = 1;
     for (let u = u0; u <= u1; u += step) { const a = S(u, v0), b = S(u, v1); ctx.strokeStyle = Math.abs(u) < 1e-9 ? 'rgba(255,107,129,.55)' : 'rgba(94,207,224,.07)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
     for (let v = v0; v <= v1; v += step) { const a = S(u0, v), b = S(u1, v); ctx.strokeStyle = Math.abs(v) < 1e-9 ? 'rgba(126,231,135,.55)' : 'rgba(94,207,224,.07)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
-    // entities
+    // entities: fully defined white, under-defined cyan, conflicting red; selection yellow
+    const stat = this.sketchStatus(sk);
+    const base = stat && stat.conflict ? '#ff6b81' : stat && stat.dof === 0 ? '#eaf7fa' : '#5ecfe0';
+    const selS = new Set(st.skRefs.map(r => JSON.stringify(r)));
     sk.entities.forEach((e, k) => {
-      const on = st.sketchSel === k;
-      ctx.strokeStyle = on ? '#ffd166' : '#5ecfe0'; ctx.lineWidth = on ? 2.2 : 1.6;
       for (const seg of CADK.entityLoop(e, k)) {
+        const ref = e.type === 'circle' ? { e: k } : seg.t === 'line' ? { e: k, l: seg.edge } : null;
+        const on = st.sketchSel === k && !st.skRefs.length || (ref && selS.has(JSON.stringify(ref)));
+        ctx.strokeStyle = on ? '#ffd166' : base; ctx.lineWidth = on ? 2.4 : 1.6;
+        if (e.open) ctx.setLineDash([8, 4]);
         const ps = this.segPoints(seg).map(p => S(p[0], p[1]));
         ctx.beginPath(); ctx.moveTo(ps[0][0], ps[0][1]); for (let i = 1; i < ps.length; i++) ctx.lineTo(ps[i][0], ps[i][1]); ctx.stroke();
+        ctx.setLineDash([]);
       }
     });
     for (const p of this.sketchPoints(sk)) {
-      const s = S(p.u, p.v);
-      ctx.fillStyle = p.kind === 'o' ? '#ffd166' : '#eaf7fa';
-      ctx.fillRect(s[0] - 2.5, s[1] - 2.5, 5, 5);
+      const s = S(p.u, p.v), on = p.ref && selS.has(JSON.stringify(p.ref));
+      ctx.fillStyle = on ? '#ffd166' : p.kind === 'o' ? '#ffd166' : '#eaf7fa';
+      ctx.fillRect(s[0] - (on ? 3.5 : 2.5), s[1] - (on ? 3.5 : 2.5), on ? 7 : 5, on ? 7 : 5);
     }
+    // relations (glyphs) and driving dimensions (clickable labels)
+    this.skDimHits = [];
+    const M = CADK.sketchModel(sk.entities), X = M.x0;
+    const mid = r => { if (r.l !== undefined) { const [a, b] = M.line(X, r); return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; } if (r.p !== undefined || r.origin) return M.pt(X, r); const e = sk.entities[r.e]; return [e.cx + e.r * 0.7071, e.cy + e.r * 0.7071]; };
+    const glyph = { horizontal: 'H', vertical: 'V', parallel: '∥', perpendicular: '⊥', equal: '=', tangent: 'T', coincident: '◦', fix: '⚓', onLine: '∈' };
+    ctx.font = "500 10px 'IBM Plex Mono'";
+    (sk.constraints || []).forEach((c, i) => {
+      if (!M.ok(c.a) || (c.b && !M.ok(c.b))) return;
+      const on = st.skCon === i;
+      if (glyph[c.type]) {
+        for (const r of [c.a, c.b].filter(Boolean)) {
+          const m = mid(r), s = S(m[0], m[1]);
+          ctx.fillStyle = on ? '#ffd166' : 'rgba(126,231,135,.85)';
+          ctx.fillText(glyph[c.type], s[0] + 5, s[1] - 5);
+        }
+        return;
+      }
+      const ms = c.b ? [(mid(c.a)[0] + mid(c.b)[0]) / 2, (mid(c.a)[1] + mid(c.b)[1]) / 2] : mid(c.a);
+      const sp = S(ms[0], ms[1]), txt = this.dimText(c), w = ctx.measureText(txt).width + 10;
+      const x = sp[0] - w / 2, y = sp[1] - 22;
+      ctx.fillStyle = on ? 'rgba(255,209,102,.25)' : 'rgba(11,14,17,.88)'; ctx.fillRect(x, y, w, 16);
+      ctx.strokeStyle = on ? '#ffd166' : 'rgba(234,247,250,.5)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, 16);
+      ctx.fillStyle = on ? '#ffe3a3' : '#eaf7fa'; ctx.fillText(txt, x + 5, y + 11.5);
+      this.skDimHits.push({ i, x, y, w, h: 16 });
+    });
     // preview of the entity being drawn
     const cur = this.skCursor, tool = st.sketchTool;
     ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.4;
@@ -3241,7 +3765,7 @@ class Component extends DCLogic {
     if (this.skPts && cur) {
       const P0 = this.skPts[0];
       ctx.beginPath();
-      if (tool === 'line') {
+      if (tool === 'line' || tool === 'path') {
         const all = this.skPts.concat([cur]).map(p => S(p[0], p[1]));
         ctx.moveTo(all[0][0], all[0][1]); for (let i = 1; i < all.length; i++) ctx.lineTo(all[i][0], all[i][1]);
         const l = this.skPts[this.skPts.length - 1]; info = 'L ' + sig(Math.hypot(cur[0] - l[0], cur[1] - l[1]));
@@ -3268,11 +3792,19 @@ class Component extends DCLogic {
       ctx.fillStyle = '#ffe3a3'; ctx.fillText(txt, s[0] + 17, s[1] + 20);
     }
   }
+  // the sketch's solver status, recomputed when its constraints or geometry change
+  sketchStatus(sk) {
+    if (this.skStatusFor !== sk.constraints || this.skStatusEnts !== sk.entities) {
+      this.skStatusFor = sk.constraints; this.skStatusEnts = sk.entities;
+      this.skStatus = (sk.constraints || []).length ? CADK.solveSketch(sk) : { dof: null, ok: true };
+    }
+    return this.skStatus;
+  }
 
   // ---- undo / redo: model inputs, not the view ----------------------------
   snapshot() {
     const s = this.state;
-    return { part: s.part, nums: { ...s.nums }, material: s.material, grav: s.grav, customMat: s.customMat };
+    return { part: s.part, nums: { ...s.nums }, material: s.material, grav: s.grav, customMat: s.customMat, meshFit: s.meshFit };
   }
   pushUndo(snap) {
     this.undoStack.push(snap || this.snapshot());
@@ -3360,7 +3892,7 @@ class Component extends DCLogic {
   }
   openCtxMenu(x, y) {
     const st = this.state;
-    if (this.sketchFeat()) { if (this.skPts && this.state.sketchTool === 'line' && this.finishPoly()) return; }
+    if (this.sketchFeat()) { if (this.skPts && (this.state.sketchTool === 'line' || this.state.sketchTool === 'path') && this.finishPoly()) return; }
     const f = st.stage <= 4 ? this.pickFace(x, y) : null;
     const id = f ? f.cad : st.stage <= 4 ? st.selCad : null, F = id && this.faceInfo(id);
     const extra = F && F.feat && st.stage === 1 && !st.featEdit ? { sel: 'f:' + F.feat } : {};
@@ -3388,7 +3920,7 @@ class Component extends DCLogic {
     }
     if (F && st.stage <= 4) {
       sep();
-      for (const [t, l] of [['fixed', 'Fixed support'], ['roller', 'Roller / slider'], ['force', 'Force'], ['pressure', 'Pressure']])
+      for (const [t, l] of [['fixed', 'Fixed support'], ['roller', 'Roller / slider'], ['contact', 'Contact support (compression only)'], ['force', 'Force'], ['pressure', 'Pressure']])
         it('Add ' + l + ' here', '', () => this.addStudy(t));
       if (F.plane) it('Sketch on this face', '', () => this.insertFeature('sketch'));
       if (F.plane) it('Hole on this face', '', () => this.insertFeature('hole'));
@@ -3403,6 +3935,7 @@ class Component extends DCLogic {
     it('Wireframe (hidden lines removed)', '', () => this.setState({ shade: 'wire' }), st.shade === 'wire');
     it('Section view', '', () => this.setState({ cutOn: !st.cutOn, stage: Math.max(st.stage, 4) }), st.cutOn);
     it('Reference planes', '', () => this.setState({ planes: !st.planes }), st.planes);
+    it('Ground grid', '', () => this.toggleGrid(), st.gridOn !== false);
     sep();
     it('Undo', 'Ctrl+Z', this.undoStack.length ? () => this.undo() : null);
     it('Redo', 'Ctrl+Y', this.redoStack.length ? () => this.redo() : null);
@@ -3521,6 +4054,9 @@ class Component extends DCLogic {
         ['Revolved Boss', '', () => this.insertFeature('revolve')], ['Revolved Cut', '', () => this.insertFeature('revolve', { op: 'cut' })], '-',
         ['Box', '', () => this.insertFeature('box')], ['Cylinder', '', () => this.insertFeature('cylinder')], ['Sphere', '', () => this.insertFeature('sphere')],
         ['Hole', '', () => this.insertFeature('hole')], '-',
+        ['Fillet (selected edges / faces)', '', () => this.insertFeature('fillet')], ['Chamfer', '', () => this.insertFeature('chamfer')],
+        ['Shell (selected faces open)', '', () => this.insertFeature('shell')], '-',
+        ['Loft (two sketches)', '', () => this.insertFeature('loft')], ['Sweep (profile + path)', '', () => this.insertFeature('sweep')], '-',
         ['Linear Pattern', '', () => this.insertFeature('lpattern')], ['Circular Pattern', '', () => this.insertFeature('cpattern')], ['Mirror', '', () => this.insertFeature('mirror')], '-',
         ['Imported Body (STL)…', '', () => this.importSTL()]] },
       { label: 'Edit', ai: 0, items: [
@@ -3534,7 +4070,7 @@ class Component extends DCLogic {
         ['Element Edges', '', set({ stage: 4 })],
         ['Reset Camera', 'Home', () => { this.zoomFit(); this.setView(-0.62, 0.42, true); }],
         ['Zoom to Fit', 'F', () => this.zoomFit()], ['Previous View', 'Ctrl+Shift+Z', this.viewStack.length ? () => this.prevView() : null],
-        ['View Orientation…', 'Space', set({ viewMenu: true })], '-'].concat(
+        ['View Orientation…', 'Space', set({ viewMenu: true })], ['Ground Grid', '', () => this.toggleGrid(), s.gridOn !== false], '-'].concat(
         STD_VIEWS.map((v, i) => [v[0], v[1], () => this.stdView(i)]), ['-',
         ['Mouse: SolidWorks', '', set({ mouseMode: 'solidworks' }), s.mouseMode !== 'catia'],
         ['Mouse: CATIA', '', set({ mouseMode: 'catia' }), s.mouseMode === 'catia'], '-',
@@ -3613,8 +4149,11 @@ class Component extends DCLogic {
   }
   onBridge(m) {
     if (m.op === 'hello') {
-      this.setState({ bridge: 'live', bridgeEngine: m.engine });
+      this.setState({ bridge: 'live', bridgeEngine: m.engine, bridgeCaps: m.capabilities || [] });
       this.pushLog('core', 'solver core attached — ' + m.engine + ' · protocol v' + m.protocol, 'ok');
+    } else if (this.meshJob && m.id === this.meshJob.id && (m.op === 'mesh_result' || m.op === 'error')) {
+      if (m.op === 'error') this.meshJob.err = m.msg; else this.meshJob.res = m;   // picked up by serverSolve
+      this.meshJob.done = true;
     } else if (m.op === 'log') {
       this.pushLog(m.ch, m.msg, m.kind);
     } else if (m.op === 'progress') {
@@ -3722,6 +4261,7 @@ class Component extends DCLogic {
       loads: { dT: n.mTemp - 22, gravity: this.state.grav !== false, density_scale: n.mScale } };
   }
   useRemote() {
+    if (this.state.engine === 'python' || this.state.engine === 'local' || this.state.analysis !== 'static' || (this.state.part.studies || []).some(s => s.type === 'contact')) return false;
     return this.state.engine !== 'local' && this.state.bridge === 'live'
       && this.ws && this.ws.readyState === 1 && !!this.bracketSpec();
   }
@@ -4113,19 +4653,32 @@ class Component extends DCLogic {
   featurePanel(f) {
     const st = this.state, len = u => (u === 'mm' ? '@len' : u);
     if (f.type === 'sketch') return this.sketchPanel(f);
-    const nums = [], choices = [];
+    const nums = [], choices = [], extra = [];
     for (const fld of CADK.featureFields(f)) {
       if (fld.kind === 'num') {
         if (fld.key === 'depth' && f.type === 'hole' && f.through) continue;
         nums.push(this.numField('f:' + f.id + ':' + fld.key, fld.label, len(fld.unit), f[fld.key], fld.step, fld.min, fld.max, v => this.setFeatureParam(f.id, fld.key, v)));
       } else if (fld.kind === 'choice') choices.push(this.choice(fld.label, fld.options, f[fld.key], v => this.setFeatureParam(f.id, fld.key, v)));
-      else if (fld.kind === 'feature') {
+      else if (fld.kind === 'edges' || fld.kind === 'faces') {
+        const list = f[fld.key] || [], sel = st.selSet.length ? st.selSet : st.selCad ? [st.selCad] : [];
+        const take = () => this.setFeatureParam(f.id, fld.key, fld.kind === 'edges' ? this.edgesFromSelection() : sel.slice());
+        extra.push(this.section(fld.label.toUpperCase() + ' · ' + list.length, {
+          notes: list.length ? list.slice(0, 8).map(x => (Array.isArray(x) ? x : [x]).map(id => { const F = this.faceInfo(id); return F ? F.name.split(' · ').slice(-1)[0] : id; }).join(' ∧ '))
+            : [fld.kind === 'edges' ? 'select two faces that meet (Ctrl+click), or one face for all its edges, then:' : 'select faces to leave open (optional), then:'],
+          buttons: [this.btn('Use selected faces (' + sel.length + ')', take, '', 'go'), this.btn('Clear', () => this.setFeatureParam(f.id, fld.key, []))] }));
+      } else if (fld.kind === 'sketch') {
+        const opts = st.part.features.filter(g => g.type === 'sketch').map(g => [g.id, this.featLabel(g) + (g.entities.some(e => e.open) ? ' (path)' : '')]);
+        choices.push(this.choice(fld.label, opts, f[fld.key], v => this.setFeatureParam(f.id, fld.key, v)));
+      } else if (fld.kind === 'feature') {
         const opts = st.part.features.slice(0, st.part.features.findIndex(g => g.id === f.id))
           .filter(g => CADK.FEATURE_INFO[g.type].solid && g.id !== f.id).map(g => [g.id, this.featLabel(g)]);
         choices.push(this.choice(fld.label, opts, f[fld.key], v => this.setFeatureParam(f.id, fld.key, v)));
       }
     }
-    const secs = [this.section(CADK.FEATURE_INFO[f.type].label.toUpperCase() + ' PARAMETERS', { params: nums, choices })];
+    const secs = [this.section(CADK.FEATURE_INFO[f.type].label.toUpperCase() + ' PARAMETERS', { params: nums, choices }), ...extra];
+    const warn = (this.compiled().warnings || []).filter(w => w.startsWith(this.featLabel(f) + ':'));
+    if (warn.length) secs.push(this.section('CHECK', { notes: warn.map(w => ({ text: w, fg: '#e6c98a' })) }));
+    if (f.type === 'shell') secs.push(this.section('', { notes: ['the shell is applied on the mesh grid: use an element size well below the wall thickness'] }));
     if (f.sketch) {
       const sk = this.feat(f.sketch);
       secs.push(this.section('PROFILE', { notes: [sk ? this.featLabel(sk) + ' · ' + sk.entities.length + ' entities on the ' + (CADK.PLANES[sk.plane] || {}).name + ' plane' : 'sketch missing'],
@@ -4137,12 +4690,17 @@ class Component extends DCLogic {
   }
   sketchPanel(sk) {
     const st = this.state, tool = st.sketchTool, len = '@len';
-    const tools = [['select', 'Select (S)'], ['line', 'Line (L)'], ['rect', 'Rectangle (R)'], ['circle', 'Circle (C)'], ['fillet', 'Sketch fillet']]
+    const tools = [['select', 'Select (S)'], ['line', 'Line (L)'], ['rect', 'Rectangle (R)'], ['circle', 'Circle (C)'], ['path', 'Path — open (P)'], ['fillet', 'Sketch fillet']]
       .map(([t, l]) => this.btn(l, () => { this.skPts = null; this.setState({ sketchTool: t }); }, '', tool === t ? 'on' : null));
-    const hint = { select: 'click an entity to select it · drag its points · Del deletes it',
+    const hint = { select: 'click points, edges or circles (Shift adds) · drag points · Del deletes',
       line: 'click points · click the first point, double-click or Enter to close · Esc cancels',
+      path: 'an open polyline for a Sweep · Enter, double-click or right-click to finish',
       rect: 'click two opposite corners', circle: 'click the centre, then a point on the circle',
       fillet: 'click a polyline corner (or a rectangle) to round it with the radius below' }[tool];
+    const stat = this.sketchStatus(sk);
+    const status = !(sk.constraints || []).length ? { text: 'no relations yet — under-defined', fg: '#5e6b78' }
+      : stat.conflict ? { text: 'over-defined: conflicting relations (residual ' + stat.residual.toExponential(1) + ') — delete one', fg: '#ff8d9e' }
+      : stat.dof === 0 ? { text: 'fully defined', fg: '#9fe0a8' } : { text: 'under-defined: ' + stat.dof + ' degrees of freedom left', fg: '#7fd8e6' };
     const secs = [
       this.section('TOOLS', { buttons: tools, notes: [hint] }),
       this.section('SKETCH PLANE', { choices: [this.choice('Plane', [['XY', 'Front'], ['XZ', 'Top'], ['YZ', 'Right']], sk.plane, v => { this.setFeatureParam(sk.id, 'plane', v); this.lookAtPlane({ ...sk, plane: v }); })],
@@ -4150,8 +4708,28 @@ class Component extends DCLogic {
           this.numField('sk:grid', 'Snap / grid', len, st.sketchGrid, 1, 0.1, 500, v => this.setState({ sketchGrid: v })),
           this.numField('sk:fil', 'Fillet radius', len, st.sketchFillet, 1, 0.1, 1000, v => this.setState({ sketchFillet: v }))] })
     ];
-    const label = (e, k) => ({ rect: 'Rectangle', circle: 'Circle', poly: 'Polyline' }[e.type] || e.type) + ' ' + (k + 1) + (e.type === 'poly' ? ' (' + e.pts.length + ')' : '');
-    secs.push(this.section('ENTITIES · ' + sk.entities.length, { buttons: sk.entities.map((e, k) => this.btn(label(e, k), () => this.setState({ sketchSel: k, sketchTool: 'select' }), '', st.sketchSel === k ? 'on' : null)),
+    // relations / dimensions for the current selection
+    const refs = st.skRefs, apps = refs.length ? this.applicableConstraints(refs) : [];
+    secs.push(this.section('RELATIONS & DIMENSIONS · ' + refs.length + ' selected', {
+      notes: [status, refs.length ? refs.map(r => CADK.refLabel(sk, r)).join(' + ') : 'select one or two points, edges or circles'],
+      buttons: apps.map(a => this.btn((CADK.CONSTRAINTS[a.type].dim ? '⟷ ' : '') + CADK.CONSTRAINTS[a.type].label, () => this.addConstraint(a.type, a.refs),
+        CADK.CONSTRAINTS[a.type].dim ? 'Driving dimension' : 'Geometric relation', CADK.CONSTRAINTS[a.type].dim ? 'go' : null))
+        .concat(refs.length ? [this.btn('Origin', () => this.setState({ skRefs: refs.concat([{ origin: true }]) }), 'Add the sketch origin to the selection')] : [])
+    }));
+    const cons = sk.constraints || [];
+    if (cons.length) {
+      const dims = [];
+      cons.forEach((c, i) => {
+        if (!CADK.CONSTRAINTS[c.type] || !CADK.CONSTRAINTS[c.type].dim) return;
+        const deg = c.type === 'angle';
+        dims.push(this.numField('cd:' + i, CADK.CONSTRAINTS[c.type].label + ' ' + (i + 1), deg ? '°' : len, c.value, deg ? 1 : st.sketchGrid, deg ? 0 : 0.001, deg ? 360 : 1e6, v => this.setConstraintValue(i, v)));
+      });
+      secs.push(this.section('RELATIONS IN THIS SKETCH · ' + cons.length, { params: dims,
+        buttons: cons.map((c, i) => this.btn((CADK.CONSTRAINTS[c.type] || { label: c.type }).label + ' · ' + CADK.refLabel(sk, c.a) + (c.b ? ' / ' + CADK.refLabel(sk, c.b) : ''),
+          () => this.setState({ skCon: st.skCon === i ? null : i, skRefs: [c.a, c.b].filter(Boolean) }), 'Select · Del removes it', st.skCon === i ? 'on' : null)) }));
+    }
+    const label = (e, k) => ({ rect: 'Rectangle', circle: 'Circle', poly: e.open ? 'Path' : 'Polyline' }[e.type] || e.type) + ' ' + (k + 1) + (e.type === 'poly' ? ' (' + e.pts.length + ')' : '');
+    secs.push(this.section('ENTITIES · ' + sk.entities.length, { buttons: sk.entities.map((e, k) => this.btn(label(e, k), () => this.setState({ sketchSel: k, sketchTool: 'select', skRefs: [] }), '', st.sketchSel === k ? 'on' : null)),
       notes: sk.entities.length ? [] : ['empty: draw a closed profile — nested profiles become holes'] }));
     const k = st.sketchSel, e = k !== null && k !== undefined ? sk.entities[k] : null;
     if (e) {
@@ -4164,7 +4742,8 @@ class Component extends DCLogic {
       if (e.type === 'poly') e.pts.slice(0, 24).forEach((pt, i) => {
         P.push(this.numField('se:' + k + 'x' + i, 'P' + (i + 1) + ' x', len, pt[0], 5, -1e5, 1e5, v => { const pts = e.pts.slice(); pts[i] = [v, pt[1]]; set('pts', pts); }));
         P.push(this.numField('se:' + k + 'y' + i, 'P' + (i + 1) + ' y', len, pt[1], 5, -1e5, 1e5, v => { const pts = e.pts.slice(); pts[i] = [pt[0], v]; set('pts', pts); }));
-        P.push(this.numField('se:' + k + 'f' + i, 'P' + (i + 1) + ' fillet', len, (e.fillets || [])[i] || 0, 1, 0, 1e5, v => { const fl = (e.fillets || e.pts.map(() => 0)).slice(); fl[i] = v; set('fillets', fl); }));
+        if (!e.open || (i > 0 && i < e.pts.length - 1))
+          P.push(this.numField('se:' + k + 'f' + i, 'P' + (i + 1) + ' fillet', len, (e.fillets || [])[i] || 0, 1, 0, 1e5, v => { const fl = (e.fillets || e.pts.map(() => 0)).slice(); fl[i] = v; set('fillets', fl); }));
       });
       secs.push(this.section('SELECTED · ' + label(e, k).toUpperCase(), { params: P, buttons: [this.btn('Delete entity', () => this.sketchDelete(), 'Del', 'warn')] }));
     }
@@ -4176,15 +4755,45 @@ class Component extends DCLogic {
     if (!this.inSession) this.pushUndo();
     this.setSketch(sk, ents);
   }
+  // pairs of named faces that meet along an edge (they share element edges on the skin)
+  faceAdjacency() {
+    const bf = this.mesh && this.mesh.bf;
+    if (!bf) return new Map();
+    if (this._adjFor === bf) return this._adj;
+    const byEdge = new Map(), adj = new Map();
+    for (const b of bf) {
+      if (!b.id) continue;
+      for (let q = 0; q < 4; q++) {
+        const a = b.nodes[q], c = b.nodes[(q + 1) % 4], key = a < c ? a + ':' + c : c + ':' + a;
+        let set = byEdge.get(key); if (!set) byEdge.set(key, set = new Set()); set.add(b.id);
+      }
+    }
+    for (const set of byEdge.values()) if (set.size > 1) for (const x of set) for (const y of set) if (x !== y) {
+      let s_ = adj.get(x); if (!s_) adj.set(x, s_ = new Set()); s_.add(y);
+    }
+    this._adjFor = bf; this._adj = adj;
+    return adj;
+  }
+  // edges for a fillet / chamfer from the selection: between selected faces, or all round one face
+  edgesFromSelection() {
+    const st = this.state, sel = st.selSet.length ? st.selSet : st.selCad ? [st.selCad] : [], adj = this.faceAdjacency(), geom = this.compiled().geom, out = [];
+    const ok = id => geom[id] && (geom[id].plane || geom[id].cyl);
+    if (sel.length === 1) { for (const n of adj.get(sel[0]) || []) if (ok(sel[0]) && ok(n)) out.push([sel[0], n]); return out; }
+    for (let i = 0; i < sel.length; i++) for (let j = i + 1; j < sel.length; j++)
+      if ((adj.get(sel[i]) || new Set()).has(sel[j]) && ok(sel[i]) && ok(sel[j])) out.push([sel[i], sel[j]]);
+    return out;
+  }
   geometryPanel() {
     const st = this.state, cm = this.compiled(), M = this.mesh, part = st.part, c = this.cv('len');
     const ext = cm.bbox[1].map((v, i) => sig((v - cm.bbox[0][i]) * c[1])).join(' × ');
     const ins = [['sketch', 'Sketch'], ['extrude', 'Extrude'], ['revolve', 'Revolve'], ['box', 'Box'], ['cylinder', 'Cylinder'], ['sphere', 'Sphere'],
-      ['hole', 'Hole'], ['lpattern', 'Linear pattern'], ['cpattern', 'Circular pattern'], ['mirror', 'Mirror']]
+      ['hole', 'Hole'], ['fillet', 'Fillet'], ['chamfer', 'Chamfer'], ['shell', 'Shell'], ['loft', 'Loft'], ['sweep', 'Sweep'],
+      ['lpattern', 'Linear pattern'], ['cpattern', 'Circular pattern'], ['mirror', 'Mirror']]
       .map(([t, l]) => this.btn(l, () => this.insertFeature(t)));
     ins.push(this.btn('Extruded cut', () => this.insertFeature('extrude', { op: 'cut' })), this.btn('Import STL…', () => this.importSTL()));
+    const warns = (cm.warnings || []).map(w => ({ text: w, fg: '#e6c98a' }));
     const secs = [
-      this.section('PART', { notes: [(part.name || 'part') + ' · ' + part.features.length + ' features', 'box ' + ext + ' ' + c[0], grp(M.ne) + ' hex8 elements'] }),
+      this.section('PART', { notes: [(part.name || 'part') + ' · ' + part.features.length + ' features', 'box ' + ext + ' ' + c[0], grp(M.ne) + ' hex8 elements'].concat(warns) }),
       this.section('INSERT FEATURE', { buttons: ins, notes: ['a selected planar face is used as the sketch plane or hole / primitive position'] }),
       this.section('NEW FROM TEMPLATE', { buttons: Object.keys(CADK.TEMPLATES).map(k => this.btn(CADK.TEMPLATES[k].label, () => this.newPart(k))) }),
       this.section('FILE', { buttons: [this.btn('Open…', () => this.openPart(), '.archpart.json or .stl'), this.btn('Save', () => this.savePart(), 'Download the part, its study and settings'),
@@ -4198,6 +4807,7 @@ class Component extends DCLogic {
     const secs = [this.section('SELECTED FACES · ' + sel.length, {
       notes: sel.length ? names.slice(0, 6).concat(names.length > 6 ? ['…'] : []) : ['click faces on the model · Ctrl / Shift + click adds faces'],
       buttons: sel.length ? [this.btn('+ Fixed', () => this.addStudy('fixed'), 'All displacements zero'), this.btn('+ Roller', () => this.addStudy('roller'), 'Normal displacement zero, free to slide'),
+        this.btn('+ Contact', () => this.addStudy('contact'), 'Compression-only support: pushes back, lets the part lift off (Python core)'),
         this.btn('+ Force', () => this.addStudy('force'), 'Total force shared over the faces'), this.btn('+ Pressure', () => this.addStudy('pressure'), 'Normal pressure; positive pushes in')] : [] })];
     const cf = '@force', cs = '@stress';
     for (const sd of studies) {
@@ -4225,7 +4835,7 @@ class Component extends DCLogic {
     const barItems = [], ctxItems = this.ctxItems(), close = fn => () => { this.setState({ ctxBar: null }); fn(); };
     if (sel) barItems.push({ label: '⟂ Normal to', title: 'Look straight at this face (Ctrl+8)', run: close(() => this.normalTo()) });
     if (st.stage === 3 || st.stage === 4) {
-      for (const [t, l] of [['fixed', '+ Fixed'], ['roller', '+ Roller'], ['force', '+ Force'], ['pressure', '+ Pressure']])
+      for (const [t, l] of [['fixed', '+ Fixed'], ['roller', '+ Roller'], ['contact', '+ Contact'], ['force', '+ Force'], ['pressure', '+ Pressure']])
         barItems.push({ label: l, title: 'Add to the study on the selected faces', run: close(() => this.addStudy(t)) });
     } else if (sel) {
       if (sel.drag) barItems.push({ label: '✎ ' + (this.dragValue(st.selCad) || { label: 'dimension' }).label, title: 'Edit the value that drives this face',
@@ -4236,7 +4846,8 @@ class Component extends DCLogic {
         { label: '⬒ Extrude', title: 'Sketch on this face, then extrude', run: close(() => this.insertFeature('extrude')) });
     }
     const cmds = [['sketch', '✎ Sketch'], ['extrude', '⬒ Extrude'], ['cut', '⬓ Cut'], ['revolve', '◔ Revolve'], ['box', '▢ Box'], ['cylinder', '◯ Cylinder'],
-      ['sphere', '● Sphere'], ['hole', '⊙ Hole'], ['lpattern', '⋯ Pattern'], ['cpattern', '✲ Circular'], ['mirror', '⇋ Mirror'], ['stl', '⇪ STL']]
+      ['sphere', '● Sphere'], ['hole', '⊙ Hole'], ['fillet', '◜ Fillet'], ['chamfer', '◸ Chamfer'], ['shell', '▭ Shell'], ['loft', '⏢ Loft'], ['sweep', '↝ Sweep'],
+      ['lpattern', '⋯ Pattern'], ['cpattern', '✲ Circular'], ['mirror', '⇋ Mirror'], ['stl', '⇪ STL']]
       .map(([t, l]) => ({ label: l, title: { cut: 'Extruded cut', stl: 'Import an STL mesh' }[t] || 'Insert ' + t, fg: '#c9d2da', bg: 'transparent',
         run: () => (t === 'stl' ? this.importSTL() : t === 'cut' ? this.insertFeature('extrude', { op: 'cut' }) : this.insertFeature(t)) }));
     return {
@@ -4249,6 +4860,7 @@ class Component extends DCLogic {
         btn(st.shade === 'wire' ? '◫ Wire' : st.shade === 'nodes' ? '⁘ Nodes' : '◼ Shaded', 'Display style (cycles)',
           () => this.setState({ shade: { shaded: 'wire', wire: 'nodes', nodes: 'shaded' }[st.shade] || 'shaded' })),
         btn('⊞ Planes', 'Reference planes', () => this.setState({ planes: !st.planes }), st.planes),
+        btn('# Grid', 'Ground grid (G toggles gestures; this is the floor grid)', () => this.toggleGrid(), st.gridOn !== false),
         btn('↶ ' + st.undoN, 'Undo model edit (Ctrl+Z)', () => this.undo()),
         btn('↷ ' + st.redoN, 'Redo (Ctrl+Y)', () => this.redo())
       ],
@@ -4302,20 +4914,22 @@ class Component extends DCLogic {
     const fmeta = f => f.type === 'extrude' ? 'D ' + sig(f.depth * cl[1]) : f.type === 'revolve' ? sig(f.angle) + '°'
       : f.type === 'box' ? [f.sx, f.sy, f.sz].map(v => sig(v * cl[1])).join('×') : f.type === 'cylinder' ? 'R' + sig(f.r * cl[1])
       : f.type === 'sphere' ? 'R' + sig(f.r * cl[1]) : f.type === 'hole' ? 'Ø' + sig(f.d * cl[1]) : f.type === 'lpattern' || f.type === 'cpattern' ? '×' + f.count
-      : f.type === 'mirror' ? f.plane : f.type === 'sketch' ? f.entities.length + ' ent' : f.type === 'stl' ? 'STL' : '';
+      : f.type === 'mirror' ? f.plane : f.type === 'sketch' ? f.entities.length + ' ent' + ((f.constraints || []).length ? ' · ' + f.constraints.length + ' rel' : '') : f.type === 'stl' ? 'STL'
+      : f.type === 'fillet' ? 'R' + sig(f.r * cl[1]) + ' ×' + (f.edges || []).length : f.type === 'chamfer' ? sig(f.r * cl[1]) + ' ×' + (f.edges || []).length
+      : f.type === 'shell' ? 't ' + sig(f.t * cl[1]) : f.type === 'loft' || f.type === 'sweep' ? (f.op === 'cut' ? 'cut' : 'boss') : '';
     const frow = (f, depth) => ['f:' + f.id, depth, this.featLabel(f) + (f.suppressed ? ' (suppressed)' : ''),
       f.suppressed ? '#3c4650' : f.type === 'sketch' ? '#8b96a2' : (f.op === 'cut' || f.type === 'hole') ? '#ff8d9e' : '#5ecfe0', '2px',
       f.suppressed ? 'italic 400 10.5px/1 IBM Plex Sans' : '400 10.5px/1 IBM Plex Sans', fmeta(f), 'geo'];
     const featRows = [];
     for (const f of part.features) {
-      if (f.type === 'sketch' && this.consumersOf(f.id).some(c => c.sketch === f.id)) continue;   // shown under its feature
+      if (f.type === 'sketch' && this.consumersOf(f.id).some(c => c.sketch === f.id || c.sketch2 === f.id || c.path === f.id)) continue;   // shown under its feature
       featRows.push(frow(f, 2));
-      if (f.sketch) { const sk = this.feat(f.sketch); if (sk) featRows.push(frow(sk, 3)); }
+      for (const key of ['sketch', 'sketch2', 'path']) if (f[key]) { const sk = this.feat(f[key]); if (sk && this.consumersOf(sk.id)[0] === f) featRows.push(frow(sk, 3)); }
     }
-    const studyCol = { fixed: '#7ee787', roller: '#b9e37a', force: '#ff6b81', pressure: '#ffa23a' };
+    const studyCol = { fixed: '#7ee787', roller: '#b9e37a', contact: '#c4a7ff', force: '#ff6b81', pressure: '#ffa23a' };
     const studyRows = (part.studies || []).map(sd => ['s:' + sd.id, 2, sd.name + (sd.suppressed ? ' (suppressed)' : ''), sd.suppressed ? '#3c4650' : studyCol[sd.type] || '#ccc', '2px',
       sd.suppressed ? 'italic 400 10.5px/1 IBM Plex Sans' : '400 10.5px/1 IBM Plex Sans',
-      sd.type === 'force' ? sig(Math.hypot(...sd.F) * cf[1]) + cf[0] : sd.type === 'pressure' ? sig(sd.P * cs[1]) + cs[0] : sd.type === 'fixed' ? 'U=0' : 'Un=0', 'load']);
+      sd.type === 'force' ? sig(Math.hypot(...sd.F) * cf[1]) + cf[0] : sd.type === 'pressure' ? sig(sd.P * cs[1]) + cs[0] : sd.type === 'fixed' ? 'U=0' : sd.type === 'contact' ? 'Un≤0' : 'Un=0', 'load']);
     void FI;
     const treeDef = [
       ['root', 0, part.name || 'part', '#5ecfe0', '50%', '600 11px/1 IBM Plex Sans', part.template ? 'template' : 'part', 'geo'],
@@ -4411,12 +5025,23 @@ class Component extends DCLogic {
       3: this.studyPanel(),
       4: { title: 'Mesh', sub: 'structured hex8 voxel core',
         sections: [{ title: 'CHARACTERISTIC LENGTH', params: [this.p('hSize', 'Size max', '@len', 0.5, 0.5, 40, 1), this.p('hSub', 'Samples per cell (n³)', '', 1, 1, 3, 0), this.p('hAspect', 'Depth ratio', '×', 0.25, 0.25, 4, 2), this.p('hBudget', 'Budget', 'k el', 2, 2, 60, 0)] }] },
-      5: { title: 'Solve', sub: 'Jacobi-PCG · geometric cascade',
+      5: { title: 'Solve', sub: this.solverLabel() + ' · ' + st.analysis,
         sections: [{ title: 'KRYLOV OPTIONS', params: [this.p('sTol', 'rtol 1e−n', '', 1, 2, 12, 0), this.p('sIncr', 'Load increments', '', 1, 1, 60, 0), this.p('sMaxIt', 'ksp max it', '', 250, 250, 40000, 0)] }] },
       6: { title: 'Results', sub: st.solved ? 'nodal fields · averaged' : 'no current solution', sections: [] }
     };
 
     for (const k of [2, 4, 5, 6]) panels[k].sections = panels[k].sections.map(x => this.section(x.title, x));
+    const AN = { static: 'linear elastic, small strain', nonlinear: 'J2 plasticity, isotropic hardening H, Newton in load increments — Python core',
+      modal: 'natural frequencies and mode shapes, lumped mass', buckling: 'linear buckling: load factors on the applied loads — Python core' };
+    panels[5].sections.unshift(this.section('ANALYSIS', {
+      choices: [this.choice('Type', [['static', 'Static'], ['nonlinear', 'Nonlinear'], ['modal', 'Modal'], ['buckling', 'Buckling']], st.analysis,
+        v => { this.pushUndo(); this.setState({ analysis: v, outputs: v === 'modal' ? { ...st.outputs, mode: true } : st.outputs }); })],
+      params: st.analysis === 'modal' || st.analysis === 'buckling' ? [this.p('nModes', st.analysis === 'modal' ? 'Modes' : 'Buckling modes', '', 1, 1, 12, 0)] : [],
+      notes: [AN[st.analysis]].concat(st.analysis === 'nonlinear' ? ['steps: Load increments below · hardening: stage 02'] : [],
+        (st.analysis === 'nonlinear' || st.analysis === 'buckling' || (st.part.studies || []).some(x => x.type === 'contact')) && !st.pyCore
+          ? [{ text: 'needs the Python FE core — open the Workbench from the webdemo server', fg: '#e6c98a' }] : []) }));
+    panels[4].sections.push(this.section('SURFACE', { choices: [this.choice('Skin', [[true, 'Body-fitted (follows curves)'], [false, 'Voxel (stepped)']], st.meshFit !== false,
+      v => { this.pushUndo(); this.setState({ meshFit: v }); })], notes: ['body-fitted moves the skin nodes onto the CAD surfaces; those elements use general hex8 stiffness'] }));
     if (st.material === 'custom') {
       const cm = MAT.custom, setM = (key, v) => { if (!this.inSession) this.pushUndo(); MAT.custom = { ...MAT.custom, [key]: v }; this.setState({ customMat: { ...MAT.custom } }); };
       panels[2].sections.push(this.section('CUSTOM MATERIAL · ISOTROPIC LINEAR ELASTIC', { params: [
@@ -4424,6 +5049,7 @@ class Component extends DCLogic {
         this.numField('cm:nu', 'Poisson ratio ν', '', cm.nu, 0.01, 0, 0.499, v => setM('nu', v)),
         this.numField('cm:rho', 'Density ρ', '@dens', cm.rho, 50, 1, 1e5, v => setM('rho', v)),
         this.numField('cm:sy', 'Yield / strength', '@stress', cm.sy, 5, 0.1, 1e5, v => setM('sy', v)),
+        this.numField('cm:H', 'Hardening modulus H', '@stress', cm.H || cm.E / 100, 100, 0, 1e7, v => setM('H', v)),
         this.numField('cm:a', 'Expansion α (1e−6/K)', '', cm.alpha * 1e6, 0.5, 0, 1000, v => setM('alpha', v * 1e-6))] }));
     }
     const materials = MATS.map(m => {
@@ -4438,7 +5064,8 @@ class Component extends DCLogic {
 
     const meshQuality = q ? [
       { label: 'Elements', val: grp(q.ne), pct: Math.min(100, 100 * q.ne / (N.hBudget * 1000)), fg: '#7ee787' },
-      { label: 'Scaled Jacobian', val: '1.000', pct: 100, fg: '#7ee787' },
+      { label: 'Min scaled Jacobian', val: (M.minSJ === undefined ? 1 : M.minSJ).toFixed(3), pct: Math.max(4, 100 * (M.minSJ === undefined ? 1 : M.minSJ)), fg: (M.minSJ || 1) < 0.3 ? '#e6c98a' : '#7ee787' },
+      { label: 'Body-fitted skin nodes', val: M.fitted ? grp(M.fitted) : st.meshFit ? '0' : 'off', pct: M.fitted ? 100 : 0, fg: '#7ee787' },
       { label: 'Aspect ratio', val: q.ar.toFixed(2) + ' max', pct: Math.max(6, Math.min(100, 100 / q.ar)), fg: q.ar > 3 ? '#e6c98a' : '#7ee787' },
       { label: 'Single-span elements', val: grp(q.thin), pct: Math.min(100, 100 * q.thin / Math.max(1, q.ne)), fg: q.thin ? '#e6c98a' : '#7ee787' }
     ] : [{ label: 'Mesh', val: 'not generated', pct: 0, fg: '#5b6672' }];
@@ -4471,7 +5098,7 @@ class Component extends DCLogic {
     ].map(t => {
       const s = sel(t[3]);
       return { label: t[1], title: t[2], bg: s.bg, bd: s.bd, fg: t[3] ? '#dff3f7' : '#7f8b98',
-        click: () => this.setState({ [t[0]]: !t[3] }) };
+        click: () => (t[0] === 'gridOn' ? this.toggleGrid() : this.setState({ [t[0]]: !t[3] })) };
     });
     if (fields.length && !FM[st.field].available)
       setTimeout(() => this.setState({ field: Object.keys(FM).find(k => FM[k].available) }), 0);
@@ -4582,16 +5209,17 @@ class Component extends DCLogic {
 
     // ---- solver engine + mesher ------------------------------------------
     const live = st.bridge === 'live';
-    const engineOpts = [['auto', 'DOLFINx'], ['local', 'IN-BROWSER']].map(e => {
+    const engineOpts = [['auto', 'AUTO'], ['dolfinx', 'DOLFINX'], ['python', 'PYTHON'], ['local', 'BROWSER']].map(e => {
       const on = st.engine === e[0], s = sel(on);
       return { label: e[1], bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
         click: () => this.setState({ engine: e[0] }) };
     });
+    const py = st.pyCore, pyTxt = py ? 'Python FE core: sparse direct / ' + (py.amg ? 'AMG-CG' : 'Jacobi-CG') + ' · incompatible-mode hex8 · static, nonlinear, modal, buckling, contact' : null;
     const engineNote = st.engine === 'local'
-      ? 'hex8 · Jacobi-PCG · runs in this tab'
-      : live ? 'attached — ' + (st.bridgeEngine || 'dolfinx') + ' · CG + GAMG'
-      : 'core not reachable on ' + BRIDGE_URL + ' — falls back to the in-browser core. '
-        + 'Start it with: docker compose up (in backend/)';
+      ? 'hex8 · Jacobi-PCG · runs in this tab · static and modal only'
+      : st.engine === 'python' ? (pyTxt || 'Python FE core not reachable — open the Workbench from the webdemo server (make demo)')
+      : st.engine === 'dolfinx' ? (live ? (st.bridgeEngine || 'dolfinx') + ' · CG + GAMG · any part (posted mesh), linear static' : 'DOLFINx core not reachable on ' + BRIDGE_URL + ' — start it with: docker compose up (in backend/)')
+      : (live ? 'parametric bracket → ' + (st.bridgeEngine || 'dolfinx') + ' · ' : '') + (pyTxt ? 'any part → ' + pyTxt : 'no Python core here — solves in this tab');
     const mesherOpts = [['voxel', 'VOXEL HEX8'], ['gmsh', 'GMSH TET']].map(mm => {
       const on = st.mesher === mm[0], s = sel(on);
       return { label: mm[1], bg: s.bg, bd: s.bd, fg: on ? '#dff3f7' : '#7f8b98',
@@ -4599,7 +5227,8 @@ class Component extends DCLogic {
     });
     const mesherNote = st.mesher === 'gmsh'
       ? 'exact filleted B-Rep, P2 tets — resolves the concentration. Requires the DOLFINx core.'
-      : 'structured grid, identical in both engines. Staircases the fillet.';
+      : st.meshFit !== false ? 'hex8 on a fitted grid, skin nodes snapped onto the CAD surfaces (stage 04 ▸ SURFACE); the Python and posted-mesh DOLFINx engines solve this same mesh'
+      : 'hex8 voxel grid, stepped surfaces (stage 04 ▸ SURFACE); the Python and posted-mesh DOLFINx engines solve this same mesh';
 
     const palRaw = this.palList();
     const palIdx = Math.min(st.palIdx, Math.max(0, palRaw.length - 1));
@@ -4616,7 +5245,7 @@ class Component extends DCLogic {
     return {
       savedLabel: st.solving ? '· solving' : stale ? '· results stale' : st.savedAgo,
       winTitle: (st.part.name || 'part') + ' — Archimedes Workbench',
-      dpiLabel: grp(M.nn * 3) + ' DOF · hex8 · Jacobi-PCG',
+      dpiLabel: grp(M.nn * 3) + ' DOF · hex8 · ' + this.solverLabel(),
       win: { isMax: st.maxed, isRestored: !st.maxed, maxTitle: st.maxed ? 'Restore Down' : 'Maximize',
         toggleMax: () => this.setState({ maxed: !st.maxed }) },
       menus: this.menuDefs().map(m => ({
@@ -4636,7 +5265,7 @@ class Component extends DCLogic {
       tabs, tabHint, tabIs: { view: st.tab === 'view', converge: st.tab === 'converge' },
       conv, chat, node, aiOpen: st.aiOpen, aiClosed: !st.aiOpen,
       engineOpts, mesherOpts, mesherNote,
-      engineNote, engineNoteFg: st.engine === 'local' ? '#4d5866' : live ? '#6f8f7a' : '#8a7c5c',
+      engineNote, engineNoteFg: st.engine === 'local' ? '#4d5866' : (live || st.pyCore) ? '#6f8f7a' : '#8a7c5c',
       leftW: st.focus ? 0 : st.leftW, rightW: st.focus ? 0 : st.rightW,
       viewportRef: this.refViewport, canvasRef: this.refCanvas,
       dragLeft: e => this.startDrag(e, 'leftW', 1),
@@ -4651,7 +5280,7 @@ class Component extends DCLogic {
         : st.stage === 1 ? 'units ' + UNITS[st.units].label + ' · rebuilt in ' + (this.rebuildMs || 0).toFixed(0) + ' ms'
         : 'units ' + UNITS[st.units].label,
       vpLine3: st.solving ? 'solving — ' + (this.prog.note || PIPE[(st.solveStep || 1) - 1])
-        : st.modal && modeInfo ? 'mode ' + st.mode + ' · ' + sig(modeInfo.hz) + ' Hz'
+        : st.modal && modeInfo ? 'mode ' + st.mode + ' · ' + this.modeLabel(modeInfo)
         : showResults ? F.label + ' · warp ×' + st.deform
         : stale ? 'inputs changed — re-solve for results'
         : this.sketchFeat() ? 'sketching on the ' + (CADK.PLANES[this.sketchFeat().plane] || {}).name + ' plane · ' + st.sketchTool + ' · ✓ when done'
@@ -4682,7 +5311,7 @@ class Component extends DCLogic {
       stop: e => e.stopPropagation(),
       runSolve: () => (st.solving ? this.abortSolve('cancelled by operator') : this.startSolve()),
       solveBtn: { label: (st.solving ? 'ABORT' : stale || st.solved ? 'RE-SOLVE' : 'SOLVE')
-          + (st.solving ? '' : this.useRemote() ? ' · DOLFINx' : ' · LOCAL'),
+          + (st.solving ? '' : { dolfinx: ' · DOLFINx', 'dolfinx-mesh': ' · DOLFINx', python: ' · PYTHON', local: ' · LOCAL' }[this.route()]),
         bg: st.solving ? '#ff6b81' : stale ? '#e6c98a' : A, fg: '#07171a' },
       showLegend: showResults && !!R && st.legendOn !== false,
       legendRight: st.aiOpen ? 338 : 12,
@@ -4690,7 +5319,7 @@ class Component extends DCLogic {
         unit: st.modal ? 'mode ' + st.mode : 'peak over step',
         gradient: cssRamp(stops), ticks,
         max: st.modal ? '1.00' : sig(F.max) + ' ' + F.unit,
-        maxLoc: st.modal && modeInfo ? sig(modeInfo.hz) + ' Hz' : F.loc },
+        maxLoc: st.modal && modeInfo ? this.modeLabel(modeInfo) : F.loc },
       probe: st.probe ? { on: true, ...st.probe } : { on: false, x: 0, y: 0, l1: '', l2: '', l3: '' },
       panel: st.featEdit && S === 1 && this.feat(st.featEdit.id) ? this.featurePanel(this.feat(st.featEdit.id)) : panels[S],
       ...this.cadVals(),
@@ -4708,15 +5337,15 @@ class Component extends DCLogic {
         onChange: e => this.setState({ threshLo: +e.target.value }) },
       iso: { on: st.iso, n: st.isoN, onChange: e => this.setState({ isoN: +e.target.value }) },
       time: st.modal
-        ? { title: 'MODE SHAPE', min: 1, max: Math.max(1, (st.modes || [1]).length), raw: st.mode,
+        ? { title: (st.modes && st.modes[0] && st.modes[0].buckling) ? 'BUCKLING MODE' : 'MODE SHAPE', min: 1, max: Math.max(1, (st.modes || [1]).length), raw: st.mode,
             label: 'mode ' + st.mode,
-            note: modeInfo ? sig(modeInfo.hz) + ' Hz — lumped mass, coarse level' : 'solve with MODE requested',
+            note: modeInfo ? this.modeLabel(modeInfo) + (modeInfo.buckling ? ' — linear buckling' : modeInfo.server ? ' — lumped mass, full mesh' : ' — lumped mass, coarse level') : 'solve with MODE requested',
             mLabel: 'ANIMATING', mBg: 'rgba(94,207,224,.12)', mBd: 'rgba(94,207,224,.42)', mFg: '#dff3f7',
             onChange: e => this.setState({ mode: +e.target.value }),
             toggleModal: () => this.setState({ modal: false }) }
         : { title: 'LOAD INCREMENT', min: 0, max: N.sIncr, raw: Math.min(st.timeStep, N.sIncr),
             label: 'λ ' + lf.toFixed(2),
-            note: 'linear elastic — increment ' + Math.min(st.timeStep, N.sIncr) + ' / ' + N.sIncr,
+            note: R && R.nonlinear ? 'nonlinear — the final state after ' + N.sIncr + ' increments (not rescaled)' : 'linear elastic — increment ' + Math.min(st.timeStep, N.sIncr) + ' / ' + N.sIncr,
             mLabel: 'MODAL', mBg: '#13181e', mBd: '#222a33', mFg: '#6c7784',
             onChange: e => this.setState({ timeStep: +e.target.value }),
             toggleModal: () => this.wantModal(true) },
@@ -4751,13 +5380,14 @@ class Component extends DCLogic {
             fg: '#8b96a2', bd: '#1f272f', toggle: () => this.toggleBridge() }
         : st.bridge === 'connecting'
         ? { label: 'connecting…', dot: '#e6c98a', fg: '#e6c98a', bd: '#3a3324', toggle: () => this.toggleBridge() }
+        : st.pyCore ? { label: 'python core', dot: '#7ee787', fg: '#8b96a2', bd: '#1f272f', toggle: () => this.toggleBridge() }
         : { label: 'in-browser', dot: '#e6c98a', fg: '#8b96a2', bd: '#3a3324', toggle: () => this.toggleBridge() },
       solveStatus: st.solving ? (this.prog.note || PIPE[(st.solveStep || 1) - 1].toUpperCase())
         : stale ? 'STALE — RE-SOLVE'
         : st.solved && st.wall ? 'CONVERGED · ' + (st.wall / 1000).toFixed(2) + ' s' : 'READY',
       solveStatusFg: st.solving ? A : stale ? '#e6c98a' : st.solved ? '#7ee787' : '#6c7784',
       statusLeft: [{ k: 'NODES', v: grp(M.nn) }, { k: 'ELEMS', v: grp(M.ne) },
-        { k: 'DOF', v: grp(M.nn * 3) }, { k: 'SOLVER', v: 'PCG · Jacobi' },
+        { k: 'DOF', v: grp(M.nn * 3) }, { k: 'SOLVER', v: this.solverLabel() },
         { k: 'ITER', v: st.solved && stats ? String(stats.it) : '—' }],
       unitBtn: { label: UNITS[st.units].label, open: st.unitsOpen,
         caret: st.unitsOpen ? '▾' : '▴',

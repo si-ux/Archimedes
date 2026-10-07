@@ -61,12 +61,17 @@ reasons for it are in [`Archimedes/docs/gestures.md`](Archimedes/docs/gestures.m
 
 The Workbench models and analyses any part, the way SolidWorks or CATIA do. It has:
 
-- a feature tree: sketches with fillets and holes, extrude and revolve (boss or cut), box, cylinder, sphere, hole,
-  linear and circular patterns, mirror, and imported STL bodies;
-- a PropertyManager (✓ / ✕) for every feature, a sketcher, and Instant3D drag arrows and a Modify box on any face;
-- supports and loads on any picked faces (fixed, roller, force, pressure, gravity, temperature);
+- a feature tree: sketches with fillets and holes, extrude and revolve (boss or cut), loft, sweep, 3D edge fillets
+  and chamfers, shell, box, cylinder, sphere, hole, linear and circular patterns, mirror, and imported STL bodies;
+- a PropertyManager (✓ / ✕) for every feature, a sketcher with relations and driving dimensions (a constraint
+  solver), and Instant3D drag arrows and a Modify box on any face;
+- supports and loads on any picked faces (fixed, roller, compression-only contact, force, pressure, gravity,
+  temperature);
+- a body-fitted hex8 mesh (skin nodes on the real CAD surfaces) and static, nonlinear (plasticity), modal and
+  buckling analyses on the Python FE core, the DOLFINx container or in the browser;
 - a material library plus a custom material, templates, open / save, and STL import and export;
-- standard views, pan and zoom at the cursor (SolidWorks or CATIA buttons), and undo / redo.
+- standard views, pan and zoom at the cursor (SolidWorks or CATIA buttons), an optional ground grid (View ▸ Ground
+  Grid, or # Grid in the viewport), and undo / redo.
 
 See [`Archimedes/docs/cad-workflow.md`](Archimedes/docs/cad-workflow.md).
 In the Workbench, thumbs-up held still for 1.2 s runs the solve instead of
@@ -118,12 +123,13 @@ pipeline works before you have data. Don't report those numbers.
 archimedes_gestures/   landmarks, features, classifier, intent engine, modelling engine, finger-count numbers,
                        filters, quality, calibration, view_state, recorder, tracker (MediaPipe), pyvista_bridge,
                        synthetic hand model
-archimedes_fe/         member model, brick FE solver (static + modal), demos, model session, GLB export,
+archimedes_fe/         member model, brick FE solver (static + modal), general hex8 mesh solver (meshsolver:
+                       static, plasticity, contact, modal, buckling), demos, model session, GLB export,
                        scripting (Python console commands, journal)
 fe_scripts/            example console scripts and a helper module
 Archimedes/            Workbench page, cadkernel.js (feature-based CAD kernel), DOLFINx backend, docs
 webdemo/               FastAPI + WebSocket server, workbench page (MediaPipe WASM + three.js), /xr WebXR viewer
 apps/desktop_demo.py   OpenCV/MediaPipe desktop app, optional PyVista window
 scripts/               train_static.py, extract_hagrid.py, evaluate_filter.py
-tests/                 69 tests (+ 8 CAD-kernel tests in Node), no camera or GPU needed:  make test
+tests/                 95 tests (+ 18 CAD-kernel tests in Node), no camera or GPU needed:  make test
 ```

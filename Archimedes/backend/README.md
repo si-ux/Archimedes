@@ -116,6 +116,7 @@ bridge carries no third-party dependency.
 client -> server
     {"op":"hello",  "protocol":1}
     {"op":"solve",  "id":"...", "study":{...}}
+    {"op":"solve_mesh", "id":"...", "mesh":{"nodes", "elems", "fixed", "f", "material", "dT"}}
     {"op":"cancel", "id":"..."}
     {"op":"ping"}
 
@@ -124,10 +125,21 @@ server -> client
     {"op":"log",      "id":.., "ch":.., "msg":.., "kind":"info|ok|warn|err", "t":..}
     {"op":"progress", "id":.., "stage":1..6, "pct":.., "note":..}
     {"op":"result",   "id":.., "stats":{..}, "grid":{..}, "fields":{..}}
+    {"op":"mesh_result", "id":.., "engine":.., "stats":{..}, "u", "umag", "vm", "p1", "energy"}
     {"op":"error",    "id":.., "msg":..}
 ```
 
 Nodal fields are base64 float32 in the UI's node order.
+
+`solve` takes the parametric bracket study. `solve_mesh` takes any part: the
+Workbench posts its own body-fitted hex8 mesh (`nodes` mm, `elems` with local
+node order n = a + 2b + 4c, which is DOLFINx's hexahedron order), the
+constrained dofs (`fixed`, 3·node + k), the nodal loads `f` (surface loads and
+self weight already lumped) and the material. `fem.solve_general` builds the
+DOLFINx mesh from them, solves linear elasticity with CG + GAMG and returns the
+fields in the posted node order. Arrays may be JSON lists or base64
+float32 / int32. This path has unit tests for the payload decoding and the mock
+engine only; the DOLFINx solve itself needs the container.
 
 `--engine mock` meshes for real but solves nothing and returns zero fields —
 it exists to exercise the wire protocol without the container, and says so

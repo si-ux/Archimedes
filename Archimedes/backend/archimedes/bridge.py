@@ -11,7 +11,9 @@ the UI's own node order, so the viewport can adopt them without remeshing.
 
     client -> server
         {"op":"hello",  "protocol":1}
-        {"op":"solve",  "id":"...", "study":{...}}
+        {"op":"solve",  "id":"...", "study":{...}}           the parametric bracket
+        {"op":"solve_mesh", "id":"...", "mesh":{nodes, elems, fixed, f, material, dT}}
+                                                             any part, meshed by the Workbench
         {"op":"cancel", "id":"..."}
         {"op":"ping"}
 
@@ -20,6 +22,7 @@ the UI's own node order, so the viewport can adopt them without remeshing.
         {"op":"log",      "id":.., "ch":.., "msg":.., "kind":"info|ok|warn|err", "t":..}
         {"op":"progress", "id":.., "stage":1..6, "pct":.., "note":..}
         {"op":"result",   "id":.., "stats":{..}, "grid":{..}, "fields":{..}}
+        {"op":"mesh_result", "id":.., "engine":.., "stats":{..}, "u":b64, "umag":b64, "vm":b64, "p1":b64, "energy":..}
         {"op":"error",    "id":.., "msg":..}
 """
 
@@ -220,7 +223,42 @@ def run_mock(study: Study, log, progress, cancelled):
     }
 
 
+def _b64(a) -> str:
+    return base64.b64encode(np.ascontiguousarray(np.asarray(a, dtype="<f4")).tobytes()).decode("ascii")
+
+
+def run_dolfinx_mesh(payload: dict, log, progress, cancelled):
+    """Any part: the Workbench posts its own (body-fitted) hex8 mesh, supports and nodal loads."""
+    from . import fem
+
+    def _log(ch, msg, kind="info"):
+        cancelled()
+        log(ch, msg, kind)
+
+    def _prog(stage, pct, note=""):
+        cancelled()
+        progress(stage, pct, note)
+
+    res = fem.solve_general(payload, _log, _prog)
+    return {"engine": res["engine"], "stats": res["stats"], "energy": res["energy"],
+            **{k: _b64(res[k]) for k in ("u", "umag", "vm", "p1")}}
+
+
+def run_mock_mesh(payload: dict, log, progress, cancelled):
+    """Protocol exerciser for posted meshes: decodes and checks the mesh, returns zero fields."""
+    from .fem import mesh_arrays
+    nodes, elems, fixed, f = mesh_arrays(payload)
+    log("core", "MOCK ENGINE — posted mesh decoded, all field values are zero", "warn")
+    progress(4, 100.0, "mock")
+    z = np.zeros(len(nodes))
+    return {"engine": "mock", "energy": 0.0,
+            "stats": {"elements": int(len(elems)), "nodes": int(len(nodes)), "dof": int(nodes.size),
+                      "fixed": int(len(fixed)), "load": float(np.abs(f).sum()), "mock": True},
+            "u": _b64(np.zeros(nodes.size)), "umag": _b64(z), "vm": _b64(z), "p1": _b64(z)}
+
+
 ENGINES = {"dolfinx": run_dolfinx, "mock": run_mock}
+MESH_ENGINES = {"dolfinx": run_dolfinx_mesh, "mock": run_mock_mesh}
 
 
 # -------------------------------------------------------------- server --
@@ -245,7 +283,7 @@ class Handler(socketserver.StreamRequestHandler):
             print(f"[bridge] client connected {peer}", flush=True)
         self._emit({"op": "hello", "protocol": PROTOCOL,
                     "engine": self._engine_banner(), "version": __version__,
-                    "capabilities": ["solve", "cancel", "modal", "voxel", "gmsh"]})
+                    "capabilities": ["solve", "solve_mesh", "cancel", "modal", "voxel", "gmsh"]})
         try:
             while True:
                 opcode, data = _recv(self.rfile)
@@ -288,10 +326,13 @@ class Handler(socketserver.StreamRequestHandler):
         elif op == "solve":
             self._cancel.clear()
             threading.Thread(target=self._solve, args=(msg,), daemon=True).start()
+        elif op == "solve_mesh":
+            self._cancel.clear()
+            threading.Thread(target=self._solve, args=(msg, True), daemon=True).start()
         else:
             self._emit({"op": "error", "msg": f"unknown op {op!r}"})
 
-    def _solve(self, msg):
+    def _solve(self, msg, posted=False):
         job = msg.get("id") or "job"
         t0 = time.perf_counter()
 
@@ -310,9 +351,13 @@ class Handler(socketserver.StreamRequestHandler):
                 raise Cancelled()
 
         try:
-            study = Study.from_dict(msg.get("study") or {})
-            out = ENGINES[self.engine](study, log, progress, cancelled)
-            out["op"] = "result"
+            if posted:
+                out = MESH_ENGINES[self.engine](msg.get("mesh") or {}, log, progress, cancelled)
+                out["op"] = "mesh_result"
+            else:
+                study = Study.from_dict(msg.get("study") or {})
+                out = ENGINES[self.engine](study, log, progress, cancelled)
+                out["op"] = "result"
             out["id"] = job
             self._emit(out)
         except Cancelled:

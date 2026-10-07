@@ -15,14 +15,18 @@ Run:  uvicorn webdemo.server:app --host 0.0.0.0 --port 8000
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import time
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import numpy as np
+
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from archimedes_fe import scripting
+from archimedes_fe import meshsolver, scripting
 from archimedes_fe.export import to_glb
 from archimedes_fe.scripting import Console
 from archimedes_fe.session import ModelSession
@@ -105,6 +109,62 @@ def scene_glb(field: str = "von_mises", deform: float | None = None):
 @app.get("/healthz")
 def health():
     return {"ok": True}
+
+
+# ---- general-mesh FE core for the Workbench -----------------------------------
+# The Workbench meshes any CAD part (body-fitted hex8) in the browser and posts the
+# mesh here for the analyses the in-browser core doesn't do (nonlinear material,
+# contact, buckling) or to solve big models faster (sparse direct / AMG).
+def _array(v, dtype, width: int | None = None) -> np.ndarray:
+    """A JSON list, or base64 of little-endian float32 / int32, as a numpy array."""
+    if isinstance(v, str):
+        raw = base64.b64decode(v)
+        a = np.frombuffer(raw, dtype="<i4" if np.issubdtype(dtype, np.integer) else "<f4").astype(dtype)
+    else:
+        a = np.asarray(v, dtype=dtype)
+    return a.reshape(-1, width) if width else a.ravel()
+
+
+@app.get("/api/fe/info")
+def fe_info():
+    try:
+        import pyamg  # noqa: F401
+        amg = True
+    except ImportError:
+        amg = False
+    return {"ok": True, "element": "hex8 (+ Wilson–Taylor incompatible modes)",
+            "analyses": ["static", "nonlinear", "modal", "buckling"], "contact": True, "amg": amg,
+            "direct_max_dof": meshsolver.DIRECT_MAX_DOF}
+
+
+@app.post("/api/fe/solve")
+async def fe_solve(req: dict = Body(...)):
+    """Solve a hex8 mesh: {nodes, elems, material, fixed, f, analysis, n_modes, contact, dT, steps}.
+
+    nodes (nn·3) mm and f (nn·3) N as lists or base64 float32; elems (ne·8, local node n = a + 2b + 4c)
+    and fixed (dof indices 3·node + k) as lists or base64 int32; contact [{nodes, normal}]. The reply is
+    meshsolver.encode_results(...) plus wall time; a model that can't be solved gets 400 {error}.
+    """
+    try:
+        nodes = _array(req["nodes"], float, 3)
+        elems = _array(req["elems"], np.int64, 8)
+        fixed = _array(req.get("fixed", []), np.int64)
+        f = _array(req["f"], float)
+        contact = [{"nodes": _array(c["nodes"], np.int64), "normal": [float(x) for x in c["normal"]]}
+                   for c in req.get("contact") or []]
+        args = dict(material=req["material"], fixed=fixed, f=f, analysis=req.get("analysis", "static"),
+                    n_modes=int(req.get("n_modes", 3)), contact=contact or None, dT=float(req.get("dT", 0.0)),
+                    steps=int(req.get("steps", 10)), solver=req.get("solver", "auto"))
+    except (KeyError, TypeError, ValueError) as e:
+        return JSONResponse({"error": f"bad request: {e}"}, status_code=400)
+    t0 = time.perf_counter()
+    try:
+        res = await asyncio.to_thread(meshsolver.solve_mesh, nodes, elems, **args)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    out = meshsolver.encode_results(res)
+    out["wall_s"] = round(time.perf_counter() - t0, 3)
+    return out
 
 
 def new_pipeline(profile: str = "viewer") -> GesturePipeline:
