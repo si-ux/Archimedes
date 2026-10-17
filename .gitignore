@@ -9,3 +9,11 @@ data/
 models/*.task
 models/*.joblib
 reports/
+build/
+dist/
+.coverage
+htmlcov/
+node_modules/
+.DS_Store
+Thumbs.db
+.idea/

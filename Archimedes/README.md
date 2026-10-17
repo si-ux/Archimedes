@@ -1,22 +1,49 @@
-# CODING AGENTS: READ THIS FIRST
+# Archimedes Workbench
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+A browser-based part modeller and finite-element pre/post-processor. It is one of the two apps in this repository;
+see the [main README](../README.md) for the overview and setup.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+The Workbench is served by the demo server at `/workbench/`:
 
-## What you should do — IMPORTANT
+```bash
+make demo        # from the repository root, then open http://localhost:8000/workbench/
+```
 
-**Read `archimedes-desktop/project/Archimedes Workbench.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+The page also opens directly from disk (`Archimedes Workbench.dc.html`). It then solves in the browser only, since
+the Python FE core and the gesture engine come from the server.
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+## Contents of this folder
 
-## About the design files
+| Path | What it is |
+|---|---|
+| `Archimedes Workbench.dc.html` | The Workbench application: UI, mesher, in-browser solver, results viewer |
+| `cadkernel.js` | The feature-based CAD kernel: sketches, constraint solver, features, faces, voxelizer, surface projection. A UMD module that also runs in Node (`tests/cadkernel_test.js`) |
+| `support.js` | The small template runtime the page is built on |
+| `Archimedes Site.dc.html` | A one-page project overview site |
+| `backend/` | The FEniCSx / DOLFINx solver core and its WebSocket bridge, run in Docker ([README](backend/README.md)) |
+| `docs/cad-workflow.md` | **User guide:** features, sketcher, loads, mesh, analyses and engines |
+| `docs/gestures.md` | The Workbench gesture vocabulary |
+| `docs/assistant-backend.md` | Design notes for the planned design assistant |
+| `uploads/` | Reference material: the FEniCSx build guide and a sketch |
+| `.devcontainer/`, `.vscode/` | A dev container and VS Code tasks for working on the DOLFINx backend |
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+## Solver engines
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+| Engine | Needs | Analyses |
+|---|---|---|
+| Browser | nothing | static, modal |
+| Python core | the demo server (`make demo`) | static, nonlinear, modal, buckling, contact |
+| DOLFINx | Docker: `cd backend && docker compose up` | static (any part); the parametric bracket also gets gmsh tetrahedra |
 
-## Bundle contents
+**AUTO** (the default) picks the best engine that is available. Details are in
+[`docs/cad-workflow.md`](docs/cad-workflow.md#mesh-and-solver).
 
-- `archimedes-desktop/README.md` — this file
-- `archimedes-desktop/project/` — the `Archimedes Desktop` project files (HTML prototypes, assets, components)
+## Working on the DOLFINx backend
+
+DOLFINx has no Windows build and is awkward to install natively, so it lives in a container:
+
+- **Run it:** `cd backend && docker compose up --build` (or the VS Code task *Solver: start bridge*).
+- **Develop inside it:** open this folder in VS Code and choose **Dev Containers: Reopen in Container**. That gives
+  you `import dolfinx`, IntelliSense and breakpoints in the solver.
+
+The bridge is bound to `127.0.0.1:8791` on purpose: it runs whatever study it receives. Don't expose it on a network.
