@@ -1,0 +1,60 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please search the existing issues first.
+        **Security problems:** don't file them here; see SECURITY.md.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Workbench (CAD modelling)
+        - Workbench (mesh / solver / results)
+        - Gesture recognition
+        - Gesture modeller
+        - Python console / scripting
+        - DOLFINx backend
+        - Server / API
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open /workbench/ and load the L-bracket template
+        2. Set the element size to 3 mm
+        3. Press SOLVE
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: The solver log (Workbench), the browser console, or the server output. Screenshots help a lot.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "e.g. Chrome 129, Ubuntu 24.04, Python 3.11, local / Codespace"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: "git rev-parse --short HEAD"
