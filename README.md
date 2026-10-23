@@ -10,6 +10,7 @@ lets you build members, cut sections and probe results with an ordinary webcam.
 [![CI](https://github.com/si-ux/archimedes/actions/workflows/ci.yml/badge.svg)](https://github.com/si-ux/archimedes/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776ab)
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-339933)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-d7ff64)](https://github.com/astral-sh/ruff)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Codespaces-open-24292f?logo=github)](https://codespaces.new/si-ux/archimedes)
 
@@ -315,8 +316,10 @@ listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-No license has been chosen yet. Until a `LICENSE` file is added, the code is under default copyright: you may view
-it and fork it on GitHub, but not reuse it elsewhere.
+Archimedes is licensed under the [Apache License 2.0](LICENSE). You may use, modify and distribute it, also
+commercially, as long as you keep the copyright and license notices, state your changes, and include the
+[NOTICE](NOTICE) file. The license also grants a patent license from contributors. Third-party components keep
+their own licenses (see [NOTICE](NOTICE)).
 
 ## Acknowledgements
 

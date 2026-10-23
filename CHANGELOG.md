@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Apache License 2.0 (`LICENSE`, `NOTICE`).
 - Project documentation for contributors: README overview with screenshots, contributing guide, code of conduct,
   security policy, issue and pull request templates.
 - Continuous integration on GitHub Actions: Ruff, pytest on Python 3.10 to 3.12, and the CAD kernel tests on Node.

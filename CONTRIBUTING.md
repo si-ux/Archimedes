@@ -3,7 +3,8 @@
 Thanks for your interest in improving Archimedes. This guide covers how to set up a development environment, how
 the code is organised, and what we look for in a pull request.
 
-By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Contributions are accepted under the
+[Apache License 2.0](LICENSE), the project's license (section 5 of the license).
 
 ## Ways to contribute
 

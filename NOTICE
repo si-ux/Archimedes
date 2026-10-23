@@ -1,0 +1,11 @@
+Copyright 2026 si-ux and the Archimedes contributors
+
+This product includes software developed as part of the Archimedes project
+(https://github.com/si-ux/archimedes), licensed under the Apache License,
+Version 2.0. See LICENSE for the full text.
+
+Third-party components keep their own licenses: MediaPipe (Apache-2.0),
+three.js and React (MIT), NumPy, SciPy and scikit-learn (BSD), PyAMG and
+FastAPI (MIT). The optional solver container uses FEniCSx / DOLFINx
+(LGPL-3.0) and Gmsh (GPL-2.0-or-later), which are not distributed with
+this repository.
