@@ -16,6 +16,19 @@ import numpy as np
 FIELDS = ("von_mises", "displacement", "max_principal", "strain")
 
 
+def snap_axis(n: np.ndarray, prev: np.ndarray | None = None, margin: float = 1.25) -> np.ndarray:
+    """Nearest signed world axis to the unit vector n. A previous axis is kept unless another clearly wins."""
+    a = np.abs(n)
+    i = int(a.argmax())
+    if prev is not None:
+        j = int(np.abs(prev).argmax())
+        if a[j] * margin >= a[i]:
+            i = j
+    v = np.zeros(3)
+    v[i] = 1.0 if n[i] >= 0 else -1.0
+    return v
+
+
 @dataclass
 class Command:
     kind: str  # orbit | zoom | section | section_lock | section_off | probe | probe_clear | probe_pin
@@ -37,8 +50,11 @@ class ViewState:
     probe_cursor: list | None = None  # [x, y] in 0..1 viewport coords
     probe_pins: list = field(default_factory=list)
     snapshots: int = 0
+    section_free: bool = False  # tilted by hand; otherwise the cut is straight along a world axis
     fields: list = field(default_factory=lambda: list(FIELDS))  # set from the solver's result fields
     _history: list = field(default_factory=list, repr=False)
+    _sec_buf: list = field(default_factory=list, repr=False)  # first palm normals of a cut: they pick its axis
+    _sec_axis: list | None = field(default=None, repr=False)  # the axis once chosen (locked for the cut)
 
     @property
     def field_name(self) -> str:
@@ -74,17 +90,41 @@ class ViewState:
         elif k == "section":
             n = self.view_to_world(np.asarray(d["normal_view"], float))
             n /= np.linalg.norm(n) + 1e-9
-            self.section_on, self.section_locked = True, False
+            free = bool(d.get("free", False))
+            offset = d.get("offset", 0.0)
+            if not free:
+                # Straight cut: the axis the palm faces over its first few frames, then locked for the whole
+                # gesture, so tremor can never tilt it. The plane slides along that axis.
+                if self._sec_axis is None:
+                    self._sec_buf.append(n)
+                    m = np.mean(self._sec_buf, axis=0)
+                    m /= np.linalg.norm(m) + 1e-9
+                    prev = np.asarray(self.plane_normal) if self.section_on and not self.section_free else None
+                    ax = snap_axis(m, prev)
+                    if len(self._sec_buf) >= 6:
+                        self._sec_axis = ax.tolist()
+                else:
+                    ax = np.asarray(self._sec_axis)
+                n = ax
+                if "disp" in d:  # slide along the axis as it appears on screen
+                    r, u, b = self.camera_basis()
+                    nv = np.array([n @ r, n @ u, n @ b])
+                    offset = d.get("gain", 0.5) * float(np.dot(d["disp"], nv))
+            else:
+                self._sec_axis, self._sec_buf = None, []
+            self.section_on, self.section_locked, self.section_free = True, False, free
             self.plane_normal = n.tolist()
-            self.plane_origin = (np.asarray(self.focal_point) + d.get("offset", 0.0) * n).tolist()
+            self.plane_origin = (np.asarray(self.focal_point) + offset * n).tolist()
         elif k == "section_off":
             self._push()
             self.section_on, self.section_locked = False, False
+            self._sec_axis, self._sec_buf = None, []
         elif k == "section_lock":
             self.section_locked = True
             if "normal_view" in d:
                 self.apply(Command("section", d))
                 self.section_locked = True
+            self._sec_axis, self._sec_buf = None, []
         elif k == "probe":
             self.probe_cursor = list(d["xy"])
         elif k == "probe_clear":
@@ -110,6 +150,7 @@ class ViewState:
             self.snapshots += 1
         elif k == "begin":  # start of a continuous gesture: one undo step per gesture
             self._push()
+            self._sec_axis, self._sec_buf = None, []
         elif k == "reset":
             self._push()
             hist = self._history

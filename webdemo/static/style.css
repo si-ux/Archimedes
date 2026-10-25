@@ -128,7 +128,7 @@ table.kv tr.em td:last-child { color: var(--arming); font-weight: 600; }
 .prompt-row { display: grid; grid-template-columns: 74px 1fr; gap: 12px; align-items: center; }
 #prompt-live { font-size: 48px; font-weight: 700; text-align: center; color: var(--arming); border: 1px solid var(--line);
   border-radius: 10px; line-height: 70px; }
-#prompt-input { width: 100%; font-size: 26px; font-variant-numeric: tabular-nums; padding: 6px 10px; }
+#prompt-input { width: calc(100% - 52px); font-size: 26px; font-variant-numeric: tabular-nums; padding: 6px 10px; }
 #prompt-choices div { padding: 2px 0; }
 #prompt-axes { margin: 6px 0; }
 #prompt-axes button.on { border-color: var(--load); background: rgba(255,159,67,.2); }
@@ -164,3 +164,4 @@ table.kv tr.em td:last-child { color: var(--arming); font-weight: 600; }
 #con-in { flex: 1; background: transparent; border: 0; outline: 0; color: var(--text); font: inherit; padding: 2px 0; }
 #viewport.console-open #prompt { bottom: calc(42% + 10px); }
 #viewport.console-open #tip, #viewport.console-open #demo-caption { display: none; }
+#prompt-back { margin-left: 6px; font-size: 18px; padding: 6px 10px; vertical-align: middle; }

@@ -27,17 +27,23 @@ class Mode:
     icon: str
     fire: str | None = None  # one-shot command emitted when the mode engages
     toast: str | None = None  # HUD message shown when it fires
+    two: bool = False  # needs both hands; never chosen by a single hand's pose
 
 
 MODES = {
-    "orbit": Mode("orbit", "fist", 0.25, False, "Rotate", "Make a fist and drag - like grabbing the model", "✊"),
-    "zoom": Mode("zoom", "pinch", 0.25, False, "Zoom", "Pinch, then move up to zoom in, down to zoom out", "🤏"),
+    "orbit": Mode("orbit", "fist", 0.12, False, "Rotate", "Make a fist and drag - like grabbing the model", "✊"),
+    "zoom": Mode("zoom", "pinch", 0.12, False, "Zoom", "Pinch, then move up to zoom in, down to zoom out", "🤏"),
+    "grab": Mode("grab", "pinch", 0.1, False, "Two-hand zoom / rotate",
+                 "Pinch with both hands: spread or bring them together to zoom, move them together to rotate",
+                 "🤏🤏", two=True),
     "section": Mode(
-        "section", "open_palm", 0.8, True, "Section cut",
-        "Hold a flat palm still - your palm becomes the cutting plane", "✋",
+        "section", "open_palm", 0.5, True, "Section cut",
+        "Hold a flat palm still: a straight cut along the axis it faces. Slide the palm to move the cut. "
+        "Show your other palm to tilt the cut freely", "✋",
     ),
-    "probe": Mode("probe", "point", 0.3, False, "Probe", "Point to read stress; hold still to pin a value", "☝️"),
-    "field": Mode("field", "peace", 0.3, False, "Field", "Show a V and swipe left/right to change the result field", "✌️"),
+    "probe": Mode("probe", "point", 0.12, False, "Probe",
+                  "Point to read stress; pinch with your other hand (or hold still) to pin the value", "☝️"),
+    "field": Mode("field", "peace", 0.2, False, "Field", "Show a V and swipe left/right to change the result field", "✌️"),
     "snapshot": Mode("snapshot", "thumbs_up", 1.0, True, "Snapshot", "Hold a thumbs-up to save a screenshot", "👍",
                      fire="snapshot", toast="Snapshot saved"),
 }
@@ -52,11 +58,11 @@ WORKBENCH_MODES = {
                   fire="solve", toast="Solve started"),
 }
 PROFILES = {"viewer": MODES, "workbench": WORKBENCH_MODES}
-POSE_TO_MODE = {m.pose: m.name for m in MODES.values()}
+POSE_TO_MODE = {m.pose: m.name for m in MODES.values() if not m.two}
 
 
 def pose_to_mode(modes: dict) -> dict:
-    return {m.pose: m.name for m in modes.values()}
+    return {m.pose: m.name for m in modes.values() if not m.two}
 
 # two-hand gesture, handled separately by the intent engine
 RESET_HINT = "Show both open palms for a second to reset the view"

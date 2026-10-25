@@ -1,4 +1,4 @@
-.PHONY: demo console test lint train train-smoke filter-smoke
+.PHONY: demo console test lint bench record-demo train train-smoke filter-smoke
 
 demo:            ## browser demo - open the forwarded port 8000
 	python -m uvicorn webdemo.server:app --host 0.0.0.0 --port 8000
@@ -8,6 +8,12 @@ console:         ## Python console without the browser (scripts: python -m archi
 
 test:
 	python -m pytest -q
+
+bench:           ## response time / accuracy of the gesture controls on synthetic hands
+	python scripts/gesture_bench.py
+
+record-demo:     ## record docs/media/*.mp4 and *.gif (needs playwright + ffmpeg)
+	python scripts/record_demo.py
 
 lint:
 	ruff check .

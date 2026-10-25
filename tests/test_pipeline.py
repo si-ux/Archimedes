@@ -76,7 +76,10 @@ def test_section_needs_still_hold_and_locks_plane():
     assert pipe.view.section_on and pipe.view.section_locked
     n = np.array(pipe.view.plane_normal)
     right, _, _ = pipe.view.camera_basis()
-    assert abs(n @ right) > 0.6  # sideways palm -> plane normal along the screen's x axis
+    # the default cut is STRAIGHT: exactly one world axis, the one the sideways palm faces most
+    assert np.isclose(np.abs(n).max(), 1.0) and np.isclose(np.abs(n).sum(), 1.0)
+    assert abs(n @ right) > 0.45  # and it is the axis closest to the screen's x direction
+    assert not pipe.view.section_free
 
 
 def test_two_open_palms_reset():

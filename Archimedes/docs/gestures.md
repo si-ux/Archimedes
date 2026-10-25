@@ -7,11 +7,12 @@ changes the mouse, menus and `▶` buttons make.
 
 | | Gesture | Hold… | then… |
 | --- | --- | --- | --- |
-| ⟳ | Orbit | ✊ fist, 0.25 s | drag, like grabbing the model |
-| ⇔ | Dolly zoom | 🤏 pinch, 0.25 s | move up to zoom in, down to zoom out |
-| ▬ | Section cut | ✋ flat palm, **still**, 0.8 s | **your palm is the cutting plane**, at any angle; turn it to orient the cut, move along it to slide; close the hand to lock · the cut is exact: crossed elements are clipped, so the face is flat |
-| ↑ | Probe | ☝️ index point, 0.3 s | the fingertip is the cursor; hold still 0.8 s to pin a node |
-| ◐ | Field | ✌️ V sign, 0.3 s | swipe left / right to change the result field |
+| ⟳ | Orbit | ✊ fist, 0.12 s | drag, like grabbing the model |
+| ⇔ | Zoom (one hand) | 🤏 pinch, 0.12 s | move up to zoom in, down to zoom out |
+| ⇱ | **Two-hand zoom and rotate** | 🤏🤏 pinch with both hands, 0.1 s | **spread the hands to zoom in, bring them together to zoom out** (1:1 with the distance between them); **move them together to rotate** |
+| ▬ | Section cut | ✋ flat palm, **still**, 0.5 s | a **straight** cut along the model axis the palm faces; the axis is picked in the first 6 frames and locked, so tremor never tilts it. Slide the palm to move the cut. **Show your other open palm to tilt the cut freely** with the hand |
+| ↑ | Probe | ☝️ index point, 0.12 s | the fingertip is the cursor. **Pinch with your other hand to pin the value** (or hold still 0.6 s) |
+| ◐ | Field | ✌️ V sign, 0.2 s | swipe left / right to change the result field |
 | ▲ | Solve | 👍 thumbs-up, **still**, 1.2 s | runs the solve once |
 | ⌂ | Reset | 🙌 both open palms, 1 s | resets the camera and removes the cut |
 
@@ -25,8 +26,8 @@ model.
 | open palm + drag = orbit | fist + drag | An open palm is the resting hand: every passing hand would orbit the model |
 | fist hold = next stage, swipes = prev/next stage | menus / keys | Stages are pre-processing; gestures are for results |
 | thumbs-up = solve, on recognition | thumbs-up held **still** 1.2 s, with a ring | A solve costs seconds to minutes; it must never fire by accident |
-| blade sweep along a fixed axis | palm plane at any angle | The one thing a mouse can't do in one motion (`cutAxis: 'free'`) |
-| two palms, vary separation = warp scale | warp slider | Two raised hands tire quickly, and MediaPipe loses overlapping hands |
+| blade sweep along a fixed axis | straight cut along an axis; tilt with the other palm | A hand always wobbles, so a free plane looked staggered; the free plane is still there, but asked for |
+| two palms, vary separation = warp scale | two *pinches*, vary separation = zoom | The distance between hands is the most direct zoom there is; pinching keeps the hands apart and tells the camera where each one is |
 
 ## How it runs
 

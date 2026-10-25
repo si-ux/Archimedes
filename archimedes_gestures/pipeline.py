@@ -53,6 +53,7 @@ class GesturePipeline:
         self.numbers = NumberEntry()
         self.fingers = FingerTracker()  # which fingers look up, shown in the camera view
         self._nudge: dict | None = None
+        self._num_t: float | None = None
         self.prompt: dict | None = None
         self.smoothers: dict[str, PoseSmoother] = {}
         self.calibrator: Calibrator | None = None
@@ -143,24 +144,46 @@ class GesturePipeline:
         cmds, toast = [], None
         pose = poses.get(ctrl.handedness, ("none", 0.0))[0] if ctrl else "none"
         inc = (self.prompt or {}).get("increment")
-        if inc and pose == "pinch" and len(f.hands) == 1:
-            # pinch and move up/down: one increment per 0.6 palm widths, from the current value
+        dt = 0.0 if self._num_t is None else max(0.0, min(f.timestamp - self._num_t, 0.2))
+        self._num_t = f.timestamp
+        events: list = []
+        if pose == "pinch" and len(f.hands) == 1:
+            # A pinch is never a digit. Held still it deletes the last digit (and repeats while held); moved up or
+            # down it nudges the value by the increment (when the question has one).
             y = ctrl.palm_center[1] / ctrl.palm_size
             if self._nudge is None:
-                base = self.numbers.value if self.numbers.value is not None else (self.prompt.get("default") or 0.0)
-                self._nudge = {"y0": y, "base": float(base), "steps": 0}
-            steps = int(round((self._nudge["y0"] - y) / 0.6))
-            if steps != self._nudge["steps"]:
-                self._nudge["steps"] = steps
-                v = max(0.0, round((self._nudge["base"] + steps * inc) / inc) * inc)
+                base = self.numbers.value if self.numbers.value is not None else ((self.prompt or {}).get("default") or 0.0)
+                self._nudge = {"y0": y, "base": float(base), "steps": 0, "still": 0.0, "next": 0.45}
+            nd = self._nudge
+            steps = int(round((nd["y0"] - y) / 0.6)) if inc else 0
+            if inc and (steps != nd["steps"] or abs(nd["y0"] - y) > 0.3):
+                nd["still"] = -1e9                                   # it moved: this is a nudge, not a delete
+            if inc and steps != nd["steps"]:
+                nd["steps"] = steps
+                v = max(0.0, round((nd["base"] + steps * inc) / inc) * inc)
                 self.numbers.set_value(v)
                 cmds.append(Command("number_set", {"digits": self.numbers.digits, "steps": steps}))
-            status = {"digits": self.numbers.digits, "live": None, "progress": 0.0, "kind": "nudge"}
-            events = []
+            elif nd["still"] >= 0 and speed < 0.9:
+                nd["still"] += dt
+                if nd["still"] >= nd["next"]:
+                    if self.numbers.backspace():
+                        cmds.append(Command("number_backspace", {"digits": self.numbers.digits}))
+                    nd["still"], nd["next"] = 0.0, 0.5
+            status = {"digits": self.numbers.digits, "live": None,
+                      "progress": 0.0 if nd["still"] < 0 else min(1.0, nd["still"] / nd["next"]),
+                      "kind": "nudge" if nd["still"] < 0 else "delete"}
+            self.numbers._ignore = None
         else:
             self._nudge = None
             events, status = self.numbers.update(f.timestamp, f.hands, speed, ctrl)
+        choices = (self.prompt or {}).get("choices") or {}
         for ev in events:
+            if ev[0] == "digit" and choices and str(ev[1]) in {str(k) for k in choices}:
+                # a "hold up N fingers" choice (the increments): the count itself is the answer, no accept step
+                cmds.append(Command("number_enter", {"value": float(ev[1])}))
+                toast = f"Chose {ev[1]}: {choices.get(ev[1], choices.get(str(ev[1])))}"
+                self.numbers.reset()
+                break
             if ev[0] == "digit":
                 cmds.append(Command("number_digit", {"digit": ev[1], "digits": self.numbers.digits}))
             elif ev[0] == "backspace":
@@ -173,7 +196,7 @@ class GesturePipeline:
                 cmds.append(Command("number_cancel"))
                 toast = "Cancelled"
                 self.numbers.reset()
-        label = {"confirm": "Accepting…", "cancel": "Cancelling…", "nudge": f"Nudge ±{inc:g} per step" if inc else None}.get(status["kind"])
+        label = {"confirm": "Accepting…", "cancel": "Cancelling…", "delete": "Deleting the last digit…", "nudge": f"Nudge ±{inc:g} per step" if inc else None}.get(status["kind"])
         if label is None and status["live"] is not None and status["kind"] == "digit":
             label = f"Digit {status['live']}"
         hud = {
@@ -181,9 +204,11 @@ class GesturePipeline:
             "pose": poses.get(ctrl.handedness, ("none", 0.0))[0] if ctrl else "none", "confidence": 1.0,
             "progress_label": label, "progress": status["progress"],
             "hints": [h.text for h in check_frame(f, self.engine.qcfg)],
-            "tip": "ACCEPT: 🙌 both open palms, hold · digits: hold up fingers · "
+            "tip": ("Lower your hand or change the finger count to answer the next question · "
+                    if self.numbers._ignore is not None else "") + ("CHOOSE: hold up that many fingers (1-5) · " if choices else
+                    "ACCEPT: 🙌 both open palms, hold · digits: hold up fingers · ")
                    + (f"🤏 pinch + move up/down = ±{inc:g} · " if inc else "")
-                   + "delete: swipe left · cancel: two fists",
+                   + "delete: 🤏 pinch and hold (or ⌫) · cancel: two fists",
             "toast": toast, "number": status, "prompt": self.prompt,
             "hands": [{"handedness": k, "pose": v[0], "confidence": round(float(v[1]), 3)} for k, v in poses.items()],
         }

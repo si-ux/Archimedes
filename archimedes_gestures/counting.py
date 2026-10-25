@@ -5,7 +5,7 @@ How a user enters "300":
     make a fist        → "30"
     open, then fist    → "300"   (a digit is taken once; change the count to enter it again)
     both open palms    → confirm ("enter"); with no digits this accepts the default
-    swipe left         → delete the last digit
+    pinch and hold     → delete the last digit; keep holding to repeat (a swipe of an open hand left works too)
     two fists (1 s)    → cancel
 
 Digits above 5 use both hands (5 + 3 = 8). Ten fingers means "confirm", not 10.
@@ -64,8 +64,8 @@ class FingerTracker:
 
 @dataclass
 class NumberEntry:
-    hold_s: float = 0.8
-    confirm_s: float = 0.8
+    hold_s: float = 0.55
+    confirm_s: float = 0.7
     cancel_s: float = 1.0
     still_speed: float = 0.9  # palm widths / s
     digits: str = ""
@@ -78,8 +78,9 @@ class NumberEntry:
     _cancel_t: float = 0.0
     _last_t: float | None = None
     _nhands: int = 0
+    _ignore: int | None = -1  # -1: ignore whatever is held now; n: ignore count n until it changes; None: listen
     _fingers: FingerTracker = field(default_factory=FingerTracker)
-    _swipe: SwipeDetector = field(default_factory=lambda: SwipeDetector(min_distance=1.6, min_speed=5.0))
+    _swipe: SwipeDetector = field(default_factory=lambda: SwipeDetector(min_distance=0.8, min_speed=2.2, window_s=0.5, refractory_s=0.9))
 
     def reset(self) -> None:
         self.digits = ""
@@ -88,6 +89,8 @@ class NumberEntry:
         self._confirm_t = self._cancel_t = 0.0
         self._last_t = None
         self._swipe.reset()
+        # a count still held up from the last answer is not a new digit: change it (or lower the hand) to start
+        self._ignore = -1 if self._nhands > 0 else None
 
     @property
     def value(self) -> float | None:
@@ -96,6 +99,21 @@ class NumberEntry:
     def set_value(self, v: float) -> None:
         """Replace the typed digits (used by the pinch nudge)."""
         self.digits = f"{v:g}"
+        self._armed = False
+
+    def backspace(self) -> bool:
+        """Delete the last typed digit; True if there was one."""
+        if not self.digits:
+            return False
+        self.digits = self.digits[:-1]
+        self._armed = False
+        return True
+
+    def set_text(self, text: str) -> None:
+        """The keyboard edited the number: take it as typed (digits and one point), and wait for a new count."""
+        clean = "".join(ch for ch in text if ch.isdigit() or ch == ".")
+        head, dot, tail = clean.partition(".")
+        self.digits = (head + dot + tail.replace(".", ""))[: self.max_digits + 1]
         self._armed = False
 
     def _smoothed(self, hand: HandFrame) -> int:
@@ -115,6 +133,7 @@ class NumberEntry:
             if not any(h.handedness == k for h in hands):
                 del self._hist[k]
         if not hands:
+            self._nhands, self._ignore = 0, None
             self._cand, self._armed = None, True
             self._confirm_t = self._cancel_t = 0.0
             return events, self.status(None, 0.0, None)
@@ -155,6 +174,13 @@ class NumberEntry:
             return events, self.status(0, self._cancel_t / self.cancel_s, "cancel")
         self._confirm_t = self._cancel_t = 0.0
 
+        if self._ignore is not None:
+            if self._ignore == -1:
+                self._ignore = total
+            if total == self._ignore:
+                self._cand, self._cand_t = None, 0.0
+                return events, self.status(total, 0.0, "taken")
+            self._ignore = None
         if total != self._cand:
             self._cand, self._cand_t, self._armed = total, 0.0, True
         elif self._armed and speed < self.still_speed:

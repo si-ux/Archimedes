@@ -332,6 +332,8 @@ async def ws_endpoint(ws: WebSocket):
                 await run_console(ws, pipe, session, msg)
             elif session is not None and kind == "console_reset":
                 console_for(session, pipe).reset_input()
+            elif kind == "number_text":      # the keyboard edited the number: gestures continue from it
+                pipe.numbers.set_text(str(msg.get("digits", "")))
             elif session is not None and kind in ("model_action", "number", "prompt_cancel", "set_axis", "set_phase",
                                                   "load_demo", "solve", "undo_model", "clear"):
                 if kind == "model_action":

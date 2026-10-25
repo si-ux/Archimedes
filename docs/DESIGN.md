@@ -32,13 +32,18 @@ two open palms held 1 s ──► reset view            hand at edge / too far �
 
 | Pose | Mode | Control | Arm time |
 |---|---|---|---|
-| ✊ fist | Rotate | drag the hand, as if grabbing the model | 0.25 s |
-| 🤏 pinch | Zoom | move up to zoom in, down to zoom out | 0.25 s |
-| ✋ flat palm, **held still** | Section cut | **the palm plane is the cutting plane**. Turn it to orient the cut; move along the normal (or push/pull) to slide it. Close the hand to lock | 0.8 s |
-| ☝️ point | Probe | the fingertip is the cursor. Hold still for 0.8 s to pin a value | 0.3 s |
-| ✌️ V | Field | swipe left/right to change the result field | 0.3 s |
+| ✊ fist | Rotate | drag the hand, as if grabbing the model | 0.12 s |
+| 🤏 pinch | Zoom | move up to zoom in, down to zoom out | 0.12 s |
+| 🤏🤏 pinch with **both** hands | Two-hand zoom / rotate | the distance between the hands *is* the zoom (spread = in); moving both hands together rotates | 0.1 s |
+| ✋ flat palm, **held still** | Section cut | a **straight** cut along the world axis the palm faces (locked after 6 frames, so tremor cannot tilt it); slide the palm to move it; the **other open palm** unlocks a free tilt | 0.5 s |
+| ☝️ point | Probe | the fingertip is the cursor. **Pinch with the other hand to pin**, or hold still for 0.6 s | 0.12 s |
+| ✌️ V | Field | swipe left/right to change the result field | 0.2 s |
 | 👍 thumbs-up, held still | Snapshot | saves a PNG | 1.0 s |
 | 🙌 both palms | Reset | (undo is always available) | 1.0 s |
+
+Typing numbers by hand: hold up fingers for a digit (0.55 s, still hand); a question with fixed choices (the
+increments) is answered by the count alone; 🤏 pinch and hold deletes the last digit and repeats while held; both
+open palms accept; two fists cancel. The keyboard (digits, Backspace, Enter) always works alongside.
 
 The two actions that could be triggered by a passing hand (section, snapshot) also require the hand to be
 *still* while arming. Every gesture has a keyboard and mouse equivalent, which doubles as the baseline condition

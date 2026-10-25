@@ -161,10 +161,10 @@ class PoseSmoother:
     With enter > exit the label cannot chatter at the decision boundary.
     """
 
-    alpha: float = 0.45
-    enter: float = 0.6
+    alpha: float = 0.6
+    enter: float = 0.55
     exit: float = 0.35
-    min_frames: int = 3
+    min_frames: int = 2
     probs: dict[str, float] = field(default_factory=dict)
     current: str = NONE
     _candidate: str = NONE

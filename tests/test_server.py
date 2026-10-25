@@ -34,7 +34,7 @@ def test_index_served(client):
 def test_websocket_frames_drive_the_view(client):
     with client.websocket_connect("/ws") as ws:
         info = json.loads(ws.receive_text())
-        assert info["type"] == "info" and len(info["cheat_sheet"]) == 7
+        assert info["type"] == "info" and len(info["cheat_sheet"]) == 8
         modes = set()
         for t, hand, _ in S.scripted_tour():
             lm = hand.landmarks.copy()

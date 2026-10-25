@@ -558,12 +558,20 @@ function renderPrompt() {
     b.classList.toggle("on", p.axis === a && p.sign === sg);
     b.onclick = () => send({ type: "set_axis", axis: a, sign: sg }); ax.appendChild(b);
   }
-  if (wasHidden) { $("prompt-input").value = ""; setTimeout(() => $("prompt-input").focus(), 0); }
+  if (wasHidden) { $("prompt-input").value = ""; lastGestureDigits = ""; setTimeout(() => $("prompt-input").focus(), 0); }
 }
+let lastGestureDigits = "";
+$("prompt-input").addEventListener("input", () => {            // keep the gesture side in step with the keyboard
+  const txt = $("prompt-input").value.replace(/[^0-9.]/g, "");
+  lastGestureDigits = txt; send({ type: "number_text", digits: txt });
+});
+$("prompt-back").onclick = () => {
+  const el = $("prompt-input"); el.value = el.value.slice(0, -1); el.dispatchEvent(new Event("input")); el.focus();
+};
 function submitPrompt() {
   const raw = $("prompt-input").value.trim(), v = raw === "" ? null : Number(raw);
   if (raw !== "" && !isFinite(v)) { toast("Enter a number", true); return; }
-  $("prompt-input").value = ""; send({ type: "number", value: v });
+  $("prompt-input").value = ""; lastGestureDigits = ""; send({ type: "number", value: v });
 }
 $("prompt-ok").onclick = submitPrompt;
 $("prompt-cancel").onclick = () => send({ type: "prompt_cancel" });
@@ -686,7 +694,8 @@ function renderHud(h) {
   if (h.personal_samples !== undefined) $("chip-personal").textContent = `${h.personal_samples} personal samples`;
   if (h.number) {                       // finger-count digits into the prompt card
     $("prompt-live").textContent = h.number.live === null ? "–" : h.number.live === 10 ? "OK" : h.number.live;
-    if (h.number.digits) $("prompt-input").value = h.number.digits;
+    // gestures write the field only when *their* digits change, so typing and Backspace are never overwritten
+    if (h.number.digits !== lastGestureDigits) { lastGestureDigits = h.number.digits; $("prompt-input").value = h.number.digits; }
     $("prompt-bar").style.width = `${h.progress * 100}%`;
     $("prompt-bar").style.background = h.number.kind === "cancel" ? "var(--bad)" : h.number.kind === "confirm" ? "var(--ok)" : "var(--arming)";
   }
@@ -925,6 +934,13 @@ resize();
 S.view = { azimuth: -60, elevation: 22, distance: 1, focal_point: [0, 0, 0], section_on: false, plane_origin: [0, 0, 0], plane_normal: [1, 0, 0],
   field_name: "von_mises", probe_cursor: null, probe_pins: [], snapshots: 0 };
 const pyConsole = createConsole(send);
-window.__archimedes = { S, resolveCommand, screenToT, onView, pyConsole };   // for automated UI tests
+// Scripted hands (automated tests, and the demo recordings made by scripts/record_demo.py): feed() sends a frame of
+// landmarks (selfie view) through the same WebSocket path a camera frame takes and draws them in the camera panel.
+function feedHands(hands, t) {
+  demoRunning = true;
+  demoLandmarks = hands.map((h) => h.landmarks);
+  send({ type: "frame", t, seq: seq++, hands, mirrored: true });
+}
+window.__archimedes = { S, resolveCommand, screenToT, onView, pyConsole, send, feed: feedHands };   // for automated UI tests
 connect();
 loop();

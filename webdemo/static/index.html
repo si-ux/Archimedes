@@ -113,7 +113,8 @@
       <div class="prompt-row">
         <div id="prompt-live" title="fingers the camera sees">–</div>
         <div>
-          <input id="prompt-input" inputmode="numeric" autocomplete="off" placeholder="type or show fingers">
+          <input id="prompt-input" inputmode="decimal" autocomplete="off" placeholder="type or show fingers">
+          <button id="prompt-back" title="Delete the last digit (Backspace, or pinch and hold)">⌫</button>
           <div id="prompt-unit" class="muted"></div>
         </div>
       </div>
@@ -122,7 +123,7 @@
       <div id="prompt-axes" class="row wrap"></div>
       <div id="prompt-accept">✅ <b>To accept:</b> show <b>🙌 both open palms</b> and hold ~1 s (the bar turns green) — or press <b>Enter</b>.
         With nothing typed, this accepts the default.</div>
-      <div class="small muted" id="prompt-help">Digits: hold up 0–5 fingers (two hands for 6–9) · <span id="prompt-inc"></span>delete: swipe left · cancel: two fists or Esc</div>
+      <div class="small muted" id="prompt-help">Digits: hold up 0–5 fingers (two hands for 6–9) · <span id="prompt-inc"></span>delete: ⌫ / Backspace / 🤏 pinch and hold · cancel: two fists or Esc</div>
       <div class="row"><button id="prompt-ok" class="primary">OK</button><button id="prompt-cancel">Cancel</button></div>
     </div>
 

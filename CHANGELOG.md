@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Gestures
+- Faster and more accurate: pose changes register in 2 frames, modes arm in 0.1 to 0.2 s (was 0.25 to 0.8 s),
+  position filters no longer lag (probe cursor lag 81 ms → 21 ms, error 4.1 % → 1.1 %), and the Workbench camera
+  follows the hand with a frame-rate independent ease.
+- Two-hand control: pinch with both hands to zoom by the distance between them and rotate by moving them; pinch with
+  the other hand to pin the probe value; show the other open palm to tilt the section cut.
+- The section cut is straight by default: its axis is chosen from the palm's first frames and locked, so the plane no
+  longer staggers with hand tremor. Tilting is opt-in.
+- Number entry: a finger count answers a choice question (the load, length and section increments) directly; digits
+  need 0.55 s (was 0.8 s); pinch and hold deletes a digit; the keyboard (typing, Backspace) is no longer overwritten
+  by the camera frames, and typed text is passed to the gesture side. An answer's finger count must change before the
+  next question reads a new one.
+- `scripts/gesture_bench.py` measures response time and accuracy on synthetic hands; `scripts/record_demo.py` records
+  the demos in `docs/media/` with Playwright and ffmpeg.
+
+### Fixed
+- A two-hand grab no longer crashes the engine when one hand leaves the frame.
+
 ### Added
 - Apache License 2.0 (`LICENSE`, `NOTICE`).
 - Project documentation for contributors: README overview with screenshots, contributing guide, code of conduct,

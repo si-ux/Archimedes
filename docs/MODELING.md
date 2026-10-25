@@ -9,7 +9,7 @@ Every action also has a Python command: open the **🐍 Python** console (the ` 
 |---|---|---|
 | ① Model | create the member | two-hand pinch-and-pull, or draw a circle; enter numbers by fingers |
 | ② Loads & supports | add supports and loads, then solve | fist / pinch / V held still, point-and-flick, palm sweep, two palms, thumbs-up |
-| ③ Results | explore the results | rotate, zoom, palm-plane section cut, probe, V-swipe fields (see `DESIGN.md`) |
+| ③ Results | explore the results | rotate, zoom, palm-plane section cut, probe, V-swipe fields, two-hand zoom (see `DESIGN.md`) |
 
 ## ① Model
 
@@ -44,7 +44,7 @@ Enter. With nothing typed, the same gesture accepts the default shown on the car
 | change the count, or lower the hand | needed before the same digit can be entered again (3-0-0 = 3, fist, open, fist) |
 | 🙌 both open palms, 0.8 s | **accept** |
 | 🤏 one-hand pinch, move up / down | nudge the value by one increment per step (about 0.6 palm heights) |
-| swipe one open hand to the left | delete the last digit |
+| pinch and hold still (or swipe one open hand left, or Backspace) | delete the last digit; keep holding to repeat |
 | ✊✊ two fists, 1 s | cancel |
 
 The big number on the card is what the camera currently counts. The ring shows the hold.

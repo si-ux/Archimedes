@@ -1462,7 +1462,9 @@ const GESTURES = [
   { id: 'pinch', mode: 'zoom', icon: '⇔', pose: 'pinch · move up / down', does: 'Dolly zoom', demo: true,
     act: (c, ph) => { c.tgt.dist = Math.max(11, Math.min(80,
       c.tgt.dist + (ph === 'fire' ? -3 : Math.sin(performance.now() / 360) * 0.32))); } },
-  { id: 'blade', mode: 'section', icon: '▬', pose: 'flat palm · hold still 0.8 s', does: 'Section cut — your palm is the plane', demo: true,
+  { id: 'grab', mode: 'grab', icon: '⇱', pose: 'pinch with both hands · spread / move', does: 'Two-hand zoom and rotate',
+    act: c => { c.tgt.dist = Math.max(11, Math.min(80, c.tgt.dist - 1)); } },
+  { id: 'blade', mode: 'section', icon: '▬', pose: 'flat palm · hold still 0.5 s · other palm = tilt', does: 'Straight section cut along the axis the palm faces', demo: true,
     act: (c, ph) => {
       const p = ph === 'fire' ? (c.state.cutPos + 12) % 92 + 4
         : 30 + 50 * (0.5 - 0.5 * Math.cos(performance.now() / 1600));
@@ -2385,7 +2387,8 @@ class Component extends DCLogic {
     this.tickSolve(28);                                 // ms of solver work per frame
     this.tickModal(now);
     this.tickGesture(now);
-    const c = this.cam, t = this.tgt, k = 0.14;
+    const dtms = Math.min(60, now - (this._kT || now)); this._kT = now;
+    const c = this.cam, t = this.tgt, k = 1 - Math.exp(-dtms / 40);   // eases in ~40 ms whatever the frame rate
     c.yaw += (t.yaw - c.yaw) * k; c.pitch += (t.pitch - c.pitch) * k; c.dist += (t.dist - c.dist) * k;
     this.pan[0] += (this.tgtPan[0] - this.pan[0]) * k; this.pan[1] += (this.tgtPan[1] - this.pan[1]) * k;
     if (!this.cadDrag && this.ctrTgt) {                 // frozen while a handle is dragged
@@ -4372,9 +4375,12 @@ class Component extends DCLogic {
       case 'zoom':
         this.tgt.dist = Math.max(11, Math.min(80, this.tgt.dist * d.factor));
         break;
+      case 'begin':
+        this._cut = null;                              // a new gesture picks a new cut axis
+        break;
       case 'section':
       case 'section_lock':
-        if (d.normal_view) this.setPalmPlane(d.normal_view, d.offset || 0);
+        if (d.normal_view) this.setPalmPlane(d, cmd.kind === 'section_lock');
         break;
       case 'section_off':
         this.setState({ cutOn: false });
@@ -4401,17 +4407,37 @@ class Component extends DCLogic {
         break;
     }
   }
-  // palm normal (view space: x right, y up, z towards the viewer) -> model space,
-  // by undoing proj()'s pitch then yaw; the plane passes through the model centre
-  // and slides along its normal by the engine's offset (half-model units)
-  setPalmPlane(nv, offset) {
+  // The palm's section command -> the cut plane. The palm normal (view space: x right, y up,
+  // z towards the viewer) is turned into model space by undoing proj()'s pitch then yaw.
+  // By default the cut is STRAIGHT: the model axis the palm faces over its first frames, locked
+  // for the whole gesture, sliding along that axis as the hand moves. Showing the other palm
+  // (d.free) lets the plane tilt with the hand. The plane passes through the model centre and
+  // slides along its normal by the engine's offset (half-model units).
+  setPalmPlane(d, final) {
     if (!this.g) return;
-    const c = this.cam, cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const nv = d.normal_view, c = this.cam, cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
     const X = nv[0], Y = nv[1], Zp = -nv[2];
     const y = Y * cp + Zp * sp, Z = -Y * sp + Zp * cp;
-    const n = [X * cy - Z * sy, y, X * sy + Z * cy];
-    const len = Math.hypot(n[0], n[1], n[2]) || 1;
-    for (let i = 0; i < 3; i++) n[i] /= len;
+    let n = [X * cy - Z * sy, y, X * sy + Z * cy];
+    const unit = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+    n = unit(n);
+    let offset = d.offset || 0;
+    if (!d.free) {
+      const L = this._cut || (this._cut = { buf: [], axis: null });
+      if (!L.axis) {
+        L.buf.push(n);
+        const m = unit([0, 1, 2].map(i => L.buf.reduce((a, v) => a + v[i], 0)));
+        const i = [0, 1, 2].reduce((best, k) => (Math.abs(m[k]) > Math.abs(m[best]) ? k : best), 0);
+        const ax = [0, 0, 0]; ax[i] = m[i] >= 0 ? 1 : -1;
+        if (L.buf.length >= 6) L.axis = ax;
+        n = ax;
+      } else n = L.axis;
+      if (d.disp) {                                   // slide along the axis as it appears on screen
+        const Xv = n[0] * cy + n[2] * sy, Zv = -n[0] * sy + n[2] * cy, Yv = n[1] * cp - Zv * sp, Zq = n[1] * sp + Zv * cp;
+        offset = (d.gain || 0.5) * (d.disp[0] * Xv + d.disp[1] * Yv + d.disp[2] * -Zq);
+      }
+    } else this._cut = null;
+    if (final) this._cut = null;
     const g = this.g, half = Math.max(g.W, g.H, g.D) / 2;
     const o = this.ctr.map((v, i) => v + n[i] * offset * half);
     this.setState({ cutOn: true, cutAxis: 'free', cutPlane: { n, o }, stage: 6 });   // as the palette's cut commands do

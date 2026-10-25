@@ -47,9 +47,9 @@ TOOLS_LOADS = {
 NUMBER_ROWS = [
     {"icon": "🙌", "label": "Accept the value", "hint": "Both open palms, hold ~1 s — the green bar fills, then the next prompt opens"},
     {"icon": "🙌", "label": "Accept the default", "hint": "Same gesture before typing anything takes the default shown on the card"},
-    {"icon": "🖐", "label": "Type a digit", "hint": "Hold up 0–5 fingers (two hands for 6–9) still ~1 s; change the count to repeat a digit"},
+    {"icon": "🖐", "label": "Type a digit", "hint": "Hold up 0–5 fingers (two hands for 6–9) still ~0.5 s; change the count to repeat a digit. A question with fixed choices is answered by the count alone"},
     {"icon": "🤏↕", "label": "Nudge by the increment", "hint": "Pinch and move up / down — one increment per step"},
-    {"icon": "👋", "label": "Delete a digit", "hint": "Swipe one open hand to the left"},
+    {"icon": "🤏", "label": "Delete a digit", "hint": "Pinch and hold still ~0.5 s; keep holding to delete more (an open-hand swipe left works too; so does Backspace)"},
     {"icon": "✊✊", "label": "Cancel", "hint": "Two fists, hold 1 s (or Esc)"},
 ]
 

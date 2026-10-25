@@ -37,15 +37,18 @@ from .vocab import MODES, NONE, pose_to_mode
 @dataclass
 class EngineConfig:
     dominant: str = "Right"
-    orbit_gain: float = 70.0  # degrees per palm-width of hand travel
-    zoom_gain: float = 0.9  # log-zoom per palm-width of vertical travel
-    section_gain: float = 0.35  # model units per palm-width
-    deadzone: float = 0.01  # palm-widths per frame ignored as tremor
+    orbit_gain: float = 90.0  # degrees per palm-width of hand travel
+    zoom_gain: float = 1.8  # log-zoom per palm-width of vertical travel (one hand)
+    grab_zoom_gain: float = 1.25  # exponent on the change of distance between two pinching hands
+    grab_orbit_gain: float = 260.0  # degrees per image-width of travel of the midpoint of two pinching hands
+    section_gain: float = 0.5  # model units per palm-width
+    deadzone: float = 0.0025  # palm-widths per frame ignored as tremor
     still_speed: float = 0.6  # palm-widths / s counted as "still"
     lost_grace_s: float = 0.3
     release_grace_s: float = 0.15
     reset_hold_s: float = 1.0
-    pin_hold_s: float = 0.8
+    pin_hold_s: float = 0.6
+    grab_grace_s: float = 0.2
     lock_lookback_s: float = 0.15
     # interaction box (selfie-view image coords): the probe cursor maps this box
     # to the full viewport, so a small comfortable hand motion covers the screen
@@ -54,7 +57,7 @@ class EngineConfig:
 
 @dataclass
 class _HandTrack:
-    pos: OneEuroFilter = field(default_factory=lambda: OneEuroFilter(1.2, 0.3))
+    pos: OneEuroFilter = field(default_factory=lambda: OneEuroFilter(1.6, 9.0))
     size: OneEuroFilter = field(default_factory=lambda: OneEuroFilter(0.8, 0.0))
     last_pos: np.ndarray | None = None
     last_t: float | None = None
@@ -94,8 +97,13 @@ class IntentEngine:
         self._mode_reset()
 
     def _mode_reset(self) -> None:
-        self.normal_f = OneEuroFilter(0.8, 0.4)
-        self.tip_f = OneEuroFilter(1.0, 0.8)
+        self.normal_f = OneEuroFilter(1.2, 0.8)
+        self.offset_f = OneEuroFilter(1.0, 2.0)
+        self.tip_f = OneEuroFilter(1.8, 14.0)
+        self.grab_t = 0.0
+        self.grab_prev: tuple | None = None
+        self.click_down = False
+        self.free_cut = False
         self.swipe = SwipeDetector()
         self.plane_hist: deque = deque(maxlen=30)
         self.start_pos: np.ndarray | None = None
@@ -114,13 +122,13 @@ class IntentEngine:
         if self.mode == "section":
             # lock from slightly before the release: the release frames are the noisiest
             lock = None
-            for ts, n, off in self.plane_hist:
+            for ts, data in self.plane_hist:
                 if ts <= t - self.cfg.lock_lookback_s:
-                    lock = (n, off)
+                    lock = data
             if lock is None and self.plane_hist:
-                lock = self.plane_hist[0][1:]
+                lock = self.plane_hist[0][1]
             if lock is not None:
-                out.append(Command("section_lock", {"normal_view": lock[0].tolist(), "offset": lock[1]}))
+                out.append(Command("section_lock", dict(lock)))
         elif self.mode == "probe":
             out.append(Command("probe_clear"))
         self.mode = None
@@ -142,6 +150,7 @@ class IntentEngine:
         for h in f.hands:
             self.tracks.setdefault(h.handedness, _HandTrack()).update(h, t)
 
+        self._f, self._poses = f, poses
         ctrl = self._control_hand(f)
         if ctrl is None:
             self.lost_t += dt
@@ -175,6 +184,10 @@ class IntentEngine:
             self.state = "idle"
             return out, self._hud(ctrl, pose, conf, hints, poses)
         self.reset_t = 0.0
+
+        # ---- two pinching hands = grab (zoom by spreading, rotate by moving) ----
+        if "grab" in self.modes and self._grab_step(f, poses, t, dt, out):
+            return out, self._hud(ctrl, pose, conf, hints, poses)
 
         # ---- active mode ----
         if self.mode:
@@ -214,6 +227,53 @@ class IntentEngine:
         return out, self._hud(ctrl, pose, conf, hints, poses)
 
     # ------------------------------------------------------------------
+    def _grab_step(self, f: FrameInput, poses: dict, t: float, dt: float, out: list[Command]) -> bool:
+        """Two pinching hands: spread to zoom, move together to rotate. True when this frame was handled."""
+        both = len(f.hands) >= 2 and all(poses.get(h.handedness, (NONE,))[0] == "pinch" for h in f.hands[:2])
+        if self.mode == "grab":
+            if not both:   # one pinch flickered or a hand left: wait out the grace period, then let go
+                self.release_t += dt
+                if self.release_t > self.cfg.grab_grace_s:
+                    self._end_mode(t, out)
+                    return False
+                self.grab_prev = None   # and do not jump when both hands are back
+                return True
+            self.release_t = 0.0
+            self._run_grab(f, out)
+            return True
+        if not both or self.mode not in (None, "zoom", "orbit"):
+            self.grab_t = 0.0
+            return False
+        self.grab_t += dt
+        self.arming, self.arm_t, self.state = "grab", self.grab_t, "arming"
+        if self.grab_t < self.modes["grab"].arm_s:
+            return True
+        if self.mode:
+            self._end_mode(t, out)
+        self.mode, self.arming, self.release_t, self.state = "grab", None, 0.0, "active"
+        self._mode_reset()
+        self.grab_prev = None
+        out.append(Command("begin", {"mode": "grab"}))
+        self._run_grab(f, out)
+        return True
+
+    def _run_grab(self, f: FrameInput, out: list[Command]) -> None:
+        a, b = (self.tracks[h.handedness] for h in f.hands[:2])
+        pa, pb = a.last_pos, b.last_pos
+        dist = float(np.linalg.norm(pa - pb)) + 1e-6
+        mid = (pa + pb) / 2
+        if self.grab_prev is not None:
+            d0, m0 = self.grab_prev
+            dl = np.log(dist / d0)
+            if abs(dl) > 0.002:   # spread (dist grows) -> zoom in -> smaller camera distance
+                out.append(Command("zoom", {"factor": float(np.exp(-dl * self.cfg.grab_zoom_gain))}))
+            dm = mid - m0
+            if np.linalg.norm(dm) > 0.0012:
+                g = self.cfg.grab_orbit_gain
+                out.append(Command("orbit", {"dx": float(dm[0] * g), "dy": float(dm[1] * g)}))
+        self.grab_prev = (dist, mid)
+
+    # ------------------------------------------------------------------
     def _run_mode(self, h: HandFrame, track: _HandTrack, t: float, dt: float, out: list[Command]) -> None:
         cfg = self.cfg
         size = track.size.value
@@ -239,15 +299,33 @@ class IntentEngine:
             # slide the plane along its own normal: screen-plane motion for the
             # in-plane part of the normal, push/pull (hand scale) for the depth part
             push = np.log(size / self.start_size)
-            offset = cfg.section_gain * (disp[0] * n[0] - disp[1] * n[1] + 2.0 * push * n[2])
-            self.plane_hist.append((t, n.copy(), float(offset)))
-            out.append(Command("section", {"normal_view": n.tolist(), "offset": float(offset)}))
+            move = np.array([disp[0], -disp[1], 2.0 * push])            # view coords: x right, y up, z to viewer
+            # a straight cut (the default) follows an axis the viewer chooses; showing the other palm
+            # lets the cut tilt freely with the hand
+            other = [o for o in self._f.hands if o is not h]
+            if any(self._poses.get(o.handedness, (NONE,))[0] == "open_palm" for o in other):
+                self.free_cut = True
+            elif not other:
+                self.free_cut = False
+            offset = float(self.offset_f(cfg.section_gain * float(np.dot(move, n)), t))
+            data = {"normal_view": n.tolist(), "offset": offset, "disp": move.tolist(), "gain": cfg.section_gain,
+                    "free": self.free_cut}
+            self.plane_hist.append((t, data))
+            out.append(Command("section", data))
         elif self.mode == "probe":
             x0, y0, x1, y1 = cfg.box
             tip = self.tip_f(fingertip(h), t)
             xy = np.clip([(tip[0] - x0) / (x1 - x0), (tip[1] - y0) / (y1 - y0)], 0.0, 1.0)
             out.append(Command("probe", {"xy": xy.tolist()}))
-            if track.speed < cfg.still_speed:
+            # the other hand pinching = click: pin the value under the cursor right now
+            other = [o for o in self._f.hands if o is not h]
+            pinching = any(self._poses.get(o.handedness, (NONE,))[0] == "pinch" for o in other)
+            if pinching and not self.click_down:
+                out.append(Command("probe_pin", {"xy": xy.tolist()}))
+                self.toast = "Value pinned"
+                self.pinned = True
+            self.click_down = pinching
+            if track.speed < cfg.still_speed and not pinching:
                 self.still_t += dt
                 if self.still_t >= cfg.pin_hold_s and not self.pinned:
                     out.append(Command("probe_pin", {"xy": xy.tolist()}))

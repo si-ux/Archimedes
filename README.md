@@ -163,11 +163,27 @@ The full guide is in [`Archimedes/docs/cad-workflow.md`](Archimedes/docs/cad-wor
 |---|---|---|
 | ✊ fist | rotate | drag, like grabbing the model |
 | 🤏 pinch | zoom | move up / down |
-| ✋ flat palm (still) | section cut | your palm *is* the cutting plane; close the hand to lock |
-| ☝️ point | probe | the fingertip is the cursor; hold still to pin a value |
+| 🤏🤏 **pinch with both hands** | zoom and rotate | spread = zoom in, together = zoom out; move both hands to rotate |
+| ✋ flat palm (still) | straight section cut | along the axis the palm faces; slide to move it; **show the other palm to tilt it freely** |
+| ☝️ point | probe | the fingertip is the cursor; **pinch with your other hand to pin the value** |
 | ✌️ V | change field | swipe left / right |
 | 👍 thumbs-up (still) | snapshot (solve in the Workbench) | |
 | 🙌 both palms | reset | |
+
+**Typing numbers:** hold up fingers for digits (0 to 9 with two hands); questions with fixed choices are answered by
+the count alone; 🤏 pinch and hold deletes a digit; 🙌 both palms accept. The keyboard works alongside (Backspace
+included).
+
+<p align="center">
+  <img src="docs/media/workbench-gestures.gif" alt="Two-hand zoom and rotate, a straight section cut and a probe, driven by scripted hands" width="88%"><br>
+  <sub>Workbench driven by scripted two-hand input (<a href="docs/media/workbench-gestures.mp4">mp4</a>).
+  Hands: kinematic model, not a camera. Recorded with <code>scripts/record_demo.py</code>.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/media/modeller-finger-input.gif" alt="Choosing increments and typing a number with fingers, deleting with a pinch" width="70%"><br>
+  <sub>Finger input in the gesture modeller (<a href="docs/media/modeller-finger-input.mp4">mp4</a>).</sub>
+</p>
 
 Mouse and keyboard always work too. The gesture vocabulary and the reasoning behind it are in
 [`docs/DESIGN.md`](docs/DESIGN.md) and [`Archimedes/docs/gestures.md`](Archimedes/docs/gestures.md).
@@ -270,8 +286,10 @@ archimedes/
 ## Development
 
 ```bash
-make test        # pytest: 95 tests; also runs the 18 CAD kernel tests when Node is installed
+make test        # pytest: 108 tests; also runs the 18 CAD kernel tests when Node is installed
 make lint        # ruff
+make bench       # response time and accuracy of the gesture controls on synthetic hands
+make record-demo # re-record docs/media/*.gif and *.mp4 (needs Playwright and ffmpeg)
 make demo        # dev server on port 8000
 ```
 
