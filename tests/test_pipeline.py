@@ -79,14 +79,13 @@ def test_section_needs_still_hold_and_locks_plane():
     # the default cut is STRAIGHT: exactly one world axis, the one the sideways palm faces most
     assert np.isclose(np.abs(n).max(), 1.0) and np.isclose(np.abs(n).sum(), 1.0)
     assert abs(n @ right) > 0.45  # and it is the axis closest to the screen's x direction
-    assert not pipe.view.section_free
 
 
-def test_two_open_palms_reset():
+def test_both_thumbs_up_reset():
     pipe = GesturePipeline(model_path=None, profile_path="/x/p.json", personal_path="/x/s.npz")
     pipe.view.azimuth = 123.0
     rng = np.random.default_rng(0)
-    canon = S.canonical_hand("open_palm", rng)
+    canon = S.canonical_hand("thumbs_up", rng)
     for i in range(int(1.4 * FPS)):
         t = i / FPS
         hands = [HandFrame(S.to_image(canon, center=(0.3, 0.5), handedness="Right"), "Right", 0.9, t),
@@ -175,11 +174,11 @@ def test_engine_handles_hand_loss_gracefully():
 def test_scripted_tour_exercises_every_mode():
     pipe = GesturePipeline(model_path=None, profile_path="/x/p.json", personal_path="/x/s.npz")
     modes = set()
-    for t, hand, _ in S.scripted_tour():
-        out = pipe.process(FrameInput(t, [hand]))
+    for t, hands, _ in S.scripted_tour():
+        out = pipe.process(FrameInput(t, hands))
         if out["hud"]["mode"]:
             modes.add(out["hud"]["mode"])
-    assert {"orbit", "zoom", "section", "probe", "field"} <= modes
+    assert {"orbit", "grab", "turn", "section", "probe", "dual", "field"} <= modes
     v = pipe.view
     assert v.distance < 1.0 and v.section_locked and v.probe_pins and v.field_index != 0
 

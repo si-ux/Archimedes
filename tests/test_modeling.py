@@ -68,90 +68,148 @@ def test_two_hands_make_digits_above_five_and_two_fists_cancel():
     assert "number_cancel" in kinds(run(p, frames))
 
 
-# ---- MODEL phase ------------------------------------------------------------------
-def test_two_hand_pinch_pull_extrudes_a_beam():
+# ---- MODEL wizard: plane -> shape -> two-hand size -> extrude -> confirm ----------------------------------------------
+def fingers(spec, center=(0.5, 0.55), handedness="Right"):
+    return lambda a, tt: [hand(S.canonical_fingers(spec), center, handedness, tt)]
+
+
+def pose(name, center=(0.5, 0.55), handedness="Right", **kw):
+    canon = S.canonical_hand(name)
+    return lambda a, tt: [hand(canon, center, handedness, tt, **kw)]
+
+
+def pull(dx, dy, s=0.12):
+    """Both hands pinched, dx / dy palm widths apart (pinch points), held."""
+    cl, cr = S.canonical_hand("pinch"), S.canonical_hand("pinch")
+    return lambda a, tt: [hand(cl, (0.5 - dx * s / 2, 0.55 - dy * s / 2), "Left", tt),
+                          hand(cr, (0.5 + dx * s / 2, 0.55 + dy * s / 2), "Right", tt)]
+
+
+NOHANDS = lambda a, tt: []  # noqa: E731
+
+
+def drive(p, steps):
+    t, cmds = 0.0, []
+    for fn, dur in steps:
+        frames, t = clip(fn, dur, t)
+        cmds += run(p, frames)
+    return cmds
+
+
+def test_model_wizard_side_plane_rectangle_then_extrude_then_confirm():
     p = pipe("model")
-    pin = S.canonical_hand("pinch")
+    p.set_prompt(None)
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("im"), 1.2), (NOHANDS, 0.2), (fingers("i"), 1.2), (NOHANDS, 0.2),
+                     (pull(3, 2), 2.5), (NOHANDS, 0.3), (pull(5, 1), 2.5), (NOHANDS, 0.3), (pose("thumbs_up"), 1.5)])
+    assert [c["data"]["plane"] for c in cmds if c["kind"] == "wiz_plane"] == ["side"]
+    steps = [c["data"]["step"] for c in cmds if c["kind"] == "wiz_step"]
+    assert steps[:4] == ["shape", "draw_rect", "extrude", "confirm"]
+    made = [c["data"] for c in cmds if c["kind"] == "create_member"]
+    assert len(made) == 1
+    m = made[0]
+    assert m["kind"] == "rect" and m["orientation"] == "horizontal"
+    assert m["b"] % 25 == 0 and m["h"] % 25 == 0 and m["L"] % 100 == 0 and m["L"] > 2000
+    assert p.modeling.step == "plane"                   # ready for the next member
 
-    def pull(a, tt, gap):
-        return [hand(pin, (0.5 - gap / 2, 0.55), "Right", tt), hand(pin, (0.5 + gap / 2, 0.55), "Left", tt)]
 
-    f1, t = clip(lambda a, tt: pull(a, tt, 0.12), 0.4)
-    f2, t = clip(lambda a, tt: pull(a, tt, 0.12 + 0.4 * a), 0.8, t)
-    f3, t = clip(lambda a, tt: pull(a, tt, 0.52), 1.0, t)
-    cmds = run(p, f1 + f2 + f3)
-    ex = [c for c in cmds if c["kind"] == "extrude"]
-    assert len(ex) == 1 and ex[0]["data"]["orientation"] == "horizontal"
-    assert 1500 <= ex[0]["data"]["length_est"] <= 6000
-
-
-def test_vertical_pull_extrudes_a_column():
+def test_a_sizing_step_needs_a_fresh_pinch():
     p = pipe("model")
-    pin = S.canonical_hand("pinch")
+    p.modeling.step = "draw_rect"
+    p.modeling._step_reset()
+    drive(p, [(pull(3, 2), 0.3)])                     # pinching when the step starts (carried over from the last one)
+    p.modeling._step_reset()
+    cmds = drive(p, [(pull(3, 2), 1.5)])
+    assert "wiz_size" not in kinds(cmds)              # nothing happens until the fingers open
+    cmds = drive(p, [(NOHANDS, 0.2), (pull(3, 2), 2.5)])
+    assert [c for c in cmds if c["kind"] == "wiz_size" and c["data"]["locked"]]
 
-    def pull(a, tt, gap):
-        return [hand(pin, (0.45, 0.6 - gap / 2), "Right", tt), hand(pin, (0.55, 0.6 + gap / 2), "Left", tt)]
 
-    frames = clip(lambda a, tt: pull(a, tt, 0.1), 0.4)[0] + clip(lambda a, tt: pull(a, tt, 0.1 + 0.25 * a), 0.8, 0.4)[0] \
-        + clip(lambda a, tt: pull(a, tt, 0.35), 1.0, 1.2)[0]
-    ex = [c for c in run(p, frames) if c["kind"] == "extrude"]
-    assert ex and ex[0]["data"]["orientation"] == "vertical"
+def test_wider_pull_gives_a_bigger_section_on_the_increment():
+    sizes = []
+    for dx in (2.0, 4.0):
+        p = pipe("model")
+        p.modeling.step = "draw_circle"
+        p.modeling._step_reset()
+        cmds = drive(p, [(NOHANDS, 0.2), (pull(dx, 0), 2.5)])
+        locked = [c["data"]["d"] for c in cmds if c["kind"] == "wiz_size" and c["data"]["locked"]]
+        assert locked and locked[0] % 25 == 0
+        sizes.append(locked[0])
+    assert sizes[1] > sizes[0] * 1.5
 
 
-def test_drawing_a_circle_with_the_index_finger():
+def test_front_plane_line_then_circle_makes_a_round_column():
     p = pipe("model")
-    pt = S.canonical_hand("point")
-    still, t = clip(lambda a, tt: [hand(pt, (0.5, 0.6), t=tt)], 0.5)
-    circ, t = clip(lambda a, tt: [hand(pt, (0.5 + 0.1 * np.sin(2 * np.pi * a), 0.6 - 0.1 * np.cos(2 * np.pi * a)), t=tt)],
-                   1.6, t)
-    cmds = run(p, still + circ)
-    assert "circle" in kinds(cmds)
-    # pointing still is not a circle
-    assert "circle" not in kinds(run(pipe("model"), clip(lambda a, tt: [hand(pt, (0.5, 0.6), t=tt)], 3.0)[0]))
+    p.set_prompt(None)
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("imr"), 1.2), (NOHANDS, 0.2),
+                     (pose("point", (0.45, 0.7)), 1.5), (NOHANDS, 0.2), (pose("point", (0.45, 0.35)), 1.5)])
+    picks = [c["data"]["slot"] for c in cmds if c["kind"] == "wiz_pick"]
+    assert picks == ["p0", "p1"] and p.modeling.step == "shape"
+    p.modeling.set_value("L", 3000.0)                   # the page measured the line on its grid
+    p.modeling.set_value("orientation", "vertical")
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("im"), 1.2), (NOHANDS, 0.2), (pull(3, 0), 2.5), (NOHANDS, 0.3),
+                     (pose("thumbs_up"), 1.5)])
+    made = [c["data"] for c in cmds if c["kind"] == "create_member"]
+    assert made and made[0]["kind"] == "circle" and made[0]["orientation"] == "vertical" and made[0]["L"] == 3000.0
 
 
-# ---- LOADS phase --------------------------------------------------------------------
-def test_held_still_fist_places_a_fixed_support_but_dragging_rotates():
+def test_two_fists_go_back_one_step():
+    p = pipe("model")
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("im"), 1.2)])
+    assert p.modeling.step == "shape"
+    fists = lambda a, tt: [hand(S.canonical_hand("fist"), (0.3, 0.55), "Left", tt),  # noqa: E731
+                           hand(S.canonical_hand("fist"), (0.7, 0.55), "Right", tt)]
+    cmds = drive(p, [(fists, 1.0)])
+    assert p.modeling.step == "plane" and [c for c in cmds if c["kind"] == "wiz_step" and c["data"].get("back")]
+
+
+def test_a_count_held_from_before_is_not_read_again():
+    p = pipe("model")
+    drive(p, [(NOHANDS, 0.2), (fingers("i"), 1.2)])    # 1 = plan plane
+    assert p.modeling.step == "shape"
+    drive(p, [(fingers("i"), 1.5)])                     # still 1: must not pick the rectangle by itself
+    assert p.modeling.step == "shape"
+    drive(p, [(NOHANDS, 0.2), (fingers("i"), 1.2)])
+    assert p.modeling.step == "draw_rect"
+
+
+# ---- LOADS wizard: what -> start -> (end) -> direction -> value ------------------------------------------------------
+def test_support_is_placed_after_the_start_point():
     p = pipe()
-    fist = S.canonical_hand("fist")
-    cmds = run(p, clip(lambda a, tt: [hand(fist, (0.4, 0.55), t=tt)], 1.2)[0])
-    sup = [c for c in cmds if c["kind"] == "support"]
-    assert len(sup) == 1 and sup[0]["data"]["op"] == "support_fixed"
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("i"), 1.2), (NOHANDS, 0.2), (pose("point", (0.4, 0.5)), 1.6)])
+    places = [c["data"] for c in cmds if c["kind"] == "wiz_place"]
+    assert places == [{"op": "support_fixed"}] and p.modeling.step == "menu"
+    assert [c["data"]["slot"] for c in cmds if c["kind"] == "wiz_pick"] == ["t0"]
+
+
+def test_pinching_the_other_hand_confirms_a_point_at_once():
     p = pipe()
-    cmds = run(p, clip(lambda a, tt: [hand(fist, (0.3 + 0.3 * a, 0.55), t=tt)], 1.2)[0])
-    assert "support" not in kinds(cmds) and "orbit" in kinds(cmds)
+    drive(p, [(NOHANDS, 0.2), (fingers("im"), 1.2), (NOHANDS, 0.2)])
+    assert p.modeling.step == "start"
+    pt, pi = S.canonical_hand("point"), S.canonical_hand("pinch")
+    moving = lambda a, tt: [hand(pt, (0.3 + 0.3 * a, 0.5), "Right", tt)]  # noqa: E731
+    click = lambda a, tt: [hand(pt, (0.6, 0.5), "Right", tt), hand(pi, (0.2, 0.6), "Left", tt)]  # noqa: E731
+    cmds = drive(p, [(moving, 0.6), (click, 0.3)])
+    assert [c["data"]["op"] for c in cmds if c["kind"] == "wiz_place"] == ["support_pinned"]
 
 
-def test_pinch_and_v_place_pinned_and_roller():
-    for pose, op in (("pinch", "support_pinned"), ("peace", "support_roller")):
-        cmds = run(pipe(), clip(lambda a, tt, pose=pose: [hand(S.canonical_hand(pose), (0.5, 0.55), t=tt)], 1.2)[0])
-        assert [c["data"]["op"] for c in cmds if c["kind"] == "support"] == [op]
-
-
-def test_point_then_flick_down_gives_a_point_load():
+def test_point_load_needs_start_and_direction():
     p = pipe()
-    pt = S.canonical_hand("point")
-    hold, t = clip(lambda a, tt: [hand(pt, (0.5, 0.5), t=tt)], 0.9)
-    flick, t = clip(lambda a, tt: [hand(pt, (0.5, 0.5 + 0.2 * a), t=tt)], 0.3, t)
-    pl = [c for c in run(p, hold + flick) if c["kind"] == "point_load"]
-    assert len(pl) == 1 and pl[0]["data"]["flick"][1] > 0  # image y down = downward flick
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("imrp"), 1.2), (NOHANDS, 0.2), (pose("point", (0.6, 0.5)), 1.6),
+                     (NOHANDS, 0.2), (pose("point", (0.6, 0.5), roll=np.pi), 1.8)])
+    steps = [c["data"]["step"] for c in cmds if c["kind"] == "wiz_step"]
+    assert steps[:2] == ["start", "dir"]
+    d = [c["data"]["vec"] for c in cmds if c["kind"] == "wiz_pick" and c["data"]["slot"] == "dir"]
+    assert d and d[0][1] > 0.8                          # pointing down the screen
+    assert [c["data"]["op"] for c in cmds if c["kind"] == "wiz_place"] == ["point_load"]
 
 
-def test_palm_sweep_gives_a_uniform_load_and_two_palms_a_trapezoid():
+def test_uniform_load_has_a_start_and_an_end():
     p = pipe()
-    palm = S.canonical_hand("open_palm")
-    down = {"pitch": 1.2}  # palm turned to face the floor
-    sweep, t = clip(lambda a, tt: [hand(palm, (0.3 + 0.4 * a, 0.55), t=tt, **down)], 0.8)
-    stop, t = clip(lambda a, tt: [hand(palm, (0.7, 0.55), t=tt, **down)], 0.9, t)
-    udl = [c for c in run(p, sweep + stop) if c["kind"] == "udl"]
-    assert len(udl) == 1
-    assert udl[0]["data"]["xy1"][0] - udl[0]["data"]["xy0"][0] > 0.3
-    assert udl[0]["data"]["normal_view"][1] < -0.5  # palm faces down in view space
-
-    p = pipe()
-    two, _ = clip(lambda a, tt: [hand(palm, (0.3, 0.55), "Right", tt), hand(palm, (0.7, 0.5), "Left", tt)], 1.2)
-    tr = [c for c in run(p, two) if c["kind"] == "trap"]
-    assert len(tr) == 1 and tr[0]["data"]["xy0"][0] < tr[0]["data"]["xy1"][0]
+    cmds = drive(p, [(NOHANDS, 0.2), (fingers("timrp"), 1.2), (NOHANDS, 0.2), (pose("point", (0.35, 0.5)), 1.6),
+                     (NOHANDS, 0.2), (pose("point", (0.65, 0.5)), 1.6), (NOHANDS, 0.2),
+                     (pose("point", (0.6, 0.5), roll=np.pi), 1.8)])
+    assert [c["data"]["slot"] for c in cmds if c["kind"] == "wiz_pick"] == ["t0", "t1", "dir"]
+    assert [c["data"]["op"] for c in cmds if c["kind"] == "wiz_place"] == ["uniform_load"]
 
 
 def test_thumbs_up_hold_solves_once():
@@ -160,6 +218,21 @@ def test_thumbs_up_hold_solves_once():
 
 
 # ---- session ---------------------------------------------------------------------------
+def test_session_creates_a_member_sized_by_the_wizard():
+    from archimedes_fe.session import ModelSession
+
+    s = ModelSession()
+    s.settings.update(length=250.0, section=50.0)
+    s.create_member("rect", "vertical", L=3337, b=212, h=480)
+    m = s.model.member
+    assert (m.section.b, m.section.h, m.length, m.orientation) == (200, 500, 3250, "vertical")
+    assert s.phase == "loads" and "column(b=200, h=500, L=3250)" in s.journal[-1]["cmd"]
+    s.create_member("circle", "horizontal", L=4000, d=330)
+    assert s.model.member.section.d == 350 and s.model.member.orientation == "horizontal"
+    s.undo()
+    assert s.model.member.section.kind == "rect"
+
+
 def test_session_builds_a_beam_from_prompts_and_solves():
     from archimedes_fe.session import ModelSession
 

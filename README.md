@@ -77,14 +77,19 @@ which has no webcam of its own.
 
 ### Gesture layer: computer vision
 
-- **One-hand control.** Six poses that are easy to tell apart (fist, pinch, flat palm, point, V, thumbs-up). A
-  relaxed hand never moves the model.
-- **Section cuts with your palm.** Your hand *is* the cutting plane; close it to lock the cut.
+- **One hand points, two hands manipulate.** Six poses that are easy to tell apart (fist, pinch, flat palm, point,
+  V, thumbs-up). One hand does the precise things (probe, section, field); both hands do the big moves (zoom, pan,
+  turn, reset), as in VR. A lone pinch does nothing, so pinch and point can never be confused. A relaxed hand never
+  moves the model.
+- **Straight section cuts with your palm.** The cut follows the axis your palm faces, locked for the gesture and
+  moved in steps, so hand tremor never tilts or jitters it.
+- **A cursor you can see.** The probe draws a ring snapped onto the model; two pointing hands compare two points.
 - **Robust recognition.** Rigid-palm motion, EMA plus hysteresis, One Euro filtering and plain-language quality
   hints ("too dark", "hand at edge").
 - **Personalisation.** A 30-second calibration detects handedness and fits a few-shot k-NN adapter to your hand.
-- **Gesture modelling.** Pull a beam out with two pinches, enter dimensions by holding up fingers, place supports
-  and loads, and solve with a thumbs-up.
+- **Gesture modelling, one confirmed step at a time.** Choose a drawing plane, size the section by pulling two pinched
+  hands apart (snapped to your increment), extrude the same way, confirm with a thumbs-up. Supports and loads: choose
+  what by finger count, point at the start (and end), point the direction, then type the value.
 - **Python console.** Abaqus-style commands (`beam(...)`, `pinned(...)`, `solve()`), your own scripts, and a journal
   that replays every gesture and mouse edit as a command.
 
@@ -159,30 +164,45 @@ The full guide is in [`Archimedes/docs/cad-workflow.md`](Archimedes/docs/cad-wor
 
 ### Gestures
 
+**Looking at results** (one hand for precise work, two hands for big moves)
+
 | Hold… | to… | then… |
 |---|---|---|
 | ✊ fist | rotate | drag, like grabbing the model |
-| 🤏 pinch | zoom | move up / down |
-| 🤏🤏 **pinch with both hands** | zoom and rotate | spread = zoom in, together = zoom out; move both hands to rotate |
-| ✋ flat palm (still) | straight section cut | along the axis the palm faces; slide to move it; **show the other palm to tilt it freely** |
-| ☝️ point | probe | the fingertip is the cursor; **pinch with your other hand to pin the value** |
-| ✌️ V | change field | swipe left / right |
-| 👍 thumbs-up (still) | snapshot (solve in the Workbench) | |
-| 🙌 both palms | reset | |
+| ☝️ point | probe | the ring on the model is your cursor; pinch your other hand (or hold still) to pin the value |
+| ✋ one flat palm, still | straight section cut | along the axis the palm faces; slide to move it in steps; relax to keep it |
+| ✌️ V | change field | move right / left: one field per step; a strip shows where you are |
+| 👍 thumbs-up, still | snapshot (solve in the Workbench) | |
+| 🤏🤏 pinch with both hands | zoom and pan | the model scales exactly with the distance between your hands; move both to pan |
+| ✊✊ two fists | turn | like holding a ball: move them to rotate, twist them like a steering wheel to spin |
+| ☝️☝️ point with both hands | compare two points | two cursors and the difference B − A |
+| 👍👍 both thumbs up, held | reset the view | |
+
+**Building the model** is a wizard: every step has one clear gesture and a confirmation, with step chips, choice cards
+and a live readout on screen.
+
+| Step | Gesture |
+|---|---|
+| Pick from a menu (plane, shape, support or load type) | hold up that many fingers, still ~0.7 s |
+| Size a rectangle / circle, or extrude a length | 🤏🤏 pinch with both hands and pull apart; the size snaps to your increment; hold still ~1 s to lock |
+| Pick a point (line ends, load start / end) | ☝️ point at it (the cursor snaps to the increment); hold still or pinch your other hand |
+| Pick a load direction | ☝️ point the way the load pushes; it snaps to ±x, ±y, ±z |
+| Accept | 👍 thumbs-up, held ~0.8 s |
+| Back one step | ✊✊ two fists, held ~0.6 s |
 
 **Typing numbers:** hold up fingers for digits (0 to 9 with two hands); questions with fixed choices are answered by
-the count alone; 🤏 pinch and hold deletes a digit; 🙌 both palms accept. The keyboard works alongside (Backspace
-included).
+the count alone; 🤏 pinch and hold deletes a digit; 🤏 pinch and move up / down nudges by the increment; 🙌 both palms
+accept. The keyboard works alongside (Backspace included).
 
 <p align="center">
-  <img src="docs/media/workbench-gestures.gif" alt="Two-hand zoom and rotate, a straight section cut and a probe, driven by scripted hands" width="88%"><br>
+  <img src="docs/media/workbench-gestures.gif" alt="Two-hand zoom, pan and turn, a straight section cut, the field strip and a probe, driven by scripted hands" width="88%"><br>
   <sub>Workbench driven by scripted two-hand input (<a href="docs/media/workbench-gestures.mp4">mp4</a>).
   Hands: kinematic model, not a camera. Recorded with <code>scripts/record_demo.py</code>.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/media/modeller-finger-input.gif" alt="Choosing increments and typing a number with fingers, deleting with a pinch" width="70%"><br>
-  <sub>Finger input in the gesture modeller (<a href="docs/media/modeller-finger-input.mp4">mp4</a>).</sub>
+  <img src="docs/media/modeller-wizard.gif" alt="Building a beam by gesture: increments, plane, two-hand rectangle, extrude, a support, a point load and solve" width="80%"><br>
+  <sub>The model and loads wizards in the gesture modeller, from increments to a solved beam (<a href="docs/media/modeller-wizard.mp4">mp4</a>).</sub>
 </p>
 
 Mouse and keyboard always work too. The gesture vocabulary and the reasoning behind it are in

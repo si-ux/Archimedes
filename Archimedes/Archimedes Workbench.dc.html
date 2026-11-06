@@ -5319,9 +5319,9 @@ class Component extends DCLogic {
         bd: st.gestureOn ? 'rgba(94,207,224,.45)' : '#242b33', fg: st.gestureOn ? '#dff3f7' : '#8b96a2',
         dot: st.gestureOn ? A : '#3b4550',
         label: this.live && this.live.ok && this.live.hud ? this.liveLabel(this.live.hud)
-          : { orbit: 'FIST — ORBIT', pinch: 'PINCH — ZOOM', blade: 'FLAT PALM — SECTION',
+          : { orbit: 'FIST — ORBIT', pinch: 'TWO PINCHES — ZOOM', blade: 'FLAT PALM — SECTION',
           point: 'INDEX POINT — PROBE', field: 'V SIGN — FIELD', thumb: 'THUMBS-UP — SOLVE',
-          reset: 'BOTH PALMS — RESET', idle: 'TRACKING' }[st.gestAct] || 'TRACKING',
+          reset: 'BOTH THUMBS — RESET', idle: 'TRACKING' }[st.gestAct] || 'TRACKING',
         hint: this.live && this.live.ok
           ? (this.live.hud ? (this.live.hud.hints[0] || this.live.hud.tip) : 'webcam · waiting for the gesture engine')
           : (this.live && this.live.error) || 'no camera · scripted driver',

@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Gestures
+### Gestures: wizards, two-hand vocabulary, visible cursors
+- Model wizard: choose a drawing plane (plan, side or front), then a rectangle or circle, size it by pulling two
+  pinched hands apart (snapped to the section increment, locked by holding still), extrude the same way, confirm with
+  a thumbs-up. On the front plane, point at the start and end of the member line on a grid first. Step chips, choice
+  cards, a live readout, a sketch grid and a 3D preview show every step.
+- Loads wizard: choose what by finger count (fixed, pinned, roller, point, uniform, trapezoidal), point at the start
+  (and end) on the member, point the load direction, then type the value. Each pick is confirmed by holding still or
+  by pinching the other hand; two fists go back a step.
+- Results: one hand does the precise work, both hands the big moves. Two pinches zoom (exactly with the hands'
+  distance) and pan; two fists turn; two pointing hands compare two points; both thumbs up reset. A lone pinch does
+  nothing, so pinch and point are never mixed up.
+- The section cut is always straight and moves in steps; the Workbench uses its X / Y / Z cut and evaluates it on the
+  fitted node positions.
+- The probe draws a ring cursor snapped onto the model in both apps; the field change is a dial with an on-screen
+  strip; confirmations play a short tick.
+- Finger counting reads the thumb from its span across the palm, which tells a tucked thumb from a raised one; the
+  Workbench sends MediaPipe world landmarks.
+- Still modes are refused while the other hand is raised; a second hand never cancels an active mode unless it makes
+  the two-hand version of it.
+
+### Gestures (earlier in this cycle)
 - Faster and more accurate: pose changes register in 2 frames, modes arm in 0.1 to 0.2 s (was 0.25 to 0.8 s),
   position filters no longer lag (probe cursor lag 81 ms → 21 ms, error 4.1 % → 1.1 %), and the Workbench camera
   follows the hand with a frame-rate independent ease.

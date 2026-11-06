@@ -5,16 +5,20 @@ Gestures in the workbench are for **looking at results**. Pipeline stages
 engine's output goes through `applyGestureCommand()`, which makes the same state
 changes the mouse, menus and `▶` buttons make.
 
+One hand does the precise work; both hands showing the same pose do the big moves,
+as in VR.
+
 | | Gesture | Hold… | then… |
 | --- | --- | --- | --- |
-| ⟳ | Orbit | ✊ fist, 0.12 s | drag, like grabbing the model |
-| ⇔ | Zoom (one hand) | 🤏 pinch, 0.12 s | move up to zoom in, down to zoom out |
-| ⇱ | **Two-hand zoom and rotate** | 🤏🤏 pinch with both hands, 0.1 s | **spread the hands to zoom in, bring them together to zoom out** (1:1 with the distance between them); **move them together to rotate** |
-| ▬ | Section cut | ✋ flat palm, **still**, 0.5 s | a **straight** cut along the model axis the palm faces; the axis is picked in the first 6 frames and locked, so tremor never tilts it. Slide the palm to move the cut. **Show your other open palm to tilt the cut freely** with the hand |
-| ↑ | Probe | ☝️ index point, 0.12 s | the fingertip is the cursor. **Pinch with your other hand to pin the value** (or hold still 0.6 s) |
-| ◐ | Field | ✌️ V sign, 0.2 s | swipe left / right to change the result field |
+| ⟳ | Orbit | ✊ fist, 0.2 s | drag, like grabbing the model |
+| ↑ | Probe | ☝️ index point, 0.2 s | a **ring cursor snapped onto the model** (a dashed line shows where you point when it is off the part). **Pinch with your other hand to pin the value** (or hold still 0.8 s) |
+| ▬ | Section cut | ✋ one flat palm, **still**, 0.6 s | a **straight** cut (X, Y or Z plane) across the axis the palm faces; the axis is picked in the first 6 frames and locked. Slide the palm to move the cut in steps. The cut is evaluated on the fitted node positions, so it is flat on body-fitted meshes too |
+| ◐ | Field | ✌️ V sign, 0.25 s | move right / left: one field per 0.7 palm widths; a strip shows the list |
 | ▲ | Solve | 👍 thumbs-up, **still**, 1.2 s | runs the solve once |
-| ⌂ | Reset | 🙌 both open palms, 1 s | resets the camera and removes the cut |
+| ⇱ | **Zoom / pan** | 🤏🤏 pinch with both hands, 0.15 s | the zoom follows the distance between the hands exactly; move both to pan |
+| ◎ | **Turn** | ✊✊ two fists, 0.15 s | move them to rotate, twist them like a steering wheel to spin |
+| ⇄ | **Compare** | ☝️☝️ point with both hands | cursors A and B and the difference B − A |
+| ⌂ | Reset | 👍👍 both thumbs up, still, 0.8 s | resets the camera and removes the cut |
 
 Relax your hand and the mode stops. A relaxed or passing hand never moves the
 model.
@@ -26,8 +30,10 @@ model.
 | open palm + drag = orbit | fist + drag | An open palm is the resting hand: every passing hand would orbit the model |
 | fist hold = next stage, swipes = prev/next stage | menus / keys | Stages are pre-processing; gestures are for results |
 | thumbs-up = solve, on recognition | thumbs-up held **still** 1.2 s, with a ring | A solve costs seconds to minutes; it must never fire by accident |
-| blade sweep along a fixed axis | straight cut along an axis; tilt with the other palm | A hand always wobbles, so a free plane looked staggered; the free plane is still there, but asked for |
+| blade sweep along a fixed axis | straight cut along an axis, always | A hand always wobbles, so a free plane looked staggered |
 | two palms, vary separation = warp scale | two *pinches*, vary separation = zoom | The distance between hands is the most direct zoom there is; pinching keeps the hands apart and tells the camera where each one is |
+| one-hand pinch = zoom | a lone pinch does nothing | Pinch and point look alike to a camera mid-transition; with no one-hand pinch mode they can never be confused |
+| both open palms = reset | both thumbs up | Two open palms are also how people start a section cut with the other hand raised |
 
 ## How it runs
 
@@ -36,7 +42,7 @@ browser: webcam → MediaPipe Hand Landmarker (WASM) → 21×3 landmarks ─┐
                                                        WebSocket /ws?profile=workbench
 python:  archimedes_gestures.GesturePipeline (classifier, smoothing,  ◄┘
          hold-to-arm state machine, One Euro filters, quality hints)
-         → commands {orbit, zoom, section, probe, field, solve, reset}
+         → commands {orbit, zoom, pan, section, probe, probe2, field, solve, reset}
 browser: applyGestureCommand() → same state changes as mouse / menus
 ```
 

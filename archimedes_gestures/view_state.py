@@ -31,8 +31,8 @@ def snap_axis(n: np.ndarray, prev: np.ndarray | None = None, margin: float = 1.2
 
 @dataclass
 class Command:
-    kind: str  # orbit | zoom | section | section_lock | section_off | probe | probe_clear | probe_pin
-    #            field | snapshot | begin | reset | undo
+    kind: str  # orbit | zoom | pan | section | section_lock | section_off | probe | probe2 | probe_clear
+    #            probe_pin | field | snapshot | begin | reset | undo (others, e.g. wiz_*, are for the renderer)
     data: dict = field(default_factory=dict)
 
 
@@ -48,9 +48,9 @@ class ViewState:
     plane_normal: list = field(default_factory=lambda: [1.0, 0.0, 0.0])
     field_index: int = 0
     probe_cursor: list | None = None  # [x, y] in 0..1 viewport coords
+    probe_cursor2: list | None = None  # the second cursor (two pointing hands: compare two points)
     probe_pins: list = field(default_factory=list)
     snapshots: int = 0
-    section_free: bool = False  # tilted by hand; otherwise the cut is straight along a world axis
     fields: list = field(default_factory=lambda: list(FIELDS))  # set from the solver's result fields
     _history: list = field(default_factory=list, repr=False)
     _sec_buf: list = field(default_factory=list, repr=False)  # first palm normals of a cut: they pick its axis
@@ -87,34 +87,32 @@ class ViewState:
             self.elevation = float(np.clip(self.elevation + d["dy"], -89, 89))
         elif k == "zoom":
             self.distance = float(np.clip(self.distance * d["factor"], 0.2, 5.0))
+        elif k == "pan":  # the model follows the hands across the screen (units: model half-sizes)
+            r, u, _ = self.camera_basis()
+            fp = np.asarray(self.focal_point) - self.distance * (d["dx"] * r - d["dy"] * u)
+            self.focal_point = np.clip(fp, -3.0, 3.0).tolist()
         elif k == "section":
+            # Always a straight cut: the axis the palm faces over its first few frames, then locked for the whole
+            # gesture, so tremor can never tilt it. The plane only slides along that axis.
             n = self.view_to_world(np.asarray(d["normal_view"], float))
             n /= np.linalg.norm(n) + 1e-9
-            free = bool(d.get("free", False))
-            offset = d.get("offset", 0.0)
-            if not free:
-                # Straight cut: the axis the palm faces over its first few frames, then locked for the whole
-                # gesture, so tremor can never tilt it. The plane slides along that axis.
-                if self._sec_axis is None:
-                    self._sec_buf.append(n)
-                    m = np.mean(self._sec_buf, axis=0)
-                    m /= np.linalg.norm(m) + 1e-9
-                    prev = np.asarray(self.plane_normal) if self.section_on and not self.section_free else None
-                    ax = snap_axis(m, prev)
-                    if len(self._sec_buf) >= 6:
-                        self._sec_axis = ax.tolist()
-                else:
-                    ax = np.asarray(self._sec_axis)
-                n = ax
-                if "disp" in d:  # slide along the axis as it appears on screen
-                    r, u, b = self.camera_basis()
-                    nv = np.array([n @ r, n @ u, n @ b])
-                    offset = d.get("gain", 0.5) * float(np.dot(d["disp"], nv))
+            if self._sec_axis is None:
+                self._sec_buf.append(n)
+                m = np.mean(self._sec_buf, axis=0)
+                m /= np.linalg.norm(m) + 1e-9
+                ax = snap_axis(m, np.asarray(self.plane_normal) if self.section_on else None)
+                if len(self._sec_buf) >= 6:
+                    self._sec_axis = ax.tolist()
             else:
-                self._sec_axis, self._sec_buf = None, []
-            self.section_on, self.section_locked, self.section_free = True, False, free
-            self.plane_normal = n.tolist()
-            self.plane_origin = (np.asarray(self.focal_point) + offset * n).tolist()
+                ax = np.asarray(self._sec_axis)
+            offset = d.get("offset", 0.0)
+            if "disp" in d:  # slide along the axis as it appears on screen
+                r, u, b = self.camera_basis()
+                nv = np.array([ax @ r, ax @ u, ax @ b])
+                offset = d.get("gain", 0.5) * float(np.dot(d["disp"], nv))
+            self.section_on, self.section_locked = True, False
+            self.plane_normal = ax.tolist()
+            self.plane_origin = (np.asarray(self.focal_point) + offset * ax).tolist()
         elif k == "section_off":
             self._push()
             self.section_on, self.section_locked = False, False
@@ -127,8 +125,10 @@ class ViewState:
             self._sec_axis, self._sec_buf = None, []
         elif k == "probe":
             self.probe_cursor = list(d["xy"])
+        elif k == "probe2":
+            self.probe_cursor2 = list(d["xy"])
         elif k == "probe_clear":
-            self.probe_cursor = None
+            self.probe_cursor = self.probe_cursor2 = None
         elif k == "probe_pin":
             self._push()
             self.probe_pins.append(list(d["xy"]))

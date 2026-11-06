@@ -6,10 +6,12 @@
 Every scenario drives the real GesturePipeline (rule classifier, pose smoother, intent engine) with a scripted
 hand at 30 fps and reports what the user would feel:
 
-* zoom: how long until the view starts to move, and how closely the zoom follows the hand
+* zoom: how long until two pinching hands start to zoom, how closely the zoom follows them, and that a lone pinch
+  does nothing (so it can never be mistaken for the probe)
 * probe: lag of the cursor behind the fingertip, and its jitter when the hand is still
-* digits: time to read a finger count, and whether a backspace swipe is recognised
+* digits: time to read a finger count, and pinch-and-hold delete
 * section: how much the cut plane wobbles while the palm is held "still"
+* wizard: time to pick a menu item by finger count, and how exactly a two-hand pull sizes a rectangle
 
 The synthetic hand is NOT a camera: use the numbers to compare versions of the code, not as accuracy claims.
 """
@@ -60,7 +62,7 @@ def first_time(results, pred, t0=0.0):
 
 # ---------------------------------------------------------------- scenarios
 def bench_zoom(seed=0) -> dict:
-    """Pinch with one hand and move it up by 0.6 palm widths in 0.6 s. Also: two pinches, spread by 40 %."""
+    """Pinch with one hand and move it up by 0.6 palm widths in 0.6 s (must do nothing). Two pinches, spread by 40 %."""
     rng = np.random.default_rng(seed)
     out = {}
     pipe = make_pipeline()
@@ -74,7 +76,7 @@ def bench_zoom(seed=0) -> dict:
         frames.append((t, [hand("pinch", center=(0.5, 0.6 - 0.6 * 0.12 * a), t=t, rng=rng)])); t += 1 / FPS
     res = list(run(pipe, frames))
     zoom = [(tt, c) for tt, r in res for c in r["commands"] if c["kind"] == "zoom"]
-    out["one_hand_first_response_ms"] = None if not zoom else round(1000 * (zoom[0][0] - t_start))
+    out["one_hand_zoom_commands"] = len(zoom)
     out["one_hand_total_zoom"] = round(float(np.prod([c["data"]["factor"] for _, c in zoom])) if zoom else 1.0, 3)
 
     pipe = make_pipeline()
@@ -149,31 +151,6 @@ def bench_digits(seed=0) -> dict:
     return out
 
 
-def bench_backspace(seed=0) -> dict:
-    """Type '30', then swipe an open hand to the left at a normal speed. Count backspaces."""
-    out = {}
-    for label, width, dur in (("quick flick", 0.30, 0.25), ("relaxed swipe", 0.22, 0.45), ("small wave", 0.12, 0.3)):
-        rng = np.random.default_rng(seed)
-        pipe = make_pipeline("model")
-        pipe.set_prompt({"action": "x", "key": "k", "step": 1, "label": "Load", "unit": "kN", "default": None,
-                         "choices": None, "increment": None})
-        pipe.numbers.digits = "30"
-        pipe.numbers._armed = False
-        t, res = 0.0, []
-        for _ in range(int(0.6 * FPS)):
-            res.append((t, pipe.process(FrameInput(t, [hand(fingers="timrp", center=(0.62, 0.55), t=t, rng=rng)]))))
-            t += 1 / FPS
-        n = max(int(dur * FPS), 2)
-        for i in range(n):
-            res.append((t, pipe.process(FrameInput(t, [hand(fingers="timrp", center=(0.62 - width * i / (n - 1), 0.55), t=t, rng=rng)]))))
-            t += 1 / FPS
-        for _ in range(int(0.6 * FPS)):
-            res.append((t, pipe.process(FrameInput(t, [hand(fingers="timrp", center=(0.62 - width, 0.55), t=t, rng=rng)]))))
-            t += 1 / FPS
-        out[label] = sum(1 for _, r in res for c in r["commands"] if c["kind"] == "number_backspace")
-    return out
-
-
 def bench_pinch_delete(seed=0) -> dict:
     """Type '305', then pinch and hold still for 1.2 s: one delete after ~0.45 s, then repeats."""
     rng = np.random.default_rng(seed)
@@ -218,10 +195,38 @@ def bench_section(seed=0) -> dict:
             "offset_wobble": round(float(np.std(along)), 4)}
 
 
+def bench_wizard(seed=0) -> dict:
+    """Model wizard: hold up 2 fingers (side plane), 1 finger (rectangle), then pinch with both hands 3 palm widths
+    apart sideways and 2 up-down and hold still: the size locks on a multiple of the 25 mm increment."""
+    rng = np.random.default_rng(seed)
+    pipe = make_pipeline("model")
+    pipe.set_prompt(None)
+    t, res = 0.0, []
+
+    def go(dur, fn):
+        nonlocal t
+        for _ in range(int(dur * FPS)):
+            res.append((t, pipe.process(FrameInput(t, fn(t))))); t += 1 / FPS
+
+    go(0.3, lambda t: [])
+    go(1.4, lambda t: [hand(fingers="im", center=(0.5, 0.55), t=t, rng=rng)])
+    plane = next((tt for tt, r in res for c in r["commands"] if c["kind"] == "wiz_plane"), None)
+    go(0.3, lambda t: [])
+    t_shape = t
+    go(1.4, lambda t: [hand(fingers="i", center=(0.5, 0.55), t=t, rng=rng)])
+    shape = next((tt for tt, r in res for c in r["commands"] if c["kind"] == "wiz_step" and c["data"]["step"] == "draw_rect"), None)
+    s = 0.12
+    go(3.0, lambda t: [hand("pinch", center=(0.5 - 1.5 * s, 0.55 - 1.0 * s), handedness="Left", t=t, rng=rng),
+                       hand("pinch", center=(0.5 + 1.5 * s, 0.55 + 1.0 * s), t=t, rng=rng)])
+    locked = [c["data"] for _, r in res for c in r["commands"] if c["kind"] == "wiz_size" and c["data"].get("locked")]
+    return {"plane_pick_ms": None if plane is None else round(1000 * (plane - 0.3)),
+            "shape_pick_ms": None if shape is None else round(1000 * (shape - t_shape)),
+            "rect": (locked[0]["b"], locked[0]["h"]) if locked else None, "step": pipe.modeling.step}
+
+
 def main() -> None:
     for name, fn in (("zoom", bench_zoom), ("probe", bench_probe), ("digits", bench_digits),
-                     ("backspace (backspaces fired)", bench_backspace), ("pinch delete", bench_pinch_delete),
-                     ("section", bench_section)):
+                     ("pinch delete", bench_pinch_delete), ("section", bench_section), ("wizard", bench_wizard)):
         print(f"{name:30s}", fn())
 
 
