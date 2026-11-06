@@ -38,7 +38,7 @@ let ground = null;
 
 const S = {                                                 // app state
   info: null, view: null, model: null, phase: "results", prompt: null, hud: null, res: null,
-  version: -1, solved: false, tool: null, toolT0: null, mouseXY: null, cursor: null, busy: false,
+  version: -1, solved: false, tool: null, toolT0: null, mouseXY: null, busy: false,
 };
 const overlay = $("overlay"), octx = overlay.getContext("2d");
 
@@ -346,7 +346,8 @@ function rebuildGlyphs() {
 // ---------------------------------------------------------------------------
 // camera from ViewState
 function frameInfo() {
-  const G = S.model ? geo() : null;
+  const spec = wizMesh ? wizSpec() : null;               // frame the member being built while it is previewed
+  const G = spec ? geo(spec) : S.model ? geo() : null;
   const c = fe && showFE() ? fe.center : G ? G.center : [0, 0, 0];
   const half = fe && showFE() ? fe.half : G ? G.span / 2 : 1000;
   return { c, half };
@@ -394,19 +395,204 @@ function axisFromViewVector(nv) {             // palm normal (view space) -> nea
 }
 function tLabel(t) { const G = geo(); return `${G.hor ? "x" : "z"} = ${fmt(t * G.L / 1000)} m`; }
 
-// gesture commands from the engine that need the camera to land on the member
+// ---------------------------------------------------------------------------
+// gesture wizard (model / loads): the engine sends viewport positions; the page snaps them to the increments, onto
+// the member or the drawing plane, keeps the confirmed picks and draws everything live
 const TOOL_NAMES = { support_fixed: "Fixed", support_pinned: "Pinned", support_roller: "Roller" };
-function resolveCommand(c) {
-  const d = c.data || {};
-  switch (c.kind) {
-    case "cursor": S.cursor = { xy: d.xy, pose: d.pose, until: performance.now() + 250 }; break;
-    case "support": sendAction({ op: d.op, t: screenToT(d.xy) }); break;
-    case "point_load": {
-      const t = screenToT(d.xy), dir = d.flick ? axisFromScreenVector(t, d.flick) : { axis: "z", sign: -1 };
-      sendAction({ op: "point_load", t, ...dir }); break;
+const WZ = { phase: null, step: null, plane: null, cur: null, picks: {}, dir: null, sec: null, L: null, orient: null, locked: false, hold: null };
+const FRONT = { w: 10000, h: 6000 };         // the front (XZ) drawing plane, mm
+const incOf = (k) => (S.settings && S.settings[k]) || (k === "length" ? 100 : 25);
+function padRect() {                          // where the drawing plane sits on screen (px), equal scale on both axes
+  const W = overlay.width, H = overlay.height, front = WZ.plane === "front" && (WZ.step || "").startsWith("line");
+  const ext = front ? [FRONT.w, FRONT.h] : [padExtent(), padExtent()];
+  const s = Math.min(W * 0.72 / ext[0], H * 0.62 / ext[1]);
+  const w = ext[0] * s, h = ext[1] * s, x0 = (W - w) / 2, y0 = H * 0.24 + (H * 0.68 - h) / 2;
+  return { x0, y0, w, h, s, ext, front };
+}
+function padExtent() { const v = WZ.sec ? Math.max(WZ.sec.b || 0, WZ.sec.h || 0, WZ.sec.d || 0) : 0; return Math.max(1000, Math.ceil(v * 1.3 / 500) * 500); }
+function padPoint(xy, prev, from) {           // viewport fraction -> snapped point on the front plane (mm)
+  const P = padRect(), W = overlay.width, H = overlay.height, inc = incOf("length");
+  const raw = [Math.min(P.ext[0], Math.max(0, (xy[0] * W - P.x0) / P.s)), Math.min(P.ext[1], Math.max(0, (P.y0 + P.h - xy[1] * H) / P.s))];
+  let q = raw.map((v, k) => (prev && Math.abs(v - prev[k]) < 0.65 * inc ? prev[k] : Math.round(v / inc) * inc));
+  if (from) {                                  // the second point: horizontal (beam) or vertical (column) from the first
+    const hor = Math.abs(raw[0] - from[0]) >= Math.abs(raw[1] - from[1]);
+    q = hor ? [q[0], from[1]] : [from[0], q[1]];
+    if (Math.hypot(q[0] - from[0], q[1] - from[1]) < inc) q = hor ? [from[0] + inc, from[1]] : [from[0], from[1] + inc];
+  }
+  return q;
+}
+function padToScreen(p) { const P = padRect(); return [P.x0 + p[0] * P.s, P.y0 + P.h - p[1] * P.s]; }
+function snapT(t) { const G = geo(), inc = incOf("length"); return Math.min(1, Math.max(0, Math.round(t * G.L / inc) * inc / G.L)); }
+function wizRefT() { const p = WZ.picks; return p.t1 !== undefined ? (p.t0 + p.t1) / 2 : p.t0 ?? 0.5; }
+function wizSpec() {                           // the member being built, as a model for geo() and the preview
+  if (!WZ.sec || WZ.phase !== "model") return null;
+  const L = WZ.L;
+  if (!L) return null;
+  const orient = WZ.plane === "plan" ? "vertical" : WZ.plane === "side" ? "horizontal" : WZ.orient || "horizontal";
+  return { member: { section: WZ.sec.kind === "circle" ? { kind: "circle", d: WZ.sec.d } : { kind: "rect", b: WZ.sec.b, h: WZ.sec.h }, length: L, orientation: orient } };
+}
+let wizMesh = null, wizKey = "";
+function updateWizPreview() {
+  const spec = S.phase === "model" && ["extrude", "confirm"].includes(WZ.step) ? wizSpec() : null;
+  const key = spec ? JSON.stringify(spec) + WZ.locked : "";
+  if (key !== wizKey) {
+    wizKey = key; disposeObj(wizMesh); wizMesh = null;
+    if (spec) {
+      const G = geo(spec);
+      wizMesh = new THREE.Group();
+      wizMesh.add(new THREE.Mesh(memberGeometry(G), new THREE.MeshLambertMaterial({ color: WZ.locked ? 0x3ecf8e : 0xf5b83d, transparent: true, opacity: 0.55 })));
+      wizMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(memberGeometry(G), 20), new THREE.LineBasicMaterial({ color: 0xffffff })));
+      scene.add(wizMesh);
     }
-    case "udl": sendAction({ op: "uniform_load", t0: screenToT(d.xy0), t1: screenToT(d.xy1), ...axisFromViewVector(d.normal_view) }); break;
-    case "trap": sendAction({ op: "trapezoidal_load", t0: screenToT(d.xy0), t1: screenToT(d.xy1), ...axisFromViewVector(d.normal_view) }); break;
+  }
+  const on = !!wizMesh;
+  world.visible = glyphs.visible = !on; $("labels").style.visibility = on ? "hidden" : "";
+}
+function wizClear(keepPlane = false) { WZ.picks = {}; WZ.dir = null; WZ.sec = null; WZ.L = null; WZ.orient = null; WZ.locked = false; if (!keepPlane) WZ.plane = null; }
+function resolveCommand(c) {
+  const d = c.data || {}, now = performance.now();
+  switch (c.kind) {
+    case "wiz_step": {
+      const prev = WZ.step;
+      WZ.phase = d.phase; WZ.step = d.step; WZ.locked = false;
+      if (d.done || d.step === "plane" || d.step === "menu") wizClear();
+      else if (d.back) {                      // undo what the step we are going back to had picked
+        const drop = { line_start: ["p0", "p1"], line_end: ["p1"], start: ["t0", "t1", "dir"], end: ["t1", "dir"], dir: ["dir"] }[d.step] || [];
+        for (const k of drop) delete WZ.picks[k];
+        if (d.step === "shape" || d.step.startsWith("draw_")) { WZ.sec = d.step === "shape" ? null : WZ.sec; if (WZ.plane !== "front") WZ.L = null; }
+        if (d.step === "extrude") WZ.L = null;
+        if (d.step === "line_start" || d.step === "line_end") { WZ.L = null; WZ.orient = null; }
+      }
+      if (prev !== d.step) tick(!d.back);
+      break;
+    }
+    case "wiz_plane": WZ.plane = d.plane; break;
+    case "wiz_cursor": WZ.cur = { xy: d.xy, slot: d.slot, target: d.target, until: now + 300 }; break;
+    case "wiz_pick": {
+      const p = WZ.picks;
+      if (d.slot === "p0") p.p0 = padPoint(d.xy, WZ.curSnap);
+      else if (d.slot === "p1" && p.p0) {
+        p.p1 = padPoint(d.xy, WZ.curSnap, p.p0);
+        const L = Math.round(Math.hypot(p.p1[0] - p.p0[0], p.p1[1] - p.p0[1])), orient = p.p1[1] === p.p0[1] ? "horizontal" : "vertical";
+        WZ.L = L; WZ.orient = orient;
+        send({ type: "wizard_value", key: "L", value: L }); send({ type: "wizard_value", key: "orientation", value: orient });
+      } else if (d.slot === "t0" || d.slot === "t1") p[d.slot] = snapT(screenToT(d.xy));
+      else if (d.slot === "dir") p.dir = axisFromScreenVector(wizRefT(), d.vec);
+      break;
+    }
+    case "wiz_dir": WZ.dir = { vec: d.vec, until: now + 300 }; break;
+    case "wiz_size":
+      if (d.kind === "extrude") WZ.L = d.L; else WZ.sec = { kind: d.kind, b: d.b, h: d.h, d: d.d };
+      WZ.locked = !!d.locked; break;
+    case "wiz_place": {
+      const p = WZ.picks, dir = p.dir || { axis: "z", sign: -1 };
+      if (d.op.startsWith("support_")) sendAction({ op: d.op, t: p.t0 ?? 0 });
+      else if (d.op === "point_load") sendAction({ op: d.op, t: p.t0 ?? 0, ...dir });
+      else sendAction({ op: d.op, t0: p.t0 ?? 0, t1: p.t1 ?? 1, ...dir });
+      break;
+    }
+  }
+}
+function renderWizard(h) {
+  const box = $("wizard"), w = h && h.wizard;
+  if (!w || h.number || S.prompt) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  if (!WZ.step) { WZ.step = w.step; WZ.phase = w.phase; }
+  if (w.data && w.data.plane && !WZ.plane) WZ.plane = w.data.plane;
+  const names = { line_start: "start", line_end: "end", dir: "direction", menu: "what" };
+  $("wiz-steps").innerHTML = w.steps.map((st, i) => `<span class="${i < w.index ? "done" : i === w.index ? "on" : ""}">${i + 1} ${names[st] || st}</span>`).join("");
+  $("wiz-title").textContent = w.title;
+  $("wiz-help").textContent = w.help;
+  $("wiz-choices").innerHTML = (w.choices || []).map((c) => `<div class="${c.n === w.live ? "live" : ""}"><b>${c.n}</b>${c.label}</div>`).join("");
+  const sz = w.size || {}, ro = $("wiz-readout");
+  let txt = "";
+  if (w.step === "draw_rect" && sz.b) txt = `${sz.b} × ${sz.h} mm`;
+  else if (w.step === "draw_circle" && sz.d) txt = `Ø ${sz.d} mm`;
+  else if (w.step === "extrude" && sz.L) txt = `L = ${fmt(sz.L / 1000)} m`;
+  else if (w.step === "confirm") { const sp = wizSpec(); if (sp) { const s = sp.member.section; txt = `${sp.member.orientation === "vertical" ? "Column" : "Beam"} ${s.kind === "circle" ? "Ø" + s.d : s.b + " × " + s.h} mm · L ${fmt(sp.member.length / 1000)} m`; } }
+  else if (WZ.cur && WZ.cur.until > performance.now() && WZ.cur.target === "member" && S.model) txt = tLabel(snapT(screenToT(WZ.cur.xy)));
+  else if (w.step === "dir" && WZ.dir && S.model) { const a = axisFromScreenVector(wizRefT(), WZ.dir.vec); txt = `${a.sign > 0 ? "+" : "−"}${a.axis}`; }
+  ro.textContent = txt; ro.classList.toggle("locked", WZ.locked);
+  $("wiz-bar").style.width = `${(h.progress || 0) * 100}%`;
+}
+function drawArrow(x0, y0, x1, y1, col, wid = 3) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  octx.strokeStyle = octx.fillStyle = col; octx.lineWidth = wid;
+  octx.beginPath(); octx.moveTo(x0, y0); octx.lineTo(x1, y1); octx.stroke();
+  octx.beginPath(); octx.moveTo(x1, y1); octx.lineTo(x1 - 14 * Math.cos(a - 0.4), y1 - 14 * Math.sin(a - 0.4)); octx.lineTo(x1 - 14 * Math.cos(a + 0.4), y1 - 14 * Math.sin(a + 0.4)); octx.fill();
+}
+function drawWizard(now) {
+  if (!WZ.step || !lastHud || !lastHud.wizard || S.prompt) return;
+  const W = overlay.width, H = overlay.height, live = WZ.cur && WZ.cur.until > now ? WZ.cur : null;
+  octx.font = "bold 13px system-ui";
+  // ---- the drawing plane ----
+  const padSteps = ["line_start", "line_end", "draw_rect", "draw_circle"];
+  if (WZ.phase === "model" && WZ.plane && (padSteps.includes(WZ.step) || (WZ.step === "shape" && WZ.plane !== "front"))) {
+    const P = padRect(), front = P.front, inc = incOf(front ? "length" : "section");
+    octx.fillStyle = "rgba(12,15,19,.93)"; octx.fillRect(P.x0 - 30, P.y0 - 26, P.w + 60, P.h + 52);
+    const minor = inc * P.s >= 7 ? inc : inc * Math.ceil(7 / (inc * P.s)), major = front ? 1000 : minor * 4;
+    for (const [step, col] of [[minor, "rgba(77,163,255,.10)"], [major, "rgba(77,163,255,.28)"]]) {
+      octx.strokeStyle = col; octx.lineWidth = 1; octx.beginPath();
+      for (let x = 0; x <= P.ext[0] + 1e-6; x += step) { octx.moveTo(P.x0 + x * P.s, P.y0); octx.lineTo(P.x0 + x * P.s, P.y0 + P.h); }
+      for (let y = 0; y <= P.ext[1] + 1e-6; y += step) { octx.moveTo(P.x0, P.y0 + P.h - y * P.s); octx.lineTo(P.x0 + P.w, P.y0 + P.h - y * P.s); }
+      octx.stroke();
+    }
+    const axes = front ? ["x", "z"] : { plan: ["x", "y"], side: ["y", "z"] }[WZ.plane] || ["b", "h"];
+    octx.fillStyle = "#8b95a3"; octx.fillText(`${front ? "Front plane (xz)" : WZ.plane === "front" ? "Cross-section" : { plan: "Plan plane (xy)", side: "Side plane (yz)" }[WZ.plane]} · grid ${inc} mm`, P.x0, P.y0 - 8);
+    octx.fillText(axes[0] + " →", P.x0 + P.w - 26, P.y0 + P.h + 18); octx.fillText("↑ " + axes[1], P.x0 - 24, P.y0 - 8 + 0);
+    if (front) {
+      const p = WZ.picks;
+      let cur = null;
+      if (live && (WZ.step === "line_start" || WZ.step === "line_end")) { cur = padPoint(live.xy, WZ.curSnap, WZ.step === "line_end" ? p.p0 : null); WZ.curSnap = cur; }
+      const a = p.p0, b = p.p1 || (WZ.step === "line_end" ? cur : null);
+      if (a && b) {
+        const [x0, y0] = padToScreen(a), [x1, y1] = padToScreen(b), L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        octx.strokeStyle = p.p1 ? "#3ecf8e" : "#f5b83d"; octx.lineWidth = 4; octx.beginPath(); octx.moveTo(x0, y0); octx.lineTo(x1, y1); octx.stroke();
+        octx.fillStyle = "#e6e9ee"; octx.fillText(`${a[1] === b[1] ? "beam" : "column"} L = ${fmt(L / 1000)} m`, (x0 + x1) / 2 + 10, (y0 + y1) / 2 - 10);
+      }
+      for (const q of [a, p.p1]) if (q) { const [x, y] = padToScreen(q); octx.fillStyle = "#3ecf8e"; octx.beginPath(); octx.arc(x, y, 6, 0, 7); octx.fill(); }
+      if (cur) {
+        const [x, y] = padToScreen(cur);
+        octx.strokeStyle = "#f5b83d"; octx.lineWidth = 2; octx.beginPath(); octx.arc(x, y, 11, 0, 7); octx.stroke();
+        octx.beginPath(); octx.moveTo(x - 18, y); octx.lineTo(x + 18, y); octx.moveTo(x, y - 18); octx.lineTo(x, y + 18); octx.stroke();
+        octx.fillStyle = "#f5b83d"; octx.fillText(`(${fmt(cur[0] / 1000)}, ${fmt(cur[1] / 1000)}) m`, x + 14, y - 14);
+      }
+    } else if (WZ.sec) {                       // the section, centred, with its dimensions
+      const cx = P.x0 + P.w / 2, cy = P.y0 + P.h / 2, sc = WZ.sec;
+      octx.strokeStyle = WZ.locked ? "#3ecf8e" : "#f5b83d"; octx.fillStyle = WZ.locked ? "rgba(62,207,142,.25)" : "rgba(245,184,61,.22)"; octx.lineWidth = 3;
+      octx.beginPath();
+      if (sc.kind === "circle") octx.arc(cx, cy, sc.d / 2 * P.s, 0, 7); else octx.rect(cx - sc.b / 2 * P.s, cy - sc.h / 2 * P.s, sc.b * P.s, sc.h * P.s);
+      octx.fill(); octx.stroke();
+      octx.fillStyle = "#e6e9ee"; octx.font = "bold 15px system-ui";
+      if (sc.kind === "circle") octx.fillText(`Ø ${sc.d} mm`, cx + sc.d / 2 * P.s + 8, cy);
+      else { octx.fillText(`b = ${sc.b} mm`, cx - 40, cy + sc.h / 2 * P.s + 20); octx.fillText(`h = ${sc.h} mm`, cx + sc.b / 2 * P.s + 8, cy); }
+    }
+  }
+  // ---- picks on the member ----
+  if (WZ.phase === "loads" && S.model) {
+    const G = geo(), at = (t) => { const s = toScreen(v3(G.at(t))); return [s[0] * W, s[1] * H]; }, p = WZ.picks;
+    if (p.t0 !== undefined && p.t1 !== undefined) {
+      const [x0, y0] = at(p.t0), [x1, y1] = at(p.t1);
+      octx.strokeStyle = "rgba(255,159,67,.55)"; octx.lineWidth = 10; octx.beginPath(); octx.moveTo(x0, y0); octx.lineTo(x1, y1); octx.stroke();
+    }
+    for (const [k, name] of [["t0", "start"], ["t1", "end"]]) if (p[k] !== undefined) {
+      const [x, y] = at(p[k]); octx.fillStyle = "#3ecf8e"; octx.beginPath(); octx.arc(x, y, 7, 0, 7); octx.fill();
+      octx.fillText(`${name} · ${tLabel(p[k])}`, x + 10, y + 22);
+    }
+    if (live && live.target === "member") {
+      const t = snapT(screenToT(live.xy)), [x, y] = at(t);
+      octx.strokeStyle = "#f5b83d"; octx.lineWidth = 2.5; octx.beginPath(); octx.arc(x, y, 12, 0, 7); octx.stroke();
+      octx.beginPath(); octx.moveTo(live.xy[0] * W, live.xy[1] * H); octx.lineTo(x, y); octx.setLineDash([4, 4]); octx.stroke(); octx.setLineDash([]);
+      octx.fillStyle = "#f5b83d"; octx.fillText(tLabel(t), x + 16, y - 14);
+    }
+    const dv = WZ.dir && WZ.dir.until > now ? WZ.dir.vec : null;
+    if (dv || p.dir) {
+      const t = wizRefT(), a = p.dir || axisFromScreenVector(t, dv), base = v3(G.at(t));
+      const tail = base.clone().add(new THREE.Vector3(...AX[a.axis]).multiplyScalar(-a.sign * G.span / 5000));
+      const [x0, y0] = (() => { const s = toScreen(tail); return [s[0] * W, s[1] * H]; })(), [x1, y1] = at(t);
+      drawArrow(x0, y0, x1, y1, p.dir ? "#3ecf8e" : "#ff9f43", 4);
+      octx.fillText(`${a.sign > 0 ? "+" : "−"}${a.axis}`, x0 + 8, y0 - 8);
+    }
   }
 }
 const sendAction = (action) => send({ type: "model_action", action });
@@ -433,6 +619,41 @@ function pick(xy) {
   const n = vNode[best], F = currentField(), N = fe.nodes;
   return { point: hit.point.clone(), text: `${F.label}: ${fmt(F.arr[n], 4)} ${F.unit}`,
     where: `node ${n} · (${fmt(N[3 * n] / 1000)}, ${fmt(N[3 * n + 1] / 1000)}, ${fmt(N[3 * n + 2] / 1000)}) m` };
+}
+// A gesture cursor always lands ON the model: when the ray misses (or the part is cut away there), the nearest
+// visible surface vertex on screen is taken instead. off = how far the finger points from the model (px).
+function snapPick(xy) {
+  const r = pick(xy);
+  if (r) return { ...r, sxy: xy, off: 0 };
+  if (!feMesh || !feMesh.visible || !vNode) return null;
+  const pos = feMesh.geometry.attributes.position, W = overlay.width, H = overlay.height, v = new THREE.Vector3();
+  let best = -1, bd = Infinity, bs = null;
+  const stride = Math.max(1, Math.floor(pos.count / 6000));       // enough samples for a cursor, cheap per frame
+  for (let i = 0; i < pos.count; i += stride) {
+    v.fromBufferAttribute(pos, i);
+    if (clipPlane.distanceToPoint(v) < -1e-6) continue;
+    const s = toScreen(v), d = Math.hypot((s[0] - xy[0]) * W, (s[1] - xy[1]) * H);
+    if (d < bd) { bd = d; best = i; bs = s; }
+  }
+  if (best < 0) return null;
+  const hit = pick(bs);
+  if (hit) return { ...hit, sxy: bs, off: bd };
+  const n = vNode[best], F = currentField(), N = fe.nodes;
+  return { point: v.fromBufferAttribute(pos, best).clone(), sxy: bs, off: bd, text: `${F.label}: ${fmt(F.arr[n], 4)} ${F.unit}`,
+    where: `node ${n} · (${fmt(N[3 * n] / 1000)}, ${fmt(N[3 * n + 1] / 1000)}, ${fmt(N[3 * n + 2] / 1000)}) m` };
+}
+// the gesture cursor: a ring with a crosshair where it lands; a dashed line back to the finger when it was snapped
+function drawCursorRing(fxy, sxy, col, off) {
+  const W = overlay.width, H = overlay.height, x = sxy[0] * W, y = sxy[1] * H;
+  octx.strokeStyle = col; octx.lineWidth = 2.5;
+  octx.beginPath(); octx.arc(x, y, 12, 0, 7); octx.stroke();
+  octx.lineWidth = 1.5; octx.beginPath();
+  octx.moveTo(x - 18, y); octx.lineTo(x - 6, y); octx.moveTo(x + 6, y); octx.lineTo(x + 18, y);
+  octx.moveTo(x, y - 18); octx.lineTo(x, y - 6); octx.moveTo(x, y + 6); octx.lineTo(x, y + 18); octx.stroke();
+  if (off > 14) {
+    octx.setLineDash([4, 4]); octx.beginPath(); octx.moveTo(fxy[0] * W, fxy[1] * H); octx.lineTo(x, y); octx.stroke(); octx.setLineDash([]);
+    octx.beginPath(); octx.arc(fxy[0] * W, fxy[1] * H, 4, 0, 7); octx.stroke();
+  }
 }
 const pinCache = new Map();
 
@@ -655,6 +876,7 @@ function onMessage(m) {
 }
 function onModel(m) {
   const changed = m.version !== S.version;
+  if (m.phase !== S.phase) { WZ.step = null; wizClear(); }
   S.model = m.model; S.phase = m.phase; S.prompt = m.prompt; S.solved = m.solved; S.version = m.version; S.settings = m.settings;
   if (!m.solved) { fe = null; disposeObj(feMesh); disposeObj(feLines); feMesh = feLines = null; }
   if (changed) { rebuildPlain(); rebuildGlyphs(); }
@@ -676,7 +898,18 @@ function renderCheat() {
   $("cheat").innerHTML = sheet.map((r) => `<li data-label="${r.label}"><span class="ic">${r.icon}</span><span><span class="lb">${r.label}</span><br><span class="muted small">${r.hint}</span></span></li>`).join("");
 }
 
-const ICONS = { orbit: "✊", zoom: "🤏", section: "✋", probe: "☝️", field: "✌️", snapshot: "👍" };
+const ICONS = { orbit: "✊", zoom: "🤏", section: "✋", probe: "☝️", field: "✌️", snapshot: "👍", grab: "🤏🤏", turn: "✊✊", dual: "☝️☝️", reset: "👍👍" };
+// a short tick when a gesture is confirmed: you hear that it worked without looking away from the model
+let audioCtx = null;
+function tick(ok = true) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
+    o.frequency.setValueAtTime(ok ? 880 : 300, t); o.frequency.exponentialRampToValueAtTime(ok ? 1320 : 220, t + 0.08);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.13);
+  } catch (e) { /* no audio: fine */ }
+}
 function renderHud(h) {
   lastHud = h;
   const badge = $("mode-badge");
@@ -689,7 +922,14 @@ function renderHud(h) {
   if (h.hints.length) { hint.textContent = h.hints[0]; hint.classList.remove("hidden"); hint.classList.toggle("soft", h.state !== "paused"); }
   else hint.classList.add("hidden");
   $("tip").textContent = h.tip;
-  if (h.toast) toast(h.toast);
+  if (h.toast) { toast(h.toast); tick(!/cancel/i.test(h.toast)); }
+  renderWizard(h);
+  const fs = $("field-strip");                // the field dial
+  if (h.field_strip) {
+    fs.innerHTML = h.field_strip.fields.map((f, i) => `<span class="${i === h.field_strip.index ? "on" : ""}">${f.replace(/_/g, " ")}</span>`).join("")
+      + `<div class="small muted">✌️ move right / left: one field per step</div>`;
+    fs.classList.remove("hidden");
+  } else fs.classList.add("hidden");
   if (h.latency_ms !== undefined) $("chip-lat").textContent = `${h.latency_ms.toFixed(1)} ms engine`;
   if (h.personal_samples !== undefined) $("chip-personal").textContent = `${h.personal_samples} personal samples`;
   if (h.number) {                       // finger-count digits into the prompt card
@@ -721,44 +961,51 @@ function saveSnapshot() {
 function drawOverlay(now) {
   const W = overlay.width, H = overlay.height;
   octx.clearRect(0, 0, W, H);
+  // a near-invisible pixel: a canvas that is only cleared is not always re-composited (seen in headless Chromium),
+  // which would leave the last drawing (a sketch plane) on screen
+  octx.fillStyle = "rgba(0,0,0,0.01)"; octx.fillRect(0, 0, 1, 1);
   for (const L of labels) {                                   // glyph labels follow the camera
     const [x, y] = toScreen(L.pos), w2 = (L.el.offsetWidth || 60) / 2;   // keep labels inside the viewport
     L.el.style.left = `${Math.min(W - w2 - 4, Math.max(w2 + 4, x * W))}px`; L.el.style.top = `${Math.min(H - 4, Math.max(24, y * H))}px`;
   }
-  const pv = lastHud && lastHud.preview;
-  if (pv && S.model) {
-    octx.lineWidth = 3; octx.strokeStyle = "#f5b83d"; octx.fillStyle = "#f5b83d";
-    if (pv.kind === "trace" && pv.points.length > 1) {
-      octx.beginPath(); pv.points.forEach(([x, y], i) => (i ? octx.lineTo(x * W, y * H) : octx.moveTo(x * W, y * H))); octx.stroke();
-    } else if (pv.kind === "sweep") {
-      const G = geo(), a = toScreen(v3(G.at(screenToT(pv.xy0)))), b = toScreen(v3(G.at(screenToT(pv.xy1))));
-      octx.lineWidth = 8; octx.globalAlpha = 0.6; octx.beginPath(); octx.moveTo(a[0] * W, a[1] * H); octx.lineTo(b[0] * W, b[1] * H); octx.stroke(); octx.globalAlpha = 1;
-    } else if (pv.kind === "extrude") {
-      octx.setLineDash([8, 6]); octx.beginPath(); octx.moveTo(pv.a[0] * W, pv.a[1] * H); octx.lineTo(pv.b[0] * W, pv.b[1] * H); octx.stroke(); octx.setLineDash([]);
-      octx.font = "bold 15px system-ui"; octx.fillText(`${pv.orientation === "horizontal" ? "beam" : "column"} ≈ ${fmt(pv.length_est / 1000)} m`, (pv.a[0] + pv.b[0]) / 2 * W + 8, (pv.a[1] + pv.b[1]) / 2 * H - 10);
-    } else if (pv.kind === "point") {
-      const G = geo(), p = toScreen(v3(G.at(screenToT(pv.xy))));
-      octx.beginPath(); octx.arc(p[0] * W, p[1] * H, 10, 0, 7); octx.stroke();
-    }
-  }
+  drawWizard(now);
   // tool cursor: gesture cursor or mouse with a tool selected
   const mk = $("cursor-mark");
-  const cur = S.cursor && S.cursor.until > now ? S.cursor.xy : S.tool && S.mouseXY ? S.mouseXY : null;
+  const cur = S.tool && S.mouseXY ? S.mouseXY : null;
   if (cur && S.model && S.phase === "loads") {
     const t = screenToT(cur), p = toScreen(v3(geo().at(t)));
     mk.style.left = `${p[0] * W}px`; mk.style.top = `${p[1] * H}px`; mk.classList.remove("hidden");
-    const name = S.tool ? (TOOL_NAMES[S.tool] || S.tool.replace("_", " ")) : { fist: "fixed?", pinch: "pinned?", peace: "roller?", point: "point load?", open_palm: "uniform load" }[S.cursor.pose] || "";
+    const name = TOOL_NAMES[S.tool] || S.tool.replace("_", " ");
     mk.innerHTML = `<span>${name} · ${tLabel(t)}</span>`;
   } else mk.classList.add("hidden");
-  // probe + pins (results)
+  // probe + pins (results): the mouse reads what is under it; a gesture cursor is drawn as a ring and snapped onto
+  // the model; two pointing hands show two cursors and the difference
   const tip = $("probe-tip");
-  const xy = (S.phase === "results" && (S.mouseXY && !S.tool ? S.mouseXY : S.view && S.view.probe_cursor)) || null;
-  const r = xy ? pick(xy) : null;
-  if (r) { tip.classList.remove("hidden"); tip.style.left = `${xy[0] * W}px`; tip.style.top = `${xy[1] * H}px`; tip.innerHTML = `${r.text}<br><span class="muted small">${r.where}</span>`; }
+  const gxy = S.phase === "results" && S.view ? S.view.probe_cursor : null;
+  const useMouse = S.phase === "results" && S.mouseXY && !S.tool && !gxy;
+  const r = useMouse ? pick(S.mouseXY) : gxy ? snapPick(gxy) : null;
+  const at = useMouse ? S.mouseXY : r ? r.sxy : null;
+  if (r && gxy) drawCursorRing(gxy, r.sxy, "#3ecf8e", r.off);
+  const g2 = S.phase === "results" && S.view ? S.view.probe_cursor2 : null, r2 = g2 ? snapPick(g2) : null;
+  if (r2) {
+    drawCursorRing(g2, r2.sxy, "#5ecfe0", r2.off);
+    octx.font = "bold 13px system-ui"; octx.fillStyle = "#5ecfe0"; octx.fillText("B  " + r2.text, r2.sxy[0] * W + 16, r2.sxy[1] * H + 26);
+    if (r) {
+      octx.strokeStyle = "rgba(230,233,238,.5)"; octx.setLineDash([5, 4]); octx.lineWidth = 1;
+      octx.beginPath(); octx.moveTo(r.sxy[0] * W, r.sxy[1] * H); octx.lineTo(r2.sxy[0] * W, r2.sxy[1] * H); octx.stroke(); octx.setLineDash([]);
+      const va = parseFloat(r.text.split(": ")[1]), vb = parseFloat(r2.text.split(": ")[1]), F = currentField();
+      if (isFinite(va) && isFinite(vb)) {
+        const t = `B − A = ${fmt(vb - va, 4)} ${F ? F.unit : ""}`, mx = (r.sxy[0] + r2.sxy[0]) / 2 * W, my = (r.sxy[1] + r2.sxy[1]) / 2 * H - 18;
+        octx.fillStyle = "rgba(10,12,15,.85)"; octx.fillRect(mx - 6, my - 15, octx.measureText(t).width + 12, 21);
+        octx.fillStyle = "#e6e9ee"; octx.fillText(t, mx, my);
+      }
+    }
+  }
+  if (r) { tip.classList.remove("hidden"); tip.style.left = `${at[0] * W + (gxy ? 14 : 0)}px`; tip.style.top = `${at[1] * H}px`; tip.innerHTML = `${g2 ? "A  " : ""}${r.text}<br><span class="muted small">${r.where}</span>`; }
   else tip.classList.add("hidden");
   if (S.view && showFE()) for (const p of S.view.probe_pins) {
     const key = p.join() + S.view.field_name;
-    if (!pinCache.has(key)) pinCache.set(key, pick(p));
+    if (!pinCache.has(key)) pinCache.set(key, snapPick(p));
     const hit = pinCache.get(key); if (!hit) continue;
     const [x, y] = toScreen(hit.point);
     octx.fillStyle = "#f5b83d"; octx.beginPath(); octx.arc(x * W, y * H, 4, 0, 7); octx.fill();
@@ -922,12 +1169,17 @@ $("btn-rec").onclick = () => {
 // ---------------------------------------------------------------------------
 function loop() {
   const now = performance.now();
-  detect(); drawCamera();
-  applyView();
-  if (feMesh && feMesh.visible) { const F = currentField(); if (F && F.vec) updatePositions(now); }
-  renderer.render(scene, camera);
-  renderGizmo();
-  drawOverlay(now);
+  try {
+    detect(); drawCamera();
+    applyView();
+    if (feMesh && feMesh.visible) { const F = currentField(); if (F && F.vec) updatePositions(now); }
+    renderer.render(scene, camera);
+    renderGizmo();
+    updateWizPreview();
+    drawOverlay(now);
+  } catch (e) {
+    console.error(e);             // one bad frame must never stop the render loop
+  }
   requestAnimationFrame(loop);
 }
 resize();
@@ -941,6 +1193,7 @@ function feedHands(hands, t) {
   demoLandmarks = hands.map((h) => h.landmarks);
   send({ type: "frame", t, seq: seq++, hands, mirrored: true });
 }
-window.__archimedes = { S, resolveCommand, screenToT, onView, pyConsole, send, feed: feedHands };   // for automated UI tests
+window.__archimedes = { S, WZ, resolveCommand, screenToT, onView, pyConsole, send, feed: feedHands,
+  memberAt: (t) => toScreen(v3(geo().at(t))) };   // for automated UI tests
 connect();
 loop();

@@ -180,19 +180,19 @@ def new_pipeline(profile: str = "viewer") -> GesturePipeline:
 async def run_tour(ws: WebSocket, pipe: GesturePipeline, stop: asyncio.Event) -> None:
     pipe.engine.reset()
     pipe.command("reset")
-    for t, hand, caption in synthetic.scripted_tour():
+    for t, hands, caption in synthetic.scripted_tour():
         if stop.is_set():
             break
-        out = pipe.process(FrameInput(t, [hand]))
-        out.update(type="state", demo=caption, landmarks=[hand.landmarks.tolist()])
+        out = pipe.process(FrameInput(t, hands))
+        out.update(type="state", demo=caption, landmarks=[h.landmarks.tolist() for h in hands])
         await ws.send_text(json.dumps(out))
         await asyncio.sleep(1 / 30)
     await ws.send_text(json.dumps({"type": "demo_done"}))
 
 
-# Gesture commands "support", "point_load", "udl" and "trap" carry screen positions.
-# They reach the page inside the "state" message; the page maps them onto the
-# member (it owns the camera) and answers with a "model_action" message.
+# Wizard commands ("wiz_cursor", "wiz_pick", "wiz_dir", "wiz_place") carry screen positions. They reach the page
+# inside the "state" message; the page maps them onto the member or the drawing plane (it owns the camera) and answers
+# with a "model_action" or "wizard_value" message.
 
 
 async def send(ws: WebSocket, obj: dict) -> None:
@@ -201,7 +201,7 @@ async def send(ws: WebSocket, obj: dict) -> None:
 
 async def send_model(ws: WebSocket, pipe: GesturePipeline, session: ModelSession) -> None:
     pipe.set_prompt(session.prompt)
-    pipe.modeling.m.length_step = session.settings["length"]
+    pipe.modeling.set_increments(section=session.settings["section"], length=session.settings["length"])
     if pipe.phase != session.phase:
         pipe.set_phase(session.phase)
     await send(ws, {"type": "model", **session.state()})
@@ -261,11 +261,8 @@ async def handle_gesture_commands(ws, pipe, session, cmds) -> None:
     changed = False
     for c in cmds:
         k, d = c["kind"], c.get("data", {})
-        if k == "extrude":
-            session.begin("new_rect", orientation=d["orientation"], length_est=d.get("length_est"))
-            changed = True
-        elif k == "circle":
-            session.begin("new_circle")
+        if k == "create_member":   # the model wizard confirmed a sized member
+            session.create_member(**{x: d[x] for x in ("kind", "orientation", "L", "b", "h", "d") if x in d})
             changed = True
         elif k == "number_enter":
             session.answer(d.get("value"))
@@ -332,6 +329,8 @@ async def ws_endpoint(ws: WebSocket):
                 await run_console(ws, pipe, session, msg)
             elif session is not None and kind == "console_reset":
                 console_for(session, pipe).reset_input()
+            elif kind == "wizard_value":     # the page measured something for the wizard (the drawn line)
+                pipe.modeling.set_value(str(msg.get("key")), msg.get("value"))
             elif kind == "number_text":      # the keyboard edited the number: gestures continue from it
                 pipe.numbers.set_text(str(msg.get("digits", "")))
             elif session is not None and kind in ("model_action", "number", "prompt_cancel", "set_axis", "set_phase",

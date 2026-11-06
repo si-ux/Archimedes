@@ -200,36 +200,51 @@ def dataset(n_per_class: int = 200, seed: int = 0, classes=POSES + ("none",)):
 # Scripted tour: a camera-free demo of every interaction (used by the web demo's
 # "Demo (no camera)" button and by tests).
 TOUR = [
-    # pose, seconds, start centre, end centre, extra pose kwargs, caption
+    # pose, seconds, start centre, end centre, extra pose kwargs, caption[, (left-hand pose, start, end)]
     ("none", 1.0, (0.5, 0.55), (0.55, 0.5), {}, "A relaxed hand does nothing - no accidental input"),
-    ("fist", 0.5, (0.5, 0.5), (0.5, 0.5), {}, "Hold a fist to grab the model…"),
+    ("fist", 0.4, (0.5, 0.5), (0.5, 0.5), {}, "Make a fist to grab the model…"),
     ("fist", 1.2, (0.5, 0.5), (0.58, 0.47), {}, "…and drag to rotate"),
-    ("open_palm", 0.3, (0.58, 0.47), (0.58, 0.47), {}, "Open the hand to let go"),
-    ("pinch", 0.4, (0.55, 0.55), (0.55, 0.55), {}, "Pinch…"),
-    ("pinch", 1.0, (0.55, 0.55), (0.55, 0.42), {}, "…and move up to zoom in"),
-    ("open_palm", 1.2, (0.5, 0.5), (0.5, 0.5), {}, "Hold a flat palm still to start a section cut"),
-    ("open_palm", 1.5, (0.5, 0.5), (0.5, 0.5), {"yaw": 1.2}, "Turn the palm - it becomes the cutting plane"),
-    ("fist", 0.4, (0.5, 0.5), (0.5, 0.5), {"yaw": 1.2}, "Close the hand to lock the cut"),
-    ("point", 0.5, (0.50, 0.68), (0.50, 0.68), {}, "Point to probe stress values"),
-    ("point", 1.5, (0.50, 0.68), (0.58, 0.66), {}, "Move the finger over the model"),
-    ("point", 1.2, (0.58, 0.66), (0.58, 0.66), {}, "Hold still to pin a value"),
-    ("peace", 0.5, (0.4, 0.5), (0.4, 0.5), {}, "Show a V for the field menu"),
-    ("peace", 0.25, (0.4, 0.5), (0.7, 0.5), {}, "Swipe to change the result field"),
-    ("peace", 0.8, (0.7, 0.5), (0.7, 0.5), {}, "Swipe to change the result field"),
+    ("none", 0.4, (0.58, 0.47), (0.58, 0.47), {}, "Relax to let go"),
+    ("pinch", 0.3, (0.62, 0.55), (0.62, 0.55), {}, "Pinch with BOTH hands…", ("pinch", (0.38, 0.55), (0.38, 0.55))),
+    ("pinch", 1.0, (0.62, 0.55), (0.72, 0.55), {}, "…and pull them apart to zoom in", ("pinch", (0.38, 0.55), (0.28, 0.55))),
+    ("pinch", 0.8, (0.72, 0.55), (0.76, 0.5), {}, "Move both to pan", ("pinch", (0.28, 0.55), (0.32, 0.5))),
+    ("none", 0.4, (0.6, 0.55), (0.6, 0.55), {}, "Relax"),
+    ("fist", 0.3, (0.65, 0.5), (0.65, 0.5), {}, "Two fists, like holding a ball…", ("fist", (0.35, 0.5), (0.35, 0.5))),
+    ("fist", 1.0, (0.65, 0.5), (0.7, 0.45), {}, "…move them to turn the model", ("fist", (0.35, 0.5), (0.4, 0.45))),
+    ("none", 0.4, (0.5, 0.5), (0.5, 0.5), {}, "Relax"),
+    ("open_palm", 1.0, (0.5, 0.5), (0.5, 0.5), {"yaw": 1.2}, "Hold one flat palm still: a straight section cut"),
+    ("open_palm", 1.0, (0.5, 0.5), (0.56, 0.5), {"yaw": 1.2}, "Slide it to move the cut along its axis"),
+    ("fist", 0.4, (0.56, 0.5), (0.56, 0.5), {"yaw": 1.2}, "Close the hand to lock the cut"),
+    ("none", 0.3, (0.5, 0.6), (0.5, 0.6), {}, "Relax"),
+    ("point", 0.4, (0.50, 0.68), (0.50, 0.68), {}, "Point: the ring is your cursor on the model"),
+    ("point", 1.2, (0.50, 0.68), (0.58, 0.66), {}, "Move the finger over the model"),
+    ("point", 1.2, (0.58, 0.66), (0.58, 0.66), {}, "Hold still (or pinch the other hand) to pin a value"),
+    ("point", 1.0, (0.62, 0.6), (0.66, 0.62), {}, "Point with both hands to compare two points", ("point", (0.4, 0.62), (0.36, 0.6))),
+    ("none", 0.4, (0.5, 0.55), (0.5, 0.55), {}, "Relax"),
+    ("peace", 0.4, (0.4, 0.5), (0.4, 0.5), {}, "Show a V: the field strip appears"),
+    ("peace", 0.6, (0.4, 0.5), (0.52, 0.5), {}, "Move right: one field per step"),
+    ("peace", 0.6, (0.52, 0.5), (0.52, 0.5), {}, "Move right: one field per step"),
     ("none", 1.0, (0.6, 0.55), (0.6, 0.55), {}, "Relax - the view stays where you left it"),
 ]
 
 
 def scripted_tour(fps: int = 30, seed: int = 0, tour=TOUR):
-    """Yield (t, HandFrame | None, caption) at ``fps`` for the scripted tour."""
+    """Yield (t, [HandFrame...], caption) at ``fps`` for the scripted tour (right hand first)."""
     rng = np.random.default_rng(seed)
     t = 0.0
-    for pose, dur, p0, p1, kw, caption in tour:
+    for pose, dur, p0, p1, kw, caption, *second in tour:
         canon = canonical_hand(pose, rng)
+        left = second[0] if second else None
+        canon2 = canonical_hand(left[0], rng) if left else None
         n = max(int(dur * fps), 1)
         for i in range(n):
             a = i / max(n - 1, 1)
             c = (p0[0] + (p1[0] - p0[0]) * a, p0[1] + (p1[1] - p0[1]) * a)
-            lm = to_image(canon, center=c, palm_size=0.12, noise=0.004, rng=rng, **kw)
-            yield t, HandFrame(lm, "Right", 0.95, t), caption
+            hands = [HandFrame(to_image(canon, center=c, palm_size=0.12, noise=0.004, rng=rng, **kw), "Right", 0.95, t)]
+            if left:
+                q0, q1 = left[1], left[2]
+                c2 = (q0[0] + (q1[0] - q0[0]) * a, q0[1] + (q1[1] - q0[1]) * a)
+                hands.append(HandFrame(to_image(canon2, center=c2, palm_size=0.12, noise=0.004, rng=rng,
+                                                handedness="Left"), "Left", 0.95, t))
+            yield t, hands, caption
             t += 1.0 / fps

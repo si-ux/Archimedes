@@ -165,3 +165,30 @@ table.kv tr.em td:last-child { color: var(--arming); font-weight: 600; }
 #viewport.console-open #prompt { bottom: calc(42% + 10px); }
 #viewport.console-open #tip, #viewport.console-open #demo-caption { display: none; }
 #prompt-back { margin-left: 6px; font-size: 18px; padding: 6px 10px; vertical-align: middle; }
+
+#field-strip { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 8px 12px;
+  background: rgba(10, 12, 15, .88); border: 1px solid #2a323c; border-radius: 10px; text-align: center; }
+#field-strip span { display: inline-block; margin: 0 3px; padding: 4px 9px; border-radius: 6px; color: #8b95a3; font-size: 13px; }
+#field-strip span.on { background: #3ecf8e; color: #04150d; font-weight: 700; }
+
+/* gesture wizard: one step at a time, each confirmed */
+#wizard { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: min(560px, 92%); z-index: 21;
+  background: rgba(16, 19, 24, .94); border: 1px solid var(--accent); border-radius: 14px; padding: 10px 14px 8px; }
+#wiz-steps { display: flex; gap: 4px; margin-bottom: 6px; }
+#wiz-steps span { flex: 1; text-align: center; font-size: 11px; padding: 3px 2px; border-radius: 6px; color: var(--muted);
+  background: rgba(42, 49, 59, .6); text-transform: capitalize; white-space: nowrap; }
+#wiz-steps span.done { color: #04150d; background: rgba(62, 207, 142, .75); }
+#wiz-steps span.on { color: #fff; background: var(--accent); font-weight: 700; }
+#wiz-title { font-size: 18px; font-weight: 700; }
+#wiz-help { margin: 2px 0 6px; }
+#wiz-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+#wiz-choices div { flex: 1 1 30%; min-width: 120px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px;
+  font-size: 13px; transition: transform .08s, background .08s; }
+#wiz-choices div b { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; margin-right: 6px;
+  border-radius: 50%; background: var(--line); }
+#wiz-choices div.live { border-color: var(--arming); background: rgba(245, 184, 61, .16); transform: scale(1.04); }
+#wiz-choices div.live b { background: var(--arming); color: #1b1300; }
+#wiz-readout { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--arming); }
+#wiz-readout.locked { color: var(--ok); }
+#wizard .bar { height: 6px; margin: 6px 0 2px; }
+#wiz-bar { height: 100%; width: 0; background: var(--arming); transition: width .08s linear; }

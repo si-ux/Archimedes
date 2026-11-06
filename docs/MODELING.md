@@ -7,9 +7,20 @@ Every action also has a Python command: open the **🐍 Python** console (the ` 
 
 | Phase | What you do | Gestures |
 |---|---|---|
-| ① Model | create the member | two-hand pinch-and-pull, or draw a circle; enter numbers by fingers |
-| ② Loads & supports | add supports and loads, then solve | fist / pinch / V held still, point-and-flick, palm sweep, two palms, thumbs-up |
-| ③ Results | explore the results | rotate, zoom, palm-plane section cut, probe, V-swipe fields, two-hand zoom (see `DESIGN.md`) |
+| ① Model | create the member | the model wizard: plane → shape → two-hand size → extrude → 👍 |
+| ② Loads & supports | add supports and loads, then solve | the loads wizard: what (fingers) → start → end → direction → value; 👍 solves |
+| ③ Results | explore the results | rotate, probe, straight section cut, field dial; two-hand zoom / pan / turn / compare / reset (see `DESIGN.md`) |
+
+Both wizards show a card at the top of the viewport: step chips (done / current / to do), the step's title and
+gesture, the choices with the one your fingers show highlighted, a live readout (size, position, direction) and a
+progress bar. Every step is confirmed before the next starts, and you hear a tick when it is.
+
+| Everywhere in the wizards | |
+|---|---|
+| 👍 thumbs-up, held ~0.8 s | accept |
+| ✊✊ two fists, held ~0.6 s | back one step (undoes that step's pick) |
+| ✊ one fist, dragged | rotate the view |
+| 🤏🤏 both hands pinched (menu and pointing steps) | zoom the view |
 
 ## ① Model
 
@@ -26,11 +37,27 @@ On entering Model (or with **⚙️ Increments…** in the toolbar) three prompt
 Bold = default. Every length, section and load you enter afterwards snaps to its step. The two-hand pull pre-fills
 the length to the nearest step. The chosen steps are shown in the left panel under *Model*.
 
-| Gesture | Result |
-|---|---|
-| 🤏🤏 **Both hands pinch** (index + thumb), pull apart, hold still 0.6 s | rectangular member. A horizontal pull gives a **beam**, a vertical pull a **column**. The pull distance pre-fills the length |
-| ☝️ **Draw a circle** in the air with the index finger | circular member. Then: 1 finger = column, 2 = beam; diameter; depth (length) |
-| ✊ fist drag · 🤏 one-hand pinch | rotate · zoom |
+### The model wizard
+
+| Step | Gesture | On screen |
+|---|---|---|
+| 1 Plane | hold up **1** plan (XY, a column's section) · **2** side (YZ, a beam's section) · **3** front (XZ, draw the member line) | choice cards |
+| 2 Shape | **1** rectangle · **2** circle | choice cards |
+| 3 Size | 🤏🤏 pinch with both hands and pull apart: left–right = width *b*, up–down = height *h* (counted double: the camera sees less height than width); for a circle the distance is the diameter. Hold both hands still ~1 s to lock | the section on a grid at your section increment, with its dimensions |
+| 4 Extrude | open the fingers, then pinch and pull again: the distance is the length (1 m per palm width), in length steps. Hold still to lock | a 3D preview of the member |
+| 5 Confirm | 👍 creates it; ✊✊ goes back | the member's summary |
+
+With the **front** plane you draw the member line first: ☝️ point at the start on the grid (snapped to the length
+increment), hold still or pinch your other hand; then the end, which snaps horizontal (a beam) or vertical (a
+column). Its length is the member length; then choose the section's shape and size it.
+
+The size follows the hands through filters, snaps to the increment with hysteresis (it never flickers between two
+steps), and the hold counts while the *hands* are still: a slow, steady pull is not still, and the value locked is
+the one shown most during the hold. Each sizing step starts with a fresh pinch, so the pinch that locked the last
+step never carries into the next.
+
+**Mouse and keyboard:** the toolbar's *New beam / New column / New circular member* still ask for the numbers on
+the prompt card.
 
 ### Entering numbers with your fingers
 Every number prompt (the card at the bottom of the viewport) can be answered three ways: with fingers, by typing, or with the OK button.
@@ -40,11 +67,11 @@ Enter. With nothing typed, the same gesture accepts the default shown on the car
 
 | Do | Means |
 |---|---|
-| hold up *n* fingers, still, 0.8 s | digit *n* (0 = fist; use two hands for 6–9: 5 + 3 = 8) |
+| hold up *n* fingers, still, 0.55 s | digit *n* (0 = fist; use two hands for 6–9: 5 + 3 = 8) |
 | change the count, or lower the hand | needed before the same digit can be entered again (3-0-0 = 3, fist, open, fist) |
 | 🙌 both open palms, 0.8 s | **accept** |
 | 🤏 one-hand pinch, move up / down | nudge the value by one increment per step (about 0.6 palm heights) |
-| pinch and hold still (or swipe one open hand left, or Backspace) | delete the last digit; keep holding to repeat |
+| pinch and hold still (or Backspace) | delete the last digit; keep holding to repeat |
 | ✊✊ two fists, 1 s | cancel |
 
 The big number on the card is what the camera currently counts. The ring shows the hold.
@@ -59,18 +86,16 @@ The big number on the card is what the camera currently counts. The ring shows t
 
 ## ② Loads & supports
 
-Point at the member: the yellow ring shows where the hand lands (and *x*/*z* in metres). Positions within 6% of an end
-snap onto it.
+| Step | Gesture |
+|---|---|
+| 1 What | hold up **1** fixed · **2** pinned · **3** roller · **4** point load · **5** uniform load · **6** (5 + 1 with two hands) trapezoidal load · 👍 held still 1.2 s = **solve** |
+| 2 Start | ☝️ point at the member: the ring snaps to the length increment and shows *x* (or *z*) in metres. Hold still ~0.9 s, or pinch your other hand to confirm at once. A support is placed here |
+| 3 End | (uniform and trapezoidal loads) the same, at the other end; the loaded span is highlighted |
+| 4 Direction | ☝️ point your finger the way the load pushes; an arrow on the member snaps to ±x, ±y or ±z as seen on screen. Hold or pinch to confirm |
+| 5 Value | the number card: fingers or keyboard (two values for a trapezoid) |
 
-| Gesture | Adds | Notes |
-|---|---|---|
-| ✊ fist **held still** 0.8 s | **fixed** support | dragging the fist rotates the view instead |
-| 🤏 pinch **held still** | **pinned** support | moving the pinch zooms instead |
-| ✌️ V **held still** | **roller** support | |
-| ☝️ point at a spot, hold 0.6 s, then **flick** | **point load** in the flick direction | snapped to the world axis that looks closest on screen; no flick within 1.5 s = straight down (−Z). Then enter kN |
-| ✋ **sweep a flat palm** along the span, then stop | **uniform load** over the swept span | the palm faces the way the load acts (palm down = −Z, gravity). Then enter kN/m |
-| 🙌 **both flat palms** at the two ends, hold 0.8 s | **trapezoidal load** between the hands | then enter the start and end intensity (kN/m) |
-| 👍 thumbs-up **held still** 1.2 s | **solve** | |
+Positions within 6 % of an end snap onto it. A count you are already holding when a menu appears is ignored until it
+changes, so one answer never answers two questions.
 
 All six directions (±X, ±Y, ±Z) are reachable by gesture. The prompt card also has ±X/±Y/±Z buttons to correct
 the direction before you answer. The left panel lists every support and load, plus any reason the model can't be

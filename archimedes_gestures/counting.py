@@ -20,12 +20,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .dynamic import SwipeDetector
-from .features import finger_extension_ratios
+from .features import extension_scores
 from .landmarks import HandFrame, normalize
 
 
 def finger_ratios(hand: HandFrame) -> np.ndarray:
-    return finger_extension_ratios(normalize(hand.shape, hand.handedness))
+    return extension_scores(normalize(hand.shape, hand.handedness))
 
 
 def count_fingers(hand: HandFrame, finger_thr: float = 1.05, thumb_thr: float = 1.02) -> int:
@@ -35,7 +35,7 @@ def count_fingers(hand: HandFrame, finger_thr: float = 1.05, thumb_thr: float = 
 
 # per finger: (goes up above, goes down below). The gap between the two is the
 # hysteresis that stops a half-bent finger flickering between up and down.
-FINGER_BANDS = np.array([[1.08, 0.97],   # thumb (tip vs IP joint, from the pinky knuckle)
+FINGER_BANDS = np.array([[1.08, 0.97],   # thumb (its span across the palm, see features.thumb_span)
                          [1.14, 0.98], [1.14, 0.98], [1.14, 0.98], [1.12, 0.97]])
 
 

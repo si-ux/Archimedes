@@ -30,6 +30,25 @@ def finger_extension_ratios(p: np.ndarray) -> np.ndarray:
     return out
 
 
+def thumb_span(p: np.ndarray) -> float:
+    """Thumb tip to the little finger's knuckle over the palm width: ~1.6-2.0 with the thumb up, ~0.7-1.1 tucked.
+
+    It tells a raised thumb from a tucked one far better than the thumb's joint ratio, which barely changes when
+    the thumb folds across the palm.
+    """
+    return float(np.linalg.norm(p[THUMB[3]] - p[PINKY[0]]) / (np.linalg.norm(p[INDEX[0]] - p[PINKY[0]]) + 1e-9))
+
+
+THUMB_SPAN_SCALE = 1.32  # puts thumb_span on the same scale as the finger ratios (1 = the up / down boundary)
+
+
+def extension_scores(p: np.ndarray) -> np.ndarray:
+    """Finger extension ratios with the thumb read from its span across the palm (p must be normalised)."""
+    r = finger_extension_ratios(p)
+    r[0] = thumb_span(p) / THUMB_SPAN_SCALE
+    return r
+
+
 def thumb_out(p: np.ndarray) -> float:
     """Thumb tip to index MCP, in palm units (p must be normalised). ~0.3 tucked, ~0.9 out."""
     return float(np.linalg.norm(p[THUMB[3]] - p[INDEX[0]]))
@@ -72,7 +91,7 @@ def extract_batch(landmarks: np.ndarray, handedness: list[str] | None = None) ->
 # Convenience used by the rules classifier and the HUD skeleton colouring
 def finger_states(lm: np.ndarray, handedness: str = "Right") -> dict[str, float]:
     p = normalize(lm, handedness)
-    r = finger_extension_ratios(p)
+    r = extension_scores(p)
     return {
         "ratios": r,
         "thumb_out": thumb_out(p),

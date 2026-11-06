@@ -182,6 +182,28 @@ class ModelSession:
                 prompts = increment_prompts() + prompts
         self.action = Action(op, data, prompts)
 
+    def create_member(self, kind: str, orientation: str, L: float, b: float | None = None, h: float | None = None,
+                      d: float | None = None) -> None:
+        """A member sized directly (the gesture wizard): no prompts, the values are already snapped and confirmed."""
+        vertical = orientation == "vertical"
+        L = max(200.0, self.snap("length", float(L)))
+        if kind == "circle":
+            d = max(20.0, self.snap("section", float(d or 300.0)))
+            sec, name = Section("circle", d=d), "Round column" if vertical else "Round beam"
+            cmd = f"{'round_column' if vertical else 'round_beam'}(d={d:g}, L={L:g})"
+        else:
+            b = max(20.0, self.snap("section", float(b or 300.0)))
+            h = max(20.0, self.snap("section", float(h or 500.0)))
+            sec, name = Section("rect", b, h), "Column" if vertical else "Beam"
+            cmd = f"{'column' if vertical else 'beam'}(b={b:g}, h={h:g}, L={L:g})"
+        self._push()
+        self.action = None
+        self.model = Model(f"{name} (gesture)", Member(sec, L, "vertical" if vertical else "horizontal"),
+                           self.model.material)
+        self.phase = "loads"
+        self._log(cmd)
+        self._changed(f"Created {sec.label()} × {L:g} mm. Now add supports and loads.")
+
     def set_direction(self, axis: str, sign: int) -> None:
         if self.action and axis in AXES:
             self.action.data.update(axis=axis, sign=1 if sign > 0 else -1)

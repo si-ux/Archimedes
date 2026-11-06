@@ -75,25 +75,29 @@ def lerp(a, b, k):
 def workbench_script() -> Script:
     s = Script(1)
     L = "Left"
-    s.scene(1.2, "Hands are tracked in your browser, only landmarks reach Python",
-            lambda a: [s.h("none", c=(0.5, 0.55))])
-    # two pinches: spread to zoom in, then bring together
-    s.scene(0.5, "Two-hand zoom: pinch with both hands", lambda a: [s.h("pinch", c=(0.36, 0.55), hand=L), s.h("pinch", c=(0.64, 0.55))])
-    s.scene(1.8, "...spread to zoom in", lambda a: [s.h("pinch", c=(0.36 - 0.12 * a, 0.55), hand=L), s.h("pinch", c=(0.64 + 0.12 * a, 0.55))])
-    s.scene(1.2, "...bring together to zoom out", lambda a: [s.h("pinch", c=(0.24 + 0.1 * a, 0.55), hand=L), s.h("pinch", c=(0.76 - 0.1 * a, 0.55))])
-    s.scene(1.8, "Move both pinched hands to rotate",
-            lambda a: [s.h("pinch", c=(0.34 + 0.16 * a, 0.55 - 0.04 * a), hand=L), s.h("pinch", c=(0.66 + 0.16 * a, 0.55 - 0.04 * a))])
-    s.scene(0.8, "", lambda a: [s.h("none", c=(0.5, 0.55))])
+    none = lambda a: [s.h("none", c=(0.5, 0.55))]
+    s.scene(1.2, "Hands are tracked in your browser, only landmarks reach Python", none)
+    # two pinches: the model scales exactly with the distance between the hands
+    s.scene(0.5, "Pinch with BOTH hands to grab the view", lambda a: [s.h("pinch", c=(0.36, 0.55), hand=L), s.h("pinch", c=(0.64, 0.55))])
+    s.scene(1.6, "...pull apart to zoom in", lambda a: [s.h("pinch", c=(0.36 - 0.12 * a, 0.55), hand=L), s.h("pinch", c=(0.64 + 0.12 * a, 0.55))])
+    s.scene(1.2, "...together to zoom out", lambda a: [s.h("pinch", c=(0.24 + 0.1 * a, 0.55), hand=L), s.h("pinch", c=(0.76 - 0.1 * a, 0.55))])
+    s.scene(1.4, "...move both to pan", lambda a: [s.h("pinch", c=(0.34 + 0.06 * a, 0.55 - 0.04 * a), hand=L), s.h("pinch", c=(0.66 + 0.06 * a, 0.55 - 0.04 * a))])
+    s.scene(0.6, "", none)
+    s.scene(1.8, "Two fists, like holding a ball: turn the model",
+            lambda a: [s.h("fist", c=(0.35 + 0.14 * a, 0.55 - 0.03 * a), hand=L), s.h("fist", c=(0.65 + 0.14 * a, 0.55 - 0.03 * a))])
+    s.scene(0.6, "", none)
     # straight section cut
-    s.scene(0.9, "Flat palm, held still: a straight cut along the axis it faces",
+    s.scene(1.0, "One flat palm, held still: a straight cut along the axis it faces",
             lambda a: [s.h("open_palm", c=(0.4, 0.55), yaw=0.18, pitch=-0.1)])
-    s.scene(2.4, "Slide the palm to move the cut: it stays straight, even with a tilted hand",
-            lambda a: [s.h("open_palm", c=lerp((0.4, 0.55), (0.62, 0.55), a), yaw=0.3 * np.sin(a * 9), pitch=-0.15 + 0.1 * np.cos(a * 7))])
-    s.scene(2.4, "Show your other palm to tilt the cut freely",
-            lambda a: [s.h("open_palm", c=(0.62, 0.55), yaw=0.15 + 0.8 * a, pitch=-0.2 * a),
-                       s.h("open_palm", c=(0.18, 0.6), hand=L)])
-    s.scene(1.0, "", lambda a: [s.h("none", c=(0.5, 0.55))])
-    s.scene(1.6, "Both palms, held: reset the view", lambda a: [s.h("open_palm", c=(0.32, 0.55), hand=L), s.h("open_palm", c=(0.68, 0.55))])
+    s.scene(2.4, "Slide the palm to move the cut: it stays straight, even with a shaky hand",
+            lambda a: [s.h("open_palm", c=lerp((0.4, 0.55), (0.6, 0.55), a), yaw=0.18 + 0.25 * np.sin(a * 9), pitch=-0.1 + 0.1 * np.cos(a * 7))])
+    s.scene(0.5, "Close the hand to keep the cut", lambda a: [s.h("fist", c=(0.6, 0.55))])
+    s.scene(0.7, "", none)
+    s.scene(0.5, "Show a V: the field strip appears", lambda a: [s.h("peace", c=(0.4, 0.55))])
+    s.scene(1.8, "Move right: one field per step", lambda a: [s.h("peace", c=lerp((0.4, 0.55), (0.5, 0.55), min(1, a * 1.6)))])
+    s.scene(0.7, "", none)
+    s.scene(1.6, "Both thumbs up, held: reset the view", lambda a: [s.h("thumbs_up", c=(0.32, 0.55), hand=L), s.h("thumbs_up", c=(0.68, 0.55))])
+    s.scene(0.6, "", none)
     return s
 
 
@@ -118,24 +122,52 @@ def probe_script(a_img, b_img) -> Script:
 
 
 def modeller_script() -> Script:
+    """The model wizard: increments, plane, shape, two-hand size, extrude, confirm."""
     s = Script(2)
-    nothing = lambda a: []  # noqa: E731
-    s.scene(0.8, "Setup: choose the load increment by holding up fingers", nothing)
-    s.scene(1.6, "3 fingers: 100 mm length increment", lambda a: [s.h(fingers="imr", c=(0.5, 0.55))])
-    s.scene(0.9, "", nothing)
-    s.scene(1.6, "2 fingers: 10 mm section increment", lambda a: [s.h(fingers="im", c=(0.5, 0.55))])
-    s.scene(0.9, "", nothing)
-    s.scene(1.6, "4 fingers: 10 kN load increment: no accept step needed", lambda a: [s.h(fingers="imrp", c=(0.5, 0.55))])
-    s.scene(0.9, "", nothing)
-    s.scene(1.6, "Digits: hold up fingers, one digit at a time (3)", lambda a: [s.h(fingers="imr", c=(0.5, 0.55))])
+    nothing = lambda a: []
+    F = lambda spec: (lambda a: [s.h(fingers=spec, c=(0.5, 0.55))])
+    sz = 0.12
+    pull = lambda dx0, dy0, dx1, dy1: (lambda a: [s.h("pinch", c=(0.5 - (dx0 + (dx1 - dx0) * min(1, 1.6 * a)) * sz / 2, 0.55 - (dy0 + (dy1 - dy0) * min(1, 1.6 * a)) * sz / 2), hand="Left"),
+                                                  s.h("pinch", c=(0.5 + (dx0 + (dx1 - dx0) * min(1, 1.6 * a)) * sz / 2, 0.55 + (dy0 + (dy1 - dy0) * min(1, 1.6 * a)) * sz / 2))])
+    s.scene(0.8, "First the increments: hold up fingers, the count is the answer", nothing)
+    s.scene(1.4, "3 fingers: 100 mm length steps", F("imr")); s.scene(0.5, "", nothing)
+    s.scene(1.4, "3 fingers: 25 mm section steps", F("imr")); s.scene(0.5, "", nothing)
+    s.scene(1.4, "4 fingers: 10 kN load steps", F("imrp")); s.scene(0.6, "", nothing)
+    s.scene(1.4, "Choose the drawing plane: 2 = side (a beam's cross-section)", F("im")); s.scene(0.5, "", nothing)
+    s.scene(1.4, "Choose the shape: 1 = rectangle", F("i")); s.scene(0.5, "", nothing)
+    s.scene(2.6, "Pinch with both hands and pull apart: width × height, snapped to 25 mm", pull(1.0, 0.6, 3.0, 2.2))
+    s.scene(1.2, "Hold still to lock it", pull(3.0, 2.2, 3.0, 2.2))
+    s.scene(0.6, "", nothing)
+    s.scene(2.6, "Pinch again and pull for the length (100 mm steps)", pull(1.0, 0.0, 4.4, 0.0))
+    s.scene(1.2, "Hold still to lock it", pull(4.4, 0.0, 4.4, 0.0))
+    s.scene(0.6, "", nothing)
+    s.scene(1.6, "Thumbs-up: create the beam", lambda a: [s.h("thumbs_up", c=(0.5, 0.55))])
+    s.scene(1.0, "", nothing)
+    return s
+
+
+def loads_script(t0_img, t1_img) -> Script:
+    """The loads wizard on the beam: a fixed support at one end, a point load at the other, its value, solve."""
+    s = Script(4)
+    nothing = lambda a: []
+    off = tip_offset()
+    c = lambda p: (p[0] - off[0], p[1] - off[1])
+    F = lambda spec: (lambda a: [s.h(fingers=spec, c=(0.5, 0.55))])
+    s.scene(1.4, "Loads: 1 finger = fixed support", F("i")); s.scene(0.4, "", nothing)
+    s.scene(1.0, "Point at the member: the cursor snaps to the length steps", lambda a: [s.h("point", c=c(lerp((0.4, 0.62), t0_img, a)))])
+    s.scene(1.3, "Hold still to confirm (or pinch with the other hand)", lambda a: [s.h("point", c=c(t0_img))]); s.scene(0.5, "", nothing)
+    s.scene(1.4, "4 fingers = point load", F("imrp")); s.scene(0.4, "", nothing)
+    s.scene(1.0, "Point at where it acts", lambda a: [s.h("point", c=c(lerp((0.5, 0.62), t1_img, a)))])
+    s.scene(0.7, "Pinch the other hand to confirm at once", lambda a: [s.h("point", c=c(t1_img)), s.h("pinch", c=(0.2, 0.62), hand="Left")])
+    s.scene(0.5, "", nothing)
+    s.scene(1.8, "Point the way the load pushes: it snaps to an axis", lambda a: [s.h("point", c=(0.5, 0.5), roll=np.pi)])
+    s.scene(0.6, "", nothing)
+    s.scene(1.4, "The value: hold up fingers for each digit (2)", F("im")); s.scene(0.5, "", nothing)
+    s.scene(1.4, "(0): a fist", F("")); s.scene(0.5, "", nothing)
+    s.scene(1.6, "Both open palms, held: accept 20 kN", lambda a: [s.h(fingers="timrp", c=(0.3, 0.55), hand="Left"), s.h(fingers="timrp", c=(0.7, 0.55))])
     s.scene(0.7, "", nothing)
-    s.scene(1.6, "(5)", lambda a: [s.h(fingers="timrp", c=(0.5, 0.55))])
-    s.scene(0.7, "", nothing)
-    s.scene(1.6, "(0): a fist", lambda a: [s.h(fingers="", c=(0.5, 0.55))])
-    s.scene(0.8, "", nothing)
-    s.scene(1.5, "Pinch and hold: delete the last digit", lambda a: [s.h("pinch", c=(0.5, 0.55))])
-    s.scene(1.2, "...keep holding to delete more", lambda a: [s.h("pinch", c=(0.5, 0.55))])
-    s.scene(0.8, "", nothing)
+    s.scene(2.0, "Thumbs-up, held still: solve", lambda a: [s.h("thumbs_up", c=(0.5, 0.55))])
+    s.scene(2.5, "", nothing)
     return s
 
 
@@ -263,24 +295,31 @@ async def record(args):
                 vid = sorted(tmp.glob("*.webm"), key=lambda f: f.stat().st_mtime)[-1]
                 encode(vid, out, "workbench-gestures", start=t_play - t_ctx - 0.4)
 
-            # ---- gesture modeller: finger digits, choices and backspace ----------------------------------
+            # ---- gesture modeller: the model and loads wizards, from increments to a solved beam --------------
             if "modeller" in args.only:
                 print("Modeller demo")
                 ctx, page = await new_page()
                 t_ctx = time.monotonic()
-                await page.goto(url + "/")
+                await page.goto(url + "/?cid=demo" + str(int(time.time())))
                 await page.wait_for_timeout(2500)
                 await page.click("#btn-skip")
                 await page.wait_for_timeout(500)
-                await page.evaluate("() => window.__archimedes.send({type:'model_action', action:{op:'new_rect'}})")
+                await page.evaluate("() => window.__archimedes.send({type:'set_phase', phase:'model'})")
                 await page.wait_for_timeout(1000)
+                feed = "([hands, t]) => window.__archimedes.feed(hands, t)"
+                hud = """() => { const A = window.__archimedes, h = document; const w = A.S.prompt ? 'prompt: ' + h.getElementById('prompt-label').textContent + ' ' + h.getElementById('prompt-input').value
+                    : (A.WZ.phase || '') + '/' + (A.WZ.step || '') + ' ' + h.getElementById('wiz-readout').textContent; return w + ' | model ' + (A.S.model && A.S.model.name); }"""
                 t_play = time.monotonic()
-                await play(page, modeller_script(), "([hands, t]) => window.__archimedes.feed(hands, t)", "modeller",
-                           "() => document.getElementById('prompt-label').textContent + ' | ' + document.getElementById('prompt-input').value")
-                await page.wait_for_timeout(500)
+                t_end = await play(page, modeller_script(), feed, "model wizard", hud)
+                await page.wait_for_timeout(800)
+                box = (0.2, 0.15, 0.8, 0.75)
+                ends = await page.evaluate("() => [0.0, 1.0].map(t => window.__archimedes.memberAt(t))")
+                img = [(box[0] + u * (box[2] - box[0]), box[1] + v * (box[3] - box[1])) for u, v in ends]
+                print("  member ends (image coords):", [[round(v, 2) for v in q] for q in img])
+                await play(page, loads_script(img[0], img[1]), feed, "loads wizard", hud, t=t_end + 1.0)
                 await ctx.close()
                 vid = sorted(tmp.glob("*.webm"), key=lambda f: f.stat().st_mtime)[-1]
-                encode(vid, out, "modeller-finger-input", start=t_play - t_ctx - 0.4)
+                encode(vid, out, "modeller-wizard", start=t_play - t_ctx - 0.4)
             await browser.close()
     finally:
         if server:

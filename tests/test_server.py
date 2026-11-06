@@ -34,16 +34,18 @@ def test_index_served(client):
 def test_websocket_frames_drive_the_view(client):
     with client.websocket_connect("/ws") as ws:
         info = json.loads(ws.receive_text())
-        assert info["type"] == "info" and len(info["cheat_sheet"]) == 8
+        assert info["type"] == "info" and len(info["cheat_sheet"]) == 9
         modes = set()
-        for t, hand, _ in S.scripted_tour():
-            lm = hand.landmarks.copy()
-            lm[:, 0] = 1 - lm[:, 0]  # the browser sends un-mirrored frames
-            ws.send_text(json.dumps({"type": "frame", "t": t * 1000, "mirrored": False,
-                                     "hands": [{"landmarks": lm.tolist(), "handedness": "Right", "score": 0.9}]}))
+        for t, hands, _ in S.scripted_tour():
+            raw = []
+            for h in hands:
+                lm = h.landmarks.copy()
+                lm[:, 0] = 1 - lm[:, 0]  # the browser sends un-mirrored frames
+                raw.append({"landmarks": lm.tolist(), "handedness": h.handedness, "score": 0.9})
+            ws.send_text(json.dumps({"type": "frame", "t": t * 1000, "mirrored": False, "hands": raw}))
             out = recv(ws, "state")
             modes.add(out["hud"]["mode"])
-        assert {"orbit", "zoom", "section", "probe", "field"} <= modes
+        assert {"orbit", "grab", "turn", "section", "probe", "dual", "field"} <= modes
         ws.send_text(json.dumps({"type": "command", "kind": "undo"}))
         assert recv(ws, "view")["type"] == "view"
 
@@ -52,11 +54,11 @@ def test_record_clip(client, tmp_path):
     with client.websocket_connect("/ws") as ws:
         ws.receive_text()
         ws.send_text(json.dumps({"type": "record_start", "label": "fist", "subject": "p01"}))
-        for i, (t, hand, _) in enumerate(S.scripted_tour()):
+        for i, (t, hands, _) in enumerate(S.scripted_tour()):
             if i > 20:
                 break
             ws.send_text(json.dumps({"type": "frame", "t": t * 1000, "mirrored": True,
-                                     "hands": [{"landmarks": hand.landmarks.tolist(), "handedness": "Right"}]}))
+                                     "hands": [{"landmarks": h.landmarks.tolist(), "handedness": h.handedness} for h in hands]}))
             recv(ws, "state")
         ws.send_text(json.dumps({"type": "record_stop"}))
         msg = recv(ws, "recorded")

@@ -111,6 +111,8 @@ class GesturePipeline:
             cmds, hud = self.engine.update(f, poses)
         for c in cmds:
             self.view.apply(c)
+        if hud.get("mode") == "field":       # the field dial: show where you are in the list
+            hud["field_strip"] = {"fields": list(self.view.fields), "index": self.view.field_index % len(self.view.fields)}
         self.last_latency_ms = (time.perf_counter() - t0) * 1000
         hud["fingers"] = self.fingers.update(f.hands)
         hud["latency_ms"] = round(self.last_latency_ms, 2)

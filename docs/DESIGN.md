@@ -10,9 +10,9 @@ to make it easier to use, and why each change makes sense from a computer-vision
 
 | First plan | Now | Why (CV / usability) |
 |---|---|---|
-| Two-hand split: the left hand picks the mode, the right hand controls | **One hand by default.** The pose picks the mode and the motion is the control | Two raised arms tire people out within minutes. MediaPipe also tracks worse when hands overlap or hide each other. With one hand, users learn 6 shapes instead of a 2×N grid |
+| Two-hand split: the left hand picks the mode, the right hand controls | **One hand points, two hands manipulate.** One hand does the precise work (probe, section, field); the big moves (zoom, pan, turn, reset) need the *same* pose on both hands, as in VR | Showing a pose with both hands is a far stronger signal than one hand's pose, so the big moves are never set off by accident, and a lone pinch can mean nothing (no pinch/point confusion). Precise work stays one-handed, so arms do not tire |
 | Separate clutch hand | **Relaxing the hand is the clutch.** A mode starts only after its pose has been held briefly | Removes accidental input ("Midas touch") without asking for a second hand. Repositioning works like lifting a mouse |
-| Modes chosen by finger count (two vs three fingers) | **Poses that are easy to tell apart**: fist, flat palm, point, V, thumbs-up, pinch | Counting fingers fails under self-occlusion and side views. The chosen poses differ in finger *shape*, not just count |
+| Modes chosen by finger count (two vs three fingers) | **Poses that are easy to tell apart** for modes: fist, flat palm, point, V, thumbs-up, pinch. Finger counts only answer menus, held still, and must change between answers | Counting fingers fails under self-occlusion and side views. The chosen poses differ in finger *shape*, not just count. Counting is read with a thumb-span feature (thumb tip to little-finger knuckle over palm width), which separates a tucked thumb from a raised one far better than the thumb's joint angles |
 | Orbit by twisting the wrist | **Orbit by dragging a fist** ("grab the model") | Monocular depth (z) from MediaPipe is noisy, so wrist roll and pitch are unreliable. 2D translation of the palm is the steadiest signal a webcam gives |
 | Raw landmarks drive motion | Motion follows the **rigid palm** (wrist + 4 knuckles) | Fingertips move whenever the pose changes. The knuckles hardly move, so opening the hand to release no longer kicks the view |
 | Per-frame classification | **EMA plus enter/exit hysteresis**, and N frames to switch | A single misclassified frame can never change mode |
@@ -27,27 +27,40 @@ to make it easier to use, and why each change makes sense from a computer-vision
 ```
 relaxed hand ──► nothing happens (skeleton shown in grey)
 hold a pose  ──► ring fills (amber) ──► mode active (green) ──► relax to stop
-two open palms held 1 s ──► reset view            hand at edge / too far ──► paused (red), view frozen
+both thumbs up held 0.8 s ──► reset view          hand at edge / too far ──► paused (red), view frozen
 ```
 
 | Pose | Mode | Control | Arm time |
 |---|---|---|---|
-| ✊ fist | Rotate | drag the hand, as if grabbing the model | 0.12 s |
-| 🤏 pinch | Zoom | move up to zoom in, down to zoom out | 0.12 s |
-| 🤏🤏 pinch with **both** hands | Two-hand zoom / rotate | the distance between the hands *is* the zoom (spread = in); moving both hands together rotates | 0.1 s |
-| ✋ flat palm, **held still** | Section cut | a **straight** cut along the world axis the palm faces (locked after 6 frames, so tremor cannot tilt it); slide the palm to move it; the **other open palm** unlocks a free tilt | 0.5 s |
-| ☝️ point | Probe | the fingertip is the cursor. **Pinch with the other hand to pin**, or hold still for 0.6 s | 0.12 s |
-| ✌️ V | Field | swipe left/right to change the result field | 0.2 s |
-| 👍 thumbs-up, held still | Snapshot | saves a PNG | 1.0 s |
-| 🙌 both palms | Reset | (undo is always available) | 1.0 s |
+| ✊ fist | Rotate | drag the hand, as if grabbing the model | 0.2 s |
+| ☝️ point | Probe | a ring cursor snapped onto the nearest visible face (it never leaves the model). **Pinch with the other hand to pin**, or hold still 0.8 s | 0.2 s |
+| ✋ one flat palm, **held still** | Section cut | always a **straight** cut along the world axis the palm faces (chosen from the first 6 frames, then locked); sliding the palm moves it in 2 % steps with hysteresis | 0.6 s |
+| ✌️ V | Field | a dial: every 0.7 palm widths right / left is one field; a strip shows the list and where you are | 0.25 s |
+| 👍 thumbs-up, held still | Snapshot (Workbench: solve) | | 1.0 s (1.2 s) |
+| 🤏🤏 pinch with **both** hands | Zoom / pan | the distance between the hands *is* the zoom, exactly (spread = in), counted from the moment both pinches appear; moving both pans | 0.15 s |
+| ✊✊ two fists | Turn | move them to rotate; twist them like a steering wheel to spin | 0.15 s |
+| ☝️☝️ point with both hands | Compare | two cursors and the difference B − A | 0.2 s |
+| 👍👍 both thumbs up, held still | Reset | (undo is always available) | 0.8 s |
+
+Rules that keep modes apart:
+
+- a two-hand mode needs the *same* pose on both hands; a still one-hand mode (section, snapshot) is refused while the
+  other hand shows anything but a relaxed hand or a fist, so two raised hands are never read as one of them;
+- an active one-hand mode is sticky: a second hand appearing does not cancel it, unless it makes the two-hand
+  version of the same pose (☝️ → ☝️☝️, ✊ → ✊✊);
+- a still mode that is arming drains when the hand moves instead of starting over, so a shaky frame does not reset
+  the hold but a passing hand never arms it;
+- one-shot modes (snapshot, reset, solve) fire once and wait for the pose to go away.
+
+Building the model uses wizards with one confirmed step at a time (see [`MODELING.md`](MODELING.md)).
 
 Typing numbers by hand: hold up fingers for a digit (0.55 s, still hand); a question with fixed choices (the
-increments) is answered by the count alone; 🤏 pinch and hold deletes the last digit and repeats while held; both
-open palms accept; two fists cancel. The keyboard (digits, Backspace, Enter) always works alongside.
+increments) is answered by the count alone; 🤏 pinch and hold deletes the last digit and repeats while held; pinch and
+move up / down nudges by the increment; both open palms accept; two fists cancel. The keyboard (digits, Backspace,
+Enter) always works alongside.
 
-The two actions that could be triggered by a passing hand (section, snapshot) also require the hand to be
-*still* while arming. Every gesture has a keyboard and mouse equivalent, which doubles as the baseline condition
-in the user study.
+Every gesture has a keyboard and mouse equivalent, which doubles as the baseline condition in the user study.
+Confirmations also play a short tick, so you hear that a gesture worked without looking away from the model.
 
 ## 3. Pipeline
 
