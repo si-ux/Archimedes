@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-06
+
+First tagged release.
+
 ### Gestures: wizards, two-hand vocabulary, visible cursors
 - Model wizard: choose a drawing plane (plan, side or front), then a rectangle or circle, size it by pulling two
   pinched hands apart (snapped to the section increment, locked by holding still), extrude the same way, confirm with
@@ -100,3 +104,6 @@ All notable changes to this project are documented here. The format follows
   and quality hints.
 - Browser demo (MediaPipe in WebAssembly, Python over WebSocket) and desktop app.
 - Archimedes Workbench FE pre/post-processor with a DOLFINx backend, wired to the gesture layer.
+
+[Unreleased]: https://github.com/si-ux/Archimedes/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/si-ux/Archimedes/releases/tag/v1.0.0

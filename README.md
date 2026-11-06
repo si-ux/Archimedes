@@ -7,12 +7,12 @@
 A feature-based CAD modeller with a finite-element solver behind it, plus a computer-vision gesture layer that
 lets you build members, cut sections and probe results with an ordinary webcam.
 
-[![CI](https://github.com/si-ux/archimedes/actions/workflows/ci.yml/badge.svg)](https://github.com/si-ux/archimedes/actions/workflows/ci.yml)
+[![CI](https://github.com/si-ux/Archimedes/actions/workflows/ci.yml/badge.svg)](https://github.com/si-ux/Archimedes/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776ab)
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-339933)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-d7ff64)](https://github.com/astral-sh/ruff)
-[![Open in GitHub Codespaces](https://img.shields.io/badge/Codespaces-open-24292f?logo=github)](https://codespaces.new/si-ux/archimedes)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Codespaces-open-24292f?logo=github)](https://codespaces.new/si-ux/Archimedes)
 
 <img src="docs/images/workbench-results.png" alt="Archimedes Workbench showing von Mises stress on an L-bracket" width="900">
 
@@ -115,7 +115,7 @@ which has no webcam of its own.
 You need **Python 3.10 to 3.12**, plus **Node.js 18+** if you want to run the CAD kernel tests.
 
 ```bash
-git clone https://github.com/si-ux/archimedes.git
+git clone https://github.com/si-ux/Archimedes.git
 cd archimedes
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
@@ -344,7 +344,7 @@ you have data. Don't report those numbers.
 - **Design assistant:** the assistant tab is interface only (see
   [`Archimedes/docs/assistant-backend.md`](Archimedes/docs/assistant-backend.md)).
 
-Ideas and bug reports are welcome in [Issues](https://github.com/si-ux/archimedes/issues).
+Ideas and bug reports are welcome in [Issues](https://github.com/si-ux/Archimedes/issues).
 
 ## Contributing
 
